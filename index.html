@@ -166,6 +166,34 @@
             <div class="mstate" id="conf-state"><span class="dot"></span><div><strong>Compréhension</strong><span class="val">—</span></div></div>
           </div>
           <p class="monitor-hint" id="monitor-hint">Lance un enregistrement : le graphique montre si ta voix est au bon niveau et, en mode direct, si le modèle te comprend bien.</p>
+        <div class="sound-ctrl" id="sound-ctrl">
+          <div class="sc-head">
+            <h3>Réglages du son</h3>
+            <button class="btn sm" id="mic-test" type="button" title="Voir le niveau du micro sur le graphique sans rien enregistrer"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>Tester le micro</span></button>
+          </div>
+
+          <label class="label" for="mic-device">Micro</label>
+          <select id="mic-device" class="select"><option value="">Micro par défaut</option></select>
+
+          <div class="gain-row">
+            <label class="label" for="gain">Gain (amplification)</label>
+            <output id="gain-val" for="gain">0 dB</output>
+          </div>
+          <input type="range" id="gain" class="range" min="-12" max="24" step="1" value="0" />
+          <div class="range-scale"><span>−12 dB</span><span>0</span><span>+24 dB</span></div>
+          <div class="sc-actions">
+            <button class="btn sm" id="gain-auto" type="button" disabled title="Parle quelques secondes (test ou enregistrement), puis clique : le gain est réglé pour que ta voix soit dans la zone verte">Ajuster automatiquement</button>
+            <button class="btn sm ghost" id="sound-reset" type="button">Réglages par défaut</button>
+          </div>
+
+          <div class="sc-toggles">
+            <label class="switch" title="Le navigateur ajuste lui-même le volume en continu. À couper pour régler le gain à la main."><input type="checkbox" id="opt-agc" /><span class="track"></span>Gain automatique</label>
+            <label class="switch" title="Atténue les bruits de fond constants (ventilation, clavier, circulation)."><input type="checkbox" id="opt-ns" /><span class="track"></span>Réduction du bruit</label>
+            <label class="switch" title="Supprime l’écho des haut-parleurs (utile sans casque, en visio)."><input type="checkbox" id="opt-ec" /><span class="track"></span>Annulation d’écho</label>
+            <label class="switch" title="Coupe les grondements graves sous 90 Hz (chocs sur la table, souffle, moteur)."><input type="checkbox" id="opt-hp" /><span class="track"></span>Filtre des basses</label>
+          </div>
+          <p class="sc-hint" id="sc-hint"></p>
+        </div>
       </div>
     </section>
 

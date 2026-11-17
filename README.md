@@ -81,6 +81,17 @@ Panneau à droite (en haut à droite sur écran moyen) qui défile sur les 30 de
 Limite : c'est la confiance du modèle, pas une garantie. Il peut se tromper avec assurance
 (noms propres, sigles), d'où le lexique.
 
+## Réglages du son (sous le graphique)
+
+- **Tester le micro** : affiche le niveau sur le graphique sans rien enregistrer.
+- **Micro** : choix du périphérique (les noms apparaissent après la première autorisation).
+- **Gain** de −12 à +24 dB, modifiable pendant l'enregistrement, appliqué au son enregistré et transcrit.
+- **Ajuster automatiquement** : règle le gain pour que la voix soit vers −20 dBFS (crêtes plafonnées à −3 dBFS).
+- **Gain automatique**, **réduction du bruit**, **annulation d'écho** (traitements du navigateur) :
+  changent au prochain démarrage du micro.
+- **Filtre des basses** : coupe les grondements sous 90 Hz, modifiable à tout moment.
+- Réglages mémorisés dans le navigateur ; bouton « Réglages par défaut ».
+
 ## Reprise automatique
 
 - Chaque bloc de 30 s transcrit est sauvegardé immédiatement, avec l'audio d'origine.

@@ -113,6 +113,21 @@ export class Monitor {
     return { level: 'ok', label: 'Bon niveau', hint: null };
   }
 
+  /**
+   * Correction de gain conseillée (dB) pour que la voix soit autour de −20 dBFS,
+   * d'après les 6 dernières secondes. null s'il n'y a pas assez de parole.
+   */
+  gainAdvice(target = -20) {
+    const win = this.levels.filter((l) => l.t >= this.now - 6);
+    if (win.length < 40) return null;
+    const dbs = win.map((l) => l.db).sort((a, b) => a - b);
+    const p90 = dbs[Math.floor(dbs.length * 0.9)];
+    if (p90 < -55) return null;
+    const peak = Math.max(...win.map((l) => l.pk));
+    // Ne jamais pousser les crêtes au-delà de −3 dBFS
+    return Math.min(target - p90, -3 - peak);
+  }
+
   confState() {
     const recent = this.confs.filter((c) => c.t >= this.now - 15);
     if (!recent.length) return null;

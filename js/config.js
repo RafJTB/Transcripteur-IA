@@ -52,12 +52,29 @@ export const MODELS = [
     },
     heavy: true,
   },
+  {
+    id: 'voxtral',
+    kind: 'voxtral',
+    repo: 'onnx-community/Voxtral-Mini-4B-Realtime-2602-ONNX',
+    label: 'Temps réel',
+    name: 'Voxtral Realtime (Mistral)',
+    params: '4 B',
+    description: 'Vrai temps réel : le texte suit la parole avec ~0,5 s de décalage. Langue détectée automatiquement. Carte graphique obligatoire.',
+    variants: {
+      webgpu: { dtype: { audio_encoder: 'q4f16', embed_tokens: 'q4f16', decoder_model_merged: 'q4f16' }, sizeMB: 2835 },
+      webgpuNoF16: { dtype: { audio_encoder: 'q4', embed_tokens: 'q4', decoder_model_merged: 'q4' }, sizeMB: 3184 },
+      // Pas de version processeur : 4 milliards de paramètres, beaucoup trop lent sans carte graphique.
+    },
+    heavy: true,
+    gpuOnly: true,
+  },
 ];
 
 export const DEFAULT_MODEL = 'small';
 
-/** Retourne la variante adaptée aux capacités détectées. */
+/** Retourne la variante adaptée aux capacités détectées (null = modèle inutilisable sur ce PC). */
 export function pickVariant(model, caps) {
+  if (model.gpuOnly && !caps.webgpu) return null;
   if (caps.webgpu) {
     if (!caps.f16 && model.variants.webgpuNoF16) return { device: 'webgpu', ...model.variants.webgpuNoF16 };
     return { device: 'webgpu', ...model.variants.webgpu };
@@ -71,8 +88,11 @@ export function lighterModel(id) {
   return i > 0 ? MODELS[i - 1] : null;
 }
 
+/** Modèle conçu pour le flux continu (direct sans re-transcription). */
+export const isStreaming = (model) => model?.kind === 'voxtral';
+
 // Whisper (Transformers.js v4) ne détecte pas la langue automatiquement :
-// elle doit être fournie explicitement.
+// elle doit être fournie explicitement. Voxtral, lui, la détecte seul.
 export const LANGUAGES = [
   ['fr', 'Français'], ['en', 'Anglais'], ['es', 'Espagnol'], ['de', 'Allemand'],
   ['it', 'Italien'], ['pt', 'Portugais'], ['nl', 'Néerlandais'], ['ar', 'Arabe'],

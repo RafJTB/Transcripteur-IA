@@ -1,11 +1,11 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
-import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel } from './config.js';
+import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming } from './config.js';
 import { decodeToMono16k, isAcceptedFile, Recorder } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
 import { History, Audios, RecChunks, clearAll, newId } from './history.js';
-import { LiveSession } from './live.js';
+import { LiveSession, VoxtralLive } from './live.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -126,6 +126,7 @@ function signalCrash(message) {
     l({ type: 'error', during: 'transcribe', kind: 'crash', message });
     l({ type: 'error', during: 'load', kind: 'crash', message });
   }
+  state.live?.fail?.(new Error(message));
 }
 
 function request(msg, doneTypes, transfer) {
@@ -173,6 +174,25 @@ function onWorkerMessage(m) {
       progress.show($('#progress-label').textContent, { value: m.progress, sub });
       break;
     }
+    case 'tick': {
+      // Voxtral (fichier) : signe de vie et progression fine à l'intérieur d'une partie
+      const r = state.run;
+      if (!r || m.jobId !== r.jobId) break;
+      r.lastAt = performance.now();
+      const pct = (m.doneS / m.totalS) * 100;
+      progress.show('Transcription en cours…', { value: pct, sub: `${fmtClock(m.doneS)} / ${fmtClock(m.totalS)} d’audio traité · progression sauvegardée à chaque partie` });
+      renderSegments(applyLexiconTo([...r.doc.job.baseSegments, ...m.segments]), { editable: false });
+      break;
+    }
+    case 'stream-seg':
+    case 'stream-partial':
+    case 'stream-pos':
+    case 'stream-done':
+      state.live?.handle?.(m);
+      break;
+    case 'error':
+      if (m.during === 'stream-start') state.live?.fail?.(new Error(m.message));
+      break;
     case 'warmup':
       progress.show('Initialisation du moteur…', { sub: caps().webgpu ? 'Compilation des shaders WebGPU (quelques secondes, une seule fois par session)' : 'Préparation du moteur WASM' });
       break;
@@ -190,7 +210,7 @@ function onWorkerMessage(m) {
       persist(doc);
       const tailS = (state.audio?.durationS ?? 0) - doc.job.fromS;
       const rt = m.elapsed > 0 ? (tailS * ((m.done - m.first) / m.total)) / m.elapsed : 0;
-      progress.show(`Transcription · bloc ${m.done} / ${m.total}`, {
+      progress.show(`Transcription · ${isStreaming(modelById(doc.job.modelId)) ? 'partie' : 'bloc'} ${m.done} / ${m.total}`, {
         value: (m.done / m.total) * 100,
         sub: m.done < m.total ? `≈ ${fmtDuration(m.eta)} restantes${rt ? ` · ×${rt.toFixed(1).replace('.', ',')} temps réel` : ''} · progression sauvegardée` : 'Finalisation…',
       });
@@ -226,32 +246,45 @@ function renderEngine() {
 function renderModels() {
   const box = $('#models');
   $$('.model', box).forEach((e) => e.remove());
+  if (state.caps && !pickVariant(modelById(state.modelId), caps())) state.modelId = DEFAULT_MODEL;
   for (const m of MODELS) {
     const v = pickVariant(m, caps());
+    const off = !!state.caps && !v;
     const cached = state.cache[m.id];
-    const slow = m.heavy && !caps().webgpu;
+    const slow = m.heavy && !caps().webgpu && !off;
     const el = document.createElement('label');
-    el.className = 'model';
+    el.className = 'model' + (off ? ' unavailable' : '');
     el.innerHTML = `
-      <input type="radio" name="model" value="${m.id}" ${m.id === state.modelId ? 'checked' : ''} />
+      <input type="radio" name="model" value="${m.id}" ${m.id === state.modelId ? 'checked' : ''} ${off ? 'disabled' : ''} />
       <span class="radio"></span>
       <span class="m-title">${m.label}<em>${m.name}</em></span>
-      <span class="m-size">${fmtMB(v.sizeMB)}</span>
+      <span class="m-size">${fmtMB((v || m.variants.webgpu).sizeMB)}</span>
       <span class="m-desc">${m.description}</span>
       <span class="m-badges" style="grid-column:2/4;display:flex;gap:6px;align-items:center;margin-top:4px">
-        ${cached ? '<span class="badge cached">En cache</span>' : '<span class="badge">À télécharger</span>'}
+        ${off ? '<span class="badge slow">Indisponible : carte graphique (WebGPU) requise</span>' : cached ? '<span class="badge cached">En cache</span>' : '<span class="badge">À télécharger</span>'}
+        ${isStreaming(m) && !off ? '<span class="badge live">Vrai temps réel</span>' : ''}
         ${slow ? '<span class="badge slow">Lent sans WebGPU</span>' : ''}
-        ${cached ? `<button class="m-clear" type="button" data-clear="${m.id}">Supprimer du cache</button>` : ''}
+        ${cached && !off ? `<button class="m-clear" type="button" data-clear="${m.id}">Supprimer du cache</button>` : ''}
       </span>`;
     box.appendChild(el);
   }
+  renderLangHint();
   renderLiveHint();
+}
+
+function renderLangHint() {
+  const m = modelById(state.modelId);
+  const el = $('#lang-hint');
+  if (el) el.hidden = !isStreaming(m);
 }
 
 function renderLiveHint() {
   const el = $('#live-hint');
   const m = modelById(state.modelId);
-  if (state.caps && !caps().webgpu && m.id !== 'base') {
+  if (isStreaming(m)) {
+    el.className = 'live-hint';
+    el.textContent = 'Vrai temps réel avec Voxtral : le texte suit ta voix avec environ une demi-seconde de décalage (si ta carte graphique suit le rythme).';
+  } else if (state.caps && !caps().webgpu && m.id !== 'base') {
     el.className = 'live-hint warn';
     el.textContent = `Sans carte graphique, ${m.name} risque de prendre du retard en direct : le modèle « Rapide » est conseillé. Le texte sera de toute façon complété à l’arrêt.`;
   } else {
@@ -264,8 +297,8 @@ async function refreshCache() {
   if (!state.caps) return;
   const models = MODELS.map((m) => {
     const v = pickVariant(m, caps());
-    return { id: m.id, repo: m.repo, device: v.device, dtype: v.dtype };
-  });
+    return v && { id: m.id, repo: m.repo, kind: m.kind, device: v.device, dtype: v.dtype };
+  }).filter(Boolean);
   try {
     const r = await request({ type: 'cache-status', models }, ['cache']);
     state.cache = r.status;
@@ -399,6 +432,7 @@ async function recToggle() {
 async function recStart() {
   if (state.phase !== 'idle') return toast('Attends la fin de la transcription en cours.', 'warn');
   const live = $('#toggle-live').checked && !!state.caps;
+  if (live && !(await confirmBigDownload(modelById(state.modelId)))) return;
   try {
     await recorder.start({ pcm: live });
   } catch (e) {
@@ -422,12 +456,7 @@ function startLive(rec) {
   persist(doc);
 
   let lastSave = 0;
-  const session = new LiveSession({
-    transcribeWindow: async (pcm, offsetS) => {
-      const jobId = ++state.jobId;
-      const r = await request({ type: 'transcribe', jobId, audio: pcm, language: state.language, chunkLengthS: 0, offsetS, quiet: true }, ['result', 'cancelled'], [pcm.buffer]);
-      return r.segments || [];
-    },
+  const handlers = {
     onUpdate: (s) => {
       doc.segments = s.committed.slice();
       state.segments = doc.segments;
@@ -435,13 +464,25 @@ function startLive(rec) {
       doc.liveP = s.committedS;
       if (performance.now() - lastSave > 2000) { lastSave = performance.now(); persist(doc); }
       renderLive();
+      if (s.finishing) progress.show('Finalisation du direct…', { sub: s.lagS > 1 ? `Reste ≈ ${Math.round(s.lagS)} s d’audio à traiter` : 'Dernière phrase…' });
     },
     onError: (e) => {
       console.error(e);
       toast(`Transcription en direct interrompue (${e.message}). L’enregistrement continue : le texte sera complété à l’arrêt.`, 'warn', 9000);
       renderRecState();
     },
-  });
+  };
+  // Voxtral : vrai flux continu. Whisper : relecture de fenêtres toutes les ~3 s.
+  const session = isStreaming(model)
+    ? new VoxtralLive({ send: (msg, transfer) => worker.postMessage(msg, transfer || []), ...handlers })
+    : new LiveSession({
+      transcribeWindow: async (pcm, offsetS) => {
+        const jobId = ++state.jobId;
+        const r = await request({ type: 'transcribe', jobId, audio: pcm, language: state.language, chunkLengthS: 0, offsetS, quiet: true }, ['result', 'cancelled'], [pcm.buffer]);
+        return r.segments || [];
+      },
+      ...handlers,
+    });
   state.live = session;
   state.phase = 'live';
   showWaiting(true);
@@ -452,7 +493,8 @@ function startLive(rec) {
     .then((v) => {
       if (state.live !== session) return;
       doc.device = v.device;
-      session.ready = true;
+      if (session.kind === 'voxtral') session.start(++state.jobId);
+      else session.ready = true;
       progress.hide();
       status(`En direct · ${model.name} · ${v.device === 'webgpu' ? 'WebGPU' : 'WASM'}`);
       renderRecState();
@@ -460,6 +502,7 @@ function startLive(rec) {
     .catch((e) => {
       if (state.live !== session) return;
       session.failed = true;
+      session.pending = [];
       progress.hide();
       toast(`Modèle indisponible pour le direct (${e.message}). L’enregistrement continue ; tu pourras transcrire à l’arrêt.`, 'warn', 9000);
       renderRecState();
@@ -496,11 +539,24 @@ async function recStop() {
 
   if (rec.live && state.live) {
     const s = state.live;
-    await s.stop();
+    const doc = state.doc;
+    let finalSegs = null;
+    if (s.kind === 'voxtral') {
+      finalSegs = await s.finish(); // le modèle termine l'audio déjà reçu, sans tout retranscrire
+      if (!finalSegs) await s.stop();
+    } else {
+      await s.stop();
+    }
     state.live = null;
     state.phase = 'idle';
-    const doc = state.doc;
+    progress.hide();
     const pcm = s.pcm;
+    if (finalSegs) {
+      await setAudioFromBlob(r.blob, name, { audioId, pcm, docId: doc.id });
+      Object.assign(doc, { audioId, source: name, durationS: pcm.length / SR });
+      doc.job = { modelId: doc.modelId, language: state.language, fromS: 0, baseSegments: finalSegs, seqs: [], total: null };
+      return finalizeDoc(doc, []);
+    }
     await setAudioFromBlob(r.blob, name, { audioId, pcm, docId: doc.id });
     Object.assign(doc, { audioId, source: name, durationS: pcm.length / SR, segments: s.committed.slice(), status: 'running' });
     doc.job = { modelId: doc.modelId, language: state.language, fromS: s.committedS, baseSegments: s.committed.slice(), seqs: [], total: null };
@@ -520,13 +576,15 @@ async function recDiscard() {
   const rec = state.rec;
   state.rec = null;
   recorder.cancel();
-  if (state.live) {
-    await state.live.stop();
-    state.live = null;
-    state.phase = 'idle';
-    progress.hide();
-    showWaiting(false);
-  }
+  // Effacement visible tout de suite ; le moteur termine son calcul en cours en arrière-plan.
+  const live = state.live;
+  state.live = null;
+  const stopping = live?.stop(); // bloque toute mise à jour du direct avant l'effacement
+  progress.hide();
+  showWaiting(false);
+  if (state.doc?.id === rec?.id) clearResult();
+  status('');
+  renderRec();
   if (rec) {
     await rec.pending;
     await RecChunks.remove(rec.id).catch(() => {});
@@ -534,11 +592,13 @@ async function recDiscard() {
     await Audios.remove(rec.id).catch(() => {});
   }
   store.del('rec.active');
-  if (state.doc?.id === rec?.id) clearResult();
-  status('');
-  renderRec();
   renderStorage();
   toast('Enregistrement supprimé.', 'ok', 3000);
+  if (live) {
+    await stopping;
+    state.phase = 'idle';
+    updateButtons();
+  }
 }
 
 function renderRecState() {
@@ -574,6 +634,11 @@ function renderRec() {
 // ======================================================================
 async function ensureLoaded(model) {
   const v = pickVariant(model, caps());
+  if (!v) {
+    const err = new Error(`${model.name} nécessite une carte graphique compatible WebGPU.`);
+    err.kind = 'unsupported';
+    throw err;
+  }
   const key = `${model.repo}|${v.device}|${JSON.stringify(v.dtype)}`;
   if (state.loadedKey === key) return v;
   if (state.phase === 'idle') {
@@ -582,7 +647,7 @@ async function ensureLoaded(model) {
   }
   // Un seul chargement à la fois : on rejoint celui en cours s'il concerne le même modèle.
   if (state.loading?.key !== key) {
-    const promise = request({ type: 'load', repo: model.repo, device: v.device, dtype: v.dtype }, ['ready'])
+    const promise = request({ type: 'load', repo: model.repo, kind: model.kind, device: v.device, dtype: v.dtype }, ['ready'])
       .finally(() => { if (state.loading?.promise === promise) state.loading = null; });
     state.loading = { key, promise };
   }
@@ -619,6 +684,17 @@ async function persist(doc = state.doc) {
   try { await History.put(structuredClone(doc)); } catch (e) { console.warn('Historique indisponible', e); }
 }
 
+/** Premier téléchargement d'un gros modèle : on prévient avant. */
+async function confirmBigDownload(model) {
+  const v = pickVariant(model, caps());
+  if (!v || state.cache[model.id] || v.sizeMB < 1000) return true;
+  return !!(await ask(
+    'Gros téléchargement',
+    `${model.name} pèse ${fmtMB(v.sizeMB)}. Il sera téléchargé une seule fois puis gardé dans le navigateur. Selon ta connexion, compte de quelques minutes à plus d’un quart d’heure.`,
+    'Télécharger'
+  ));
+}
+
 async function startTranscription() {
   if (!state.audio || state.phase !== 'idle' || recorder.state !== 'idle') return;
   const model = modelById(state.modelId);
@@ -630,6 +706,7 @@ async function startTranscription() {
     );
     if (!ok) return;
   }
+  if (!(await confirmBigDownload(model))) return;
   const a = state.audio;
   const audioId = await ensureAudioStored();
   const doc = newDoc({
@@ -679,7 +756,8 @@ async function runJob(doc) {
       state.phase = 'transcribing';
       updateButtons();
       const done = doc.job.seqs.length;
-      progress.show(done ? `Reprise au bloc ${done + 1}${doc.job.total ? ` / ${doc.job.total}` : ''}…` : 'Transcription…', {
+      const unit = isStreaming(model) ? 'partie' : 'bloc';
+      progress.show(done ? `Reprise ${unit === 'partie' ? 'à la partie' : 'au bloc'} ${done + 1}${doc.job.total ? ` / ${doc.job.total}` : ''}…` : 'Transcription…', {
         value: doc.job.total ? (done / doc.job.total) * 100 : 0,
         sub: done ? 'Les blocs déjà transcrits ne sont pas refaits' : 'Analyse du premier bloc',
       });
@@ -713,7 +791,7 @@ async function runJob(doc) {
           doc.status = 'interrupted';
           break;
         }
-        toast(`Le moteur de transcription s’est arrêté. Reprise automatique au bloc ${doc.job.seqs.length + 1}…`, 'warn', 7000);
+        toast(`Le moteur de transcription s’est arrêté. Reprise automatique ${isStreaming(model) ? 'à la partie' : 'au bloc'} ${doc.job.seqs.length + 1}…`, 'warn', 7000);
         await startWorker().catch(() => {});
         continue;
       }
@@ -835,8 +913,9 @@ function renderResume(doc = state.doc, { auto = false } = {}) {
   if (!isResumable(doc) || state.phase !== 'idle' || recorder.state !== 'idle') return;
   const j = doc.job;
   const done = j.seqs?.length || 0;
+  const unit = isStreaming(modelById(j.modelId)) ? 'partie' : 'bloc';
   const what = j.total
-    ? `bloc ${done} / ${j.total} (${Math.round((done / j.total) * 100)} %)`
+    ? `${unit} ${done} / ${j.total} (${Math.round((done / j.total) * 100)} %)`
     : j.fromS > 0 ? `reste à partir de ${fmtClock(j.fromS)}` : 'pas encore commencée';
   const base = `${what} · ${modelById(j.modelId)?.name ?? ''}`;
   $('#resume-title').textContent = doc.stopReason === 'user' ? 'Transcription arrêtée' : 'Transcription interrompue';
@@ -1222,6 +1301,7 @@ function bind() {
     state.modelId = e.target.value;
     store.set('model', state.modelId);
     renderLiveHint();
+    renderLangHint();
   });
   $('#models').addEventListener('click', async (e) => {
     const id = e.target.dataset?.clear;
@@ -1230,7 +1310,7 @@ function bind() {
     const m = modelById(id);
     const v = pickVariant(m, caps());
     if (!(await ask('Supprimer du cache ?', `${m.name} (${fmtMB(v.sizeMB)}) devra être retéléchargé à la prochaine utilisation.`, 'Supprimer'))) return;
-    await request({ type: 'cache-clear', repo: m.repo, device: v.device, dtype: v.dtype }, ['cache-cleared']).catch(() => {});
+    await request({ type: 'cache-clear', repo: m.repo, kind: m.kind, device: v.device, dtype: v.dtype }, ['cache-cleared']).catch(() => {});
     if (state.loadedKey?.startsWith(m.repo + '|')) state.loadedKey = null;
     await refreshCache();
     toast(`${m.name} supprimé du cache.`, 'ok', 2500);

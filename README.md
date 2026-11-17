@@ -31,6 +31,7 @@ js/config.js        Modèles, variantes WebGPU/WASM, langues, découpage, régla
 js/asr-worker.js    Web Worker : chargement Whisper, découpage 30 s / chevauchement 5 s, fusion, progression
 js/app.js           Orchestration UI ↔ worker, reprise et repli automatiques, exports, historique
 js/monitor.js       Graphique volume / compréhension en temps réel
+js/calibration.js   Diagnostic de la pièce et score de dictée (fonctions pures)
 js/live.js          Transcription en direct (Whisper par fenêtres, Voxtral en flux continu)
 js/voxtral-engine.js Moteur Voxtral Realtime : flux continu, sessions de ~2 min, phrases horodatées
 js/pcm-worklet.js   Capture de l'audio brut du micro (AudioWorklet) pour le direct
@@ -80,6 +81,32 @@ Panneau à droite (en haut à droite sur écran moyen) qui défile sur les 30 de
 
 Limite : c'est la confiance du modèle, pas une garantie. Il peut se tromper avec assurance
 (noms propres, sigles), d'où le lexique.
+
+## Réglages du son (sous le graphique)
+
+- **Tester le micro** : affiche le niveau sur le graphique sans rien enregistrer.
+- **Micro** : choix du périphérique (les noms apparaissent après la première autorisation).
+- **Gain** de −12 à +24 dB, modifiable pendant l'enregistrement, appliqué au son enregistré et transcrit.
+- **Ajuster automatiquement** : règle le gain pour que la voix soit vers −20 dBFS (crêtes plafonnées à −3 dBFS).
+- **Gain automatique**, **réduction du bruit**, **annulation d'écho** (traitements du navigateur) :
+  changent au prochain démarrage du micro.
+- **Filtre des basses** : coupe les grondements sous 90 Hz, modifiable à tout moment.
+- Réglages mémorisés dans le navigateur ; bouton « Réglages par défaut ».
+
+## Optimiser la qualité (micro du PC portable)
+
+Dans les réglages du son :
+- **Optimiser pour le micro du PC** : réduction du bruit, annulation d'écho, gain automatique et filtre
+  des basses activés en un clic.
+- **Diagnostic de la pièce** (~15 s) : 3 s de silence puis une phrase lue, avec le micro brut. Mesure le
+  bruit de fond, l'écart voix / bruit et estime l'écho (vitesse à laquelle le son retombe après chaque mot),
+  avec verdict et conseils.
+- **Calibrer par dictée** (~1 min) : 3 phrases lues, chacune avec un réglage différent ; chaque lecture
+  est transcrite et comparée à la phrase (pourcentage de mots justes, mots mal compris surlignés).
+  À moins de 3 points d'écart, le réglage recommandé est conservé.
+
+Limites : l'écho est une estimation indicative ; deux lectures ne sont jamais identiques, seuls des écarts
+nets entre réglages sont significatifs.
 
 ## Reprise automatique
 

@@ -1,12 +1,13 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming } from './config.js';
-import { decodeToMono16k, isAcceptedFile, Recorder } from './audio.js';
+import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
 import { History, Audios, RecChunks, clearAll, newId } from './history.js';
 import { LiveSession, VoxtralLive } from './live.js';
 import { Monitor, CONF } from './monitor.js';
+import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -382,7 +383,7 @@ async function loadDocAudio(doc) {
 function handleFiles(files) {
   const f = files?.[0];
   if (!f) return;
-  if (state.phase !== 'idle' || recorder.state !== 'idle') return toast('Attends la fin de l’enregistrement ou de la transcription en cours.', 'warn');
+  if (state.phase !== 'idle' || micBusy()) return toast('Attends la fin de l’enregistrement ou de la transcription en cours.', 'warn');
   if (!isAcceptedFile(f)) {
     toast(`Format non supporté : « ${f.name} ». Formats acceptés : mp3, wav, m4a, webm, mp4, ogg, flac…`, 'err');
     return;
@@ -401,9 +402,19 @@ function selectTab(name) {
 // Micro (+ direct, + sauvegarde continue)
 // ======================================================================
 let monitor = null; // graphique volume / compréhension (créé au démarrage)
+
+/** Micro occupé par un enregistrement (le simple test du micro ne bloque rien). */
+const micBusy = () => recorder.state === 'recording' || recorder.state === 'paused';
+
+/** Réglages du son, mémorisés dans le navigateur. */
+const sound = (() => {
+  try { return { ...DEFAULT_AUDIO_SETTINGS, ...JSON.parse(store.get('sound', '{}')) }; } catch { return { ...DEFAULT_AUDIO_SETTINGS }; }
+})();
+const saveSound = () => store.set('sound', JSON.stringify(sound));
 const recorder = new Recorder({
-  onLevel(_l, info) {
+  onLevel(l, info) {
     if (info) monitor?.addLevel(info.t, info.rms, info.peak);
+    if (tool.meter) $('#tool-meter-fill').style.width = `${Math.round(Math.min(1, l * 1.4) * 100)}%`;
   },
   onTick(s) {
     $('#rec-time').textContent = fmtClock(s);
@@ -419,7 +430,7 @@ const recorder = new Recorder({
 });
 
 async function recToggle() {
-  if (recorder.state === 'idle') await recStart();
+  if (!micBusy()) await recStart();
   else await recStop();
 }
 
@@ -427,8 +438,9 @@ async function recStart() {
   if (state.phase !== 'idle') return toast('Attends la fin de la transcription en cours.', 'warn');
   const live = $('#toggle-live').checked && !!state.caps;
   if (live && !(await confirmBigDownload(modelById(state.modelId)))) return;
+  stopMicTest();
   try {
-    await recorder.start({ pcm: live });
+    await recorder.start({ pcm: live, settings: sound });
   } catch (e) {
     status(e.message, 'err');
     toast(e.message, 'err', 7000);
@@ -437,6 +449,7 @@ async function recStart() {
   const rec = { id: newId(), live, mime: recorder.mimeType, startedAt: Date.now(), pending: Promise.resolve() };
   state.rec = rec;
   monitor?.start();
+  refreshDevices();
   store.set('rec.active', JSON.stringify({ id: rec.id, live, mime: rec.mime, startedAt: rec.startedAt }));
   clearAudio();
   hideResume();
@@ -569,9 +582,9 @@ async function recStop() {
 
 /** Supprime l'enregistrement en cours sans rien garder. */
 async function recDiscard() {
-  if (recorder.state === 'idle') return;
+  if (!micBusy()) return;
   const ok = await ask('Supprimer cet enregistrement ?', 'L’audio enregistré et le texte transcrit en direct seront définitivement effacés de ce navigateur.', 'Supprimer', { danger: true });
-  if (!ok || recorder.state === 'idle') return;
+  if (!ok || !micBusy()) return;
   const rec = state.rec;
   state.rec = null;
   recorder.cancel();
@@ -602,7 +615,7 @@ async function recDiscard() {
 }
 
 function renderRecState() {
-  const s = recorder.state;
+  const s = micBusy() ? recorder.state : 'idle';
   let text = { idle: 'Prêt à enregistrer', recording: 'Enregistrement en cours…', paused: 'En pause' }[s];
   const l = state.live;
   if (l && s !== 'idle') {
@@ -614,7 +627,7 @@ function renderRecState() {
 }
 
 function renderRec() {
-  const s = recorder.state;
+  const s = micBusy() ? recorder.state : 'idle';
   const btn = $('#rec-main');
   btn.classList.toggle('recording', s !== 'idle');
   btn.classList.toggle('paused', s === 'paused');
@@ -626,6 +639,7 @@ function renderRec() {
   $('#toggle-live').disabled = s !== 'idle';
   $('#rec-pause span').textContent = s === 'paused' ? 'Reprendre' : 'Pause';
   if (s === 'idle') $('#rec-time').textContent = '00:00';
+  renderSound();
   updateButtons();
 }
 
@@ -696,7 +710,7 @@ async function confirmBigDownload(model) {
 }
 
 async function startTranscription() {
-  if (!state.audio || state.phase !== 'idle' || recorder.state !== 'idle') return;
+  if (!state.audio || state.phase !== 'idle' || micBusy()) return;
   const model = modelById(state.modelId);
   if (model.heavy && !caps().webgpu) {
     const ok = await ask(
@@ -729,7 +743,7 @@ async function startTranscription() {
  * Plantage du moteur → redémarrage et reprise automatique (2 fois max).
  */
 async function runJob(doc) {
-  if (state.phase !== 'idle' || recorder.state !== 'idle') return;
+  if (state.phase !== 'idle' || micBusy()) return;
   hideResume();
   showDoc(doc, { editable: false });
   if (!(await loadDocAudio(doc))) {
@@ -910,7 +924,7 @@ function hideResume() {
 /** Affiche « Reprendre » ; avec `auto`, la reprise se lance seule après un compte à rebours. */
 function renderResume(doc = state.doc, { auto = false } = {}) {
   hideResume();
-  if (!isResumable(doc) || state.phase !== 'idle' || recorder.state !== 'idle') return;
+  if (!isResumable(doc) || state.phase !== 'idle' || micBusy()) return;
   const j = doc.job;
   const done = j.seqs?.length || 0;
   const unit = isStreaming(modelById(j.modelId)) ? 'partie' : 'bloc';
@@ -988,6 +1002,394 @@ function confSummary(segs) {
   return `confiance ${Math.round(avg * 100)} %` + (low ? ` · ${low} passage${low > 1 ? 's' : ''} à vérifier (soulignés)` : '');
 }
 
+// ======================================================================
+// Réglages du son (sous le graphique)
+// ======================================================================
+const fmtGain = (db) => (db > 0 ? `+${db} dB` : `${db} dB`).replace('-', '−');
+
+function renderSound() {
+  $('#gain').value = sound.gainDb;
+  $('#gain-val').textContent = fmtGain(sound.gainDb);
+  $('#opt-agc').checked = sound.autoGainControl;
+  $('#opt-ns').checked = sound.noiseSuppression;
+  $('#opt-ec').checked = sound.echoCancellation;
+  $('#opt-hp').checked = sound.highpass;
+  $('#mic-device').value = sound.deviceId;
+  if ($('#mic-device').value !== sound.deviceId) $('#mic-device').value = '';
+  const busy = micBusy();
+  const testing = recorder.state === 'preview';
+  // Ces réglages imposent de rouvrir le micro : figés pendant un enregistrement
+  ['#mic-device', '#opt-agc', '#opt-ns', '#opt-ec', '#tool-diag', '#tool-calib'].forEach((id) => ($(id).disabled = busy));
+  $('#gain-auto').disabled = !(busy || testing);
+  $('#mic-test').disabled = busy;
+  $('#mic-test').classList.toggle('active', testing);
+  $('#mic-test span').textContent = testing ? 'Arrêter le test' : 'Tester le micro';
+  const hint = $('#sc-hint');
+  if (busy) {
+    hint.className = 'sc-hint';
+    hint.textContent = 'Pendant l’enregistrement, seuls le gain et le filtre des basses sont modifiables. Les autres réglages s’appliqueront au prochain.';
+  } else if (sound.autoGainControl && sound.gainDb !== 0) {
+    hint.className = 'sc-hint warn';
+    hint.textContent = 'Le gain automatique du navigateur compense en partie ton réglage : coupe-le pour un contrôle total du gain.';
+  } else {
+    hint.className = 'sc-hint';
+    hint.textContent = testing ? 'Test en cours : parle normalement et règle le gain pour que la courbe reste dans la zone verte.' : 'Astuce : « Tester le micro » montre le niveau sans rien enregistrer.';
+  }
+}
+
+async function refreshDevices() {
+  const sel = $('#mic-device');
+  const mics = (await listMicrophones()).filter((d) => d.deviceId && d.deviceId !== 'default');
+  sel.replaceChildren(new Option('Micro par défaut', ''), ...mics.map((d, i) => new Option(d.label || `Micro ${i + 1}`, d.deviceId)));
+  renderSound();
+}
+
+/** Applique un changement de réglage. Gain et filtre : immédiat. Autres : rouvre le micro en test. */
+async function applySound(key, value) {
+  sound[key] = value;
+  saveSound();
+  if (key === 'gainDb') recorder.setGain(value);
+  else if (key === 'highpass') recorder.setHighpass(value);
+  else if (recorder.state === 'preview') { stopMicTest(); await startMicTest(); }
+  renderSound();
+}
+
+async function startMicTest() {
+  if (micBusy() || recorder.state === 'preview') return;
+  try {
+    await recorder.start({ preview: true, settings: sound });
+  } catch (e) {
+    status(e.message, 'err');
+    toast(e.message, 'err', 7000);
+    return;
+  }
+  monitor.start();
+  refreshDevices(); // les noms des micros sont visibles après autorisation
+  renderSound();
+}
+
+function stopMicTest() {
+  if (recorder.state !== 'preview') return;
+  recorder.stopPreview();
+  monitor.stop();
+  renderSound();
+}
+
+function autoGain() {
+  const delta = monitor.gainAdvice();
+  if (delta == null) return toast('Parle normalement quelques secondes, puis clique à nouveau.', 'warn', 4000);
+  const next = Math.max(-12, Math.min(24, Math.round(sound.gainDb + delta)));
+  if (next === sound.gainDb) return toast(`Le niveau est déjà bon (gain ${fmtGain(next)}).`, 'ok', 3000);
+  applySound('gainDb', next);
+  toast(`Gain ajusté à ${fmtGain(next)}.${sound.autoGainControl ? ' Coupe le gain automatique pour un réglage plus stable.' : ''}`, 'ok', 5000);
+}
+
+function bindSound() {
+  $('#gain').addEventListener('input', (e) => applySound('gainDb', Number(e.target.value)));
+  $('#opt-agc').onchange = (e) => applySound('autoGainControl', e.target.checked);
+  $('#opt-ns').onchange = (e) => applySound('noiseSuppression', e.target.checked);
+  $('#opt-ec').onchange = (e) => applySound('echoCancellation', e.target.checked);
+  $('#opt-hp').onchange = (e) => applySound('highpass', e.target.checked);
+  $('#mic-device').onchange = (e) => applySound('deviceId', e.target.value);
+  $('#mic-test').onclick = () => (recorder.state === 'preview' ? stopMicTest() : startMicTest());
+  $('#gain-auto').onclick = autoGain;
+  $('#preset-laptop').onclick = applyLaptopPreset;
+  $('#tool-diag').onclick = runDiagnostic;
+  $('#tool-calib').onclick = runCalibration;
+  $('#tool-close').onclick = () => tool.close();
+  $('#sound-reset').onclick = async () => {
+    Object.assign(sound, DEFAULT_AUDIO_SETTINGS);
+    saveSound();
+    recorder.setGain(0);
+    recorder.setHighpass(false);
+    if (recorder.state === 'preview') { stopMicTest(); await startMicTest(); }
+    renderSound();
+    toast('Réglages du son par défaut rétablis.', 'ok', 2500);
+  };
+  navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
+  refreshDevices();
+}
+
+// ======================================================================
+// Outils qualité du micro : préréglage PC portable, diagnostic, calibration
+// ======================================================================
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/** Fenêtre guidée : une étape = un texte + des boutons ; renvoie la valeur du bouton (null si fermé). */
+const tool = {
+  meter: false,
+  _resolve: null,
+  _timer: null,
+  open(title) {
+    $('#tool-title').textContent = title;
+    $('#tool').hidden = false;
+    this.cancelled = false;
+  },
+  close() {
+    $('#tool').hidden = true;
+    this.cancelled = true;
+    this.meter = false;
+    clearInterval(this._timer);
+    this._resolve?.(null);
+    this._resolve = null;
+  },
+  /** Affiche une étape. `timeout` (s) : valide automatiquement le dernier bouton à la fin du délai. */
+  show({ step = '', html, actions = [], meter = false, timeout = 0 }) {
+    if (this.cancelled) return Promise.resolve(null);
+    clearInterval(this._timer);
+    $('#tool-step').textContent = step;
+    $('#tool-body').innerHTML = html;
+    this.meter = meter;
+    $('#tool-meter').hidden = !meter;
+    $('#tool-timer').textContent = '';
+    const box = $('#tool-actions');
+    box.innerHTML = '';
+    return new Promise((resolve) => {
+      this._resolve = resolve;
+      const done = (v) => { clearInterval(this._timer); this._resolve = null; resolve(v); };
+      for (const a of actions) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn' + (a.primary ? ' primary' : '');
+        b.textContent = a.label;
+        b.onclick = () => (a.value === null ? this.close() : done(a.value));
+        box.appendChild(b);
+      }
+      box.lastElementChild?.focus();
+      if (timeout) {
+        const end = performance.now() + timeout * 1000;
+        const last = actions[actions.length - 1];
+        this._timer = setInterval(() => {
+          const left = Math.ceil((end - performance.now()) / 1000);
+          $('#tool-timer').textContent = `${Math.max(0, left)} s`;
+          if (left <= 0) done(last.value);
+        }, 200);
+      }
+      if (!actions.length) this._resolve = resolve; // étape d'attente : se termine par close() ou par le code
+    });
+  },
+  /** Étape sans bouton (attente), à remplacer par la suivante. */
+  wait(step, html) {
+    if (this.cancelled) return;
+    clearInterval(this._timer);
+    $('#tool-step').textContent = step;
+    $('#tool-body').innerHTML = html;
+    this.meter = false;
+    $('#tool-meter').hidden = true;
+    $('#tool-actions').innerHTML = '<button class="btn" type="button">Annuler</button>';
+    $('#tool-actions button').onclick = () => this.close();
+  },
+};
+
+function toolBusy() {
+  if (state.phase !== 'idle' || micBusy()) {
+    toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
+    return true;
+  }
+  return false;
+}
+
+/** Arrête proprement le micro s'il a été ouvert par un outil. */
+function toolCleanup() {
+  tool.meter = false;
+  if (recorder.state === 'preview') recorder.stopPreview();
+  else if (recorder.state !== 'idle') recorder.cancel();
+  monitor.stop();
+  renderRec();
+}
+
+function applyLaptopPreset() {
+  Object.assign(sound, LAPTOP_PRESET);
+  saveSound();
+  recorder.setGain(sound.gainDb);
+  recorder.setHighpass(sound.highpass);
+  if (recorder.state === 'preview') { stopMicTest(); startMicTest(); }
+  renderSound();
+  toast('Réglages optimisés pour le micro du PC : réduction du bruit, annulation d’écho, gain automatique et filtre des basses activés.', 'ok', 6000);
+}
+
+const rowHtml = (x, best = false) => `
+  <div class="tool-row${best ? ' best' : ''}" data-level="${x.level}">
+    <span class="dot"></span><strong>${esc(x.label)}</strong><span class="v">${esc(x.value)}</span>
+    ${x.text ? `<small>${esc(x.text)}</small>` : ''}${x.diff ? `<div class="diff">${x.diff}</div>` : ''}
+  </div>`;
+
+async function runDiagnostic() {
+  if (toolBusy()) return;
+  stopMicTest();
+  tool.open('Diagnostic de la pièce');
+  try {
+    const go = await tool.show({
+      step: 'Étape 1 / 3',
+      html: `<p>On mesure ta pièce avec le <strong>micro brut</strong> (sans traitement du navigateur), pour juger la pièce elle-même.</p>
+        <ol><li><strong>3 secondes de silence complet</strong> : ne parle pas, ne touche pas au clavier.</li>
+        <li>Puis <strong>lis une phrase à voix haute</strong>, normalement, à ta place habituelle devant le PC.</li></ol>`,
+      actions: [{ label: 'Annuler', value: null }, { label: 'Commencer', value: 'go', primary: true }],
+    });
+    if (!go) return;
+    await recorder.start({ preview: true, settings: { ...sound, noiseSuppression: false, autoGainControl: false, echoCancellation: false, highpass: false, gainDb: 0 } });
+    monitor.start();
+    // 1. Silence
+    const t0 = monitor.now;
+    for (let n = 3; n > 0 && !tool.cancelled; n--) {
+      tool.wait('Étape 2 / 3', `<p class="tool-big">Silence…</p><p>Ne parle pas, ne touche à rien : <strong>${n} s</strong></p>`);
+      tool.meter = true; $('#tool-meter').hidden = false;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (tool.cancelled) return;
+    await new Promise((r) => setTimeout(r, 400));
+    const silence = monitor.levels.filter((l) => l.t >= t0 + 0.4);
+    // 2. Voix
+    const t1 = monitor.now;
+    const done = await tool.show({
+      step: 'Étape 2 / 3',
+      meter: true,
+      timeout: 15,
+      html: `<p>Lis cette phrase à voix haute, normalement, <strong>en marquant de courtes pauses</strong> :</p><blockquote class="tool-sentence">${esc(DICTATION[0])}</blockquote>`,
+      actions: [{ label: 'Annuler', value: null }, { label: 'J’ai fini', value: 'done', primary: true }],
+    });
+    const speech = monitor.levels.filter((l) => l.t >= t1);
+    toolCleanup();
+    if (!done) return;
+    const res = analyzeRoom(silence, speech);
+    if (!res) {
+      await tool.show({ step: 'Résultat', html: '<p>Mesure trop courte : recommence en laissant le micro ouvert quelques secondes de plus.</p>', actions: [{ label: 'Fermer', value: null }] });
+      return;
+    }
+    const next = await tool.show({
+      step: 'Étape 3 / 3 · Résultat',
+      html: `<p class="tool-verdict">${esc(res.verdict)}</p>
+        <div class="tool-results">${res.items.map((x) => rowHtml(x)).join('')}</div>
+        <div class="tool-advice"><p>Conseils</p><ul>${res.advice.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></div>
+        <p>Mesure indicative faite avec le micro brut. L’écho est estimé d’après la vitesse à laquelle le son retombe après chaque mot.</p>`,
+      actions: [{ label: 'Fermer', value: null }, { label: 'Calibrer les réglages', value: 'calib', primary: true }],
+    });
+    if (next === 'calib') { tool.close(); runCalibration(); }
+  } catch (e) {
+    toolCleanup();
+    if (!tool.cancelled) { tool.close(); toast(e.message, 'err', 7000); }
+  } finally {
+    if (recorder.state !== 'idle') toolCleanup();
+    renderSound();
+  }
+}
+
+async function runCalibration() {
+  if (toolBusy()) return;
+  stopMicTest();
+  const model = modelById(state.modelId);
+  tool.open('Calibration par dictée');
+  try {
+    const go = await tool.show({
+      step: 'Présentation',
+      html: `<p>Tu vas lire <strong>3 phrases</strong>, une par réglage. Pour chacune, l’app transcrit ta lecture et calcule le <strong>pourcentage de mots justes</strong>.</p>
+        <ul>${CALIBRATION_CONFIGS.map((c, i) => `<li>Lecture ${i + 1} : ${esc(c.label)}</li>`).join('')}</ul>
+        <p>Installe-toi comme d’habitude devant le PC et lis normalement, sans forcer. Modèle utilisé : <strong>${esc(model.name)}</strong>. Durée : environ 1 minute.</p>
+        <p>Les écarts de 1 ou 2 % ne sont pas significatifs (deux lectures ne sont jamais identiques).</p>`,
+      actions: [{ label: 'Annuler', value: null }, { label: 'Commencer', value: 'go', primary: true }],
+    });
+    if (!go) return;
+    if (!(await confirmBigDownload(model))) return tool.close();
+    tool.wait('Préparation', `<p class="tool-big">Préparation du modèle…</p><p>${esc(model.name)} — la première fois, il peut être téléchargé.</p>`);
+    await ensureLoaded(model);
+    state.phase = 'idle';
+    progress.hide();
+    updateButtons();
+    if (tool.cancelled) return;
+
+    const results = [];
+    for (const [i, cfg] of CALIBRATION_CONFIGS.entries()) {
+      const sentence = DICTATION[i];
+      const step = `Lecture ${i + 1} / ${CALIBRATION_CONFIGS.length}`;
+      const ready = await tool.show({
+        step,
+        html: `<p>Réglage testé : <strong>${esc(cfg.label)}</strong></p><p>Clique sur « Commencer à lire », puis lis :</p><blockquote class="tool-sentence">${esc(sentence)}</blockquote>`,
+        actions: [{ label: 'Annuler', value: null }, { label: 'Commencer à lire', value: 'go', primary: true }],
+      });
+      if (!ready) return;
+      await recorder.start({ settings: { ...sound, ...cfg.settings } });
+      monitor.start();
+      const done = await tool.show({
+        step,
+        meter: true,
+        timeout: 25,
+        html: `<p class="tool-rec">● Enregistrement — lis la phrase :</p><blockquote class="tool-sentence">${esc(sentence)}</blockquote>`,
+        actions: [{ label: 'Annuler', value: null }, { label: 'J’ai fini', value: 'done', primary: true }],
+      });
+      if (!done) return;
+      const rec = await recorder.stop();
+      monitor.stop();
+      renderRec();
+      tool.wait(step, '<p class="tool-big">Analyse de la lecture…</p><p>Transcription et comparaison avec la phrase lue.</p>');
+      const pcm = await decodeToMono16k(rec.blob);
+      const jobId = ++state.jobId;
+      const r = await request(
+        { type: 'transcribe', jobId, audio: pcm, language: 'fr', chunkLengthS: CHUNKING.chunkLengthS, strideLengthS: CHUNKING.strideLengthS, offsetS: 0, quiet: true },
+        ['result', 'cancelled'],
+        [pcm.buffer]
+      );
+      if (tool.cancelled) return;
+      const hyp = (r.segments || []).map((x) => x.text).join(' ');
+      const sc = dictationScore(sentence, hyp);
+      const confs = (r.segments || []).map((x) => x.conf).filter((x) => x != null);
+      results.push({ cfg, score: sc.score, ops: sc.ops, conf: confs.length ? confs.reduce((a, b) => a + b, 0) / confs.length : null });
+    }
+
+    // Meilleur réglage ; à 3 points près, on garde le réglage recommandé (A), plus simple
+    const A = results[0];
+    let best = [...results].sort((a, b) => b.score - a.score)[0];
+    const close = best.score - A.score < 0.03;
+    if (close) best = A;
+    // « Compris : » = la transcription, mots faux surlignés + nombre de mots oubliés
+    const diffHtml = (ops) => {
+      const said = ops.filter((o) => o.type !== 'del').map((o) => (o.type === 'ok' ? esc(o.hyp ?? o.ref) : `<mark>${esc(o.hyp)}</mark>`)).join(' ');
+      const missed = ops.filter((o) => o.type === 'del').length;
+      return `<span class="lbl">Compris :</span> ${said || '<em>rien</em>'}${missed ? ` <span class="missed">· ${missed} mot${missed > 1 ? 's' : ''} oublié${missed > 1 ? 's' : ''}</span>` : ''}`;
+    };
+    const lvl = (s) => (s >= 0.9 ? 'ok' : s >= 0.75 ? 'warn' : 'err');
+    const rows = results.map((x) => rowHtml({
+      level: lvl(x.score),
+      label: x.cfg.label,
+      value: `${Math.round(x.score * 100)} %`,
+      text: `${x.cfg.short}${x.conf != null ? ` · confiance du modèle ${Math.round(x.conf * 100)} %` : ''}`,
+      diff: diffHtml(x.ops),
+    }, x === best)).join('');
+    const top = Math.max(...results.map((x) => x.score));
+    const verdict = top < 0.5
+      ? 'Scores trop faibles pour départager les réglages : le problème vient d’ailleurs (distance, bruit, écho ou modèle).'
+      : close
+        ? `Les réglages se valent (écart de ${Math.round((top - A.score) * 100)} point${top - A.score >= 0.015 ? 's' : ''} au plus) : on garde le réglage recommandé.`
+        : `Meilleur réglage : « ${best.cfg.label} » (${Math.round(best.score * 100)} % de mots justes).`;
+    const tip = best.score < 0.75
+      ? '<div class="tool-advice"><p>Score faible quel que soit le réglage</p><ul><li>Rapproche-toi du PC, réduis le bruit ambiant, ou essaie un modèle plus précis.</li><li>Lance le « Diagnostic de la pièce » pour savoir si le problème vient de l’environnement.</li></ul></div>'
+      : '';
+    const act = await tool.show({
+      step: 'Résultat',
+      html: `<p class="tool-verdict">${esc(verdict)}</p><div class="tool-results">${rows}</div>${tip}
+        <p>Mots surlignés : mal compris. Le réglage encadré en vert sera appliqué.</p>`,
+      actions: [{ label: 'Fermer', value: null }, { label: 'Recommencer', value: 'again' }, { label: 'Appliquer ce réglage', value: 'apply', primary: true }],
+    });
+    if (act === 'apply') {
+      Object.assign(sound, best.cfg.settings);
+      saveSound();
+      renderSound();
+      tool.close();
+      toast(`Réglage appliqué : ${best.cfg.label}.`, 'ok', 5000);
+    } else if (act === 'again') {
+      tool.close();
+      runCalibration();
+    }
+  } catch (e) {
+    console.error(e);
+    toolCleanup();
+    if (!tool.cancelled) { tool.close(); toast(`Calibration interrompue : ${e.message}`, 'err', 8000); }
+  } finally {
+    if (recorder.state !== 'idle') toolCleanup();
+    if (state.phase === 'loading') { state.phase = 'idle'; progress.hide(); updateButtons(); }
+    renderSound();
+  }
+}
+
 /** Pastilles « Volume » / « Compréhension » + conseil sous le graphique. */
 function renderMonitorState({ volume, conf }) {
   const set = (id, st, empty) => {
@@ -995,8 +1397,9 @@ function renderMonitorState({ volume, conf }) {
     el.dataset.level = st?.level || '';
     $('.val', el).textContent = st?.label || empty;
   };
+  const testing = recorder.state === 'preview';
   set('#vol-state', volume, recorder.state === 'idle' ? '—' : 'Mesure…');
-  set('#conf-state', conf, recorder.state === 'idle' ? '—' : state.live ? 'En attente du modèle…' : 'Mode direct désactivé');
+  set('#conf-state', conf, recorder.state === 'idle' ? '—' : testing ? 'Test du micro (pas de transcription)' : state.live ? 'En attente du modèle…' : 'Mode direct désactivé');
   const hint = (volume?.level === 'err' && volume.hint) || (conf?.level === 'err' && conf.hint) || volume?.hint || conf?.hint;
   const el = $('#monitor-hint');
   if (recorder.state === 'idle' && !hint) {
@@ -1004,7 +1407,9 @@ function renderMonitorState({ volume, conf }) {
     el.textContent = 'Lance un enregistrement : le graphique montre si ta voix est au bon niveau et, en mode direct, si le modèle te comprend bien.';
   } else {
     el.className = 'monitor-hint' + (hint ? ' warn' : '');
-    el.textContent = hint || (recorder.state === 'idle' ? '' : 'Tout va bien : continue à parler normalement.');
+    el.textContent = hint || (recorder.state === 'idle' ? ''
+      : testing ? (volume?.level === 'ok' ? 'Bon niveau : tu peux lancer l’enregistrement.' : 'Parle normalement pour vérifier le niveau.')
+      : 'Tout va bien : continue à parler normalement.');
   }
 }
 
@@ -1098,7 +1503,7 @@ function exportAs(fmt) {
 
 function updateButtons() {
   const busy = state.phase !== 'idle';
-  const recording = recorder.state !== 'idle';
+  const recording = micBusy();
   const has = state.segments.length > 0 && !busy;
   const btn = $('#btn-transcribe');
   btn.disabled = !state.audio || busy || recording || !state.caps;
@@ -1234,7 +1639,7 @@ async function renderHistory() {
 }
 
 function openDoc(it) {
-  if (state.phase !== 'idle' || recorder.state !== 'idle') return toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
+  if (state.phase !== 'idle' || micBusy()) return toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
   showDoc(it);
   closeDrawers();
   renderResume(it);
@@ -1243,7 +1648,7 @@ function openDoc(it) {
     const before = state.audio;
     Audios.get(it.audioId).then((rec) => {
       // Ne jamais écraser un audio choisi entre-temps par l'utilisateur
-      if (rec?.blob && state.doc?.id === it.id && state.phase === 'idle' && state.audio === before && recorder.state === 'idle') setAudioFromBlob(rec.blob, rec.name, { audioId: rec.id, docId: it.id }).then(() => renderResume(state.doc));
+      if (rec?.blob && state.doc?.id === it.id && state.phase === 'idle' && state.audio === before && !micBusy()) setAudioFromBlob(rec.blob, rec.name, { audioId: rec.id, docId: it.id }).then(() => renderResume(state.doc));
     }).catch(() => {});
   }
 }
@@ -1390,7 +1795,12 @@ function bind() {
   $('#btn-lexicon').onclick = () => { renderLexicon(); openDrawer('#drawer-lexicon'); };
   $('#btn-history').onclick = () => { renderHistory(); openDrawer('#drawer-history'); };
   $$('.drawer').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) closeDrawers(); }));
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDrawers(); if (!$('#modal').hidden) $('#modal-cancel').click(); } });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    closeDrawers();
+    if (!$('#modal').hidden) $('#modal-cancel').click();
+    else if (!$('#tool').hidden) tool.close();
+  });
   $('#lex-add').onclick = () => {
     state.lexicon.push({ from: '', to: '', enabled: true });
     saveLexicon(state.lexicon);
@@ -1404,7 +1814,7 @@ function bind() {
     renderLexicon();
   };
   $('#hist-clear').onclick = async () => {
-    if (state.phase !== 'idle' || recorder.state !== 'idle') return toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
+    if (state.phase !== 'idle' || micBusy()) return toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
     if (!(await ask('Tout supprimer ?', 'Toutes les transcriptions et tous les audios enregistrés seront définitivement effacés de ce navigateur.', 'Tout supprimer', { danger: true }))) return;
     await clearAll();
     store.del('rec.active');
@@ -1414,7 +1824,7 @@ function bind() {
     renderStorage();
     updateButtons();
   };
-  window.addEventListener('beforeunload', (e) => { if (state.phase !== 'idle' || recorder.state !== 'idle') e.preventDefault(); });
+  window.addEventListener('beforeunload', (e) => { if (state.phase !== 'idle' || micBusy()) e.preventDefault(); });
 }
 
 // ======================================================================
@@ -1424,7 +1834,11 @@ async function init() {
   $('#foot-version').textContent = TRANSFORMERS_VERSION;
   monitor = new Monitor($('#monitor-canvas'), { onState: renderMonitorState });
   bind();
+  bindSound();
   renderRec();
+  // Interface prête : désarme le filet de sécurité des mises à jour (voir index.html)
+  window.__appBoot = true;
+  try { sessionStorage.removeItem('boot-retry'); } catch { /* ignore */ }
   if (!window.Worker || !window.OfflineAudioContext) {
     status('Ce navigateur est trop ancien. Utilise une version récente de Chrome ou Edge.', 'err');
     return;
@@ -1454,4 +1868,8 @@ async function init() {
 init();
 
 // Accès de débogage / tests automatisés
-window.__app = { state, exportAs, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks };
+window.__app = {
+  state, exportAs, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
+  recorderState: () => recorder.state,
+  monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },
+};

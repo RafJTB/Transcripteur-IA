@@ -6,7 +6,38 @@
   <title>Transcripteur local</title>
   <meta name="description" content="Transcription audio → texte 100 % locale dans le navigateur (Whisper, WebGPU/WASM). Aucun audio n'est envoyé." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111316'/%3E%3Cg fill='%237c9cff'%3E%3Crect x='7' y='13' width='3' height='6' rx='1.5'/%3E%3Crect x='12' y='9' width='3' height='14' rx='1.5'/%3E%3Crect x='17' y='6' width='3' height='20' rx='1.5'/%3E%3Crect x='22' y='11' width='3' height='10' rx='1.5'/%3E%3C/g%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="app-version" content="2026-11-17-4" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-17-4" />
+  <script>
+    // Filet de sécurité des mises à jour : si l'application ne démarre pas (souvent un mélange
+    // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
+    // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
+    (function () {
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-17-4', 'sw.js', 'js/app.js?v=2026-11-17-4', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
+      var done = false;
+      function refreshAll() {
+        return Promise.all(FILES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); }));
+      }
+      window.__forceUpdate = function () { refreshAll().then(function () { location.reload(); }); };
+      function fail() {
+        if (done || window.__appBoot) return;
+        done = true;
+        var tried = false;
+        try { tried = sessionStorage.getItem('boot-retry') === '1'; sessionStorage.setItem('boot-retry', '1'); } catch (e) {}
+        if (!tried) return window.__forceUpdate();
+        var b = document.createElement('div');
+        b.className = 'boot-error';
+        b.innerHTML = '<strong>L’application n’a pas pu démarrer.</strong> Ton navigateur garde peut-être une ancienne version en mémoire. ' +
+          '<button type="button">Recharger la dernière version</button><span>Si le problème continue : Ctrl + Maj + R.</span>';
+        b.querySelector('button').onclick = function () { window.__forceUpdate(); };
+        (document.body || document.documentElement).appendChild(b);
+      }
+      window.addEventListener('error', function () { setTimeout(fail, 300); });
+      window.addEventListener('unhandledrejection', function () { setTimeout(fail, 300); });
+      setTimeout(fail, 15000);
+    })();
+  </script>
   <script>
     // Active l'isolation cross-origin via un service worker (GitHub Pages ne permet pas
     // d'envoyer les en-têtes COOP/COEP). Elle autorise le WASM multithread (3-4× plus rapide sur CPU).
@@ -135,6 +166,41 @@
             <div class="mstate" id="conf-state"><span class="dot"></span><div><strong>Compréhension</strong><span class="val">—</span></div></div>
           </div>
           <p class="monitor-hint" id="monitor-hint">Lance un enregistrement : le graphique montre si ta voix est au bon niveau et, en mode direct, si le modèle te comprend bien.</p>
+        <div class="sound-ctrl" id="sound-ctrl">
+          <div class="sc-head">
+            <h3>Réglages du son</h3>
+            <button class="btn sm" id="mic-test" type="button" title="Voir le niveau du micro sur le graphique sans rien enregistrer"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>Tester le micro</span></button>
+          </div>
+
+          <label class="label" for="mic-device">Micro</label>
+          <select id="mic-device" class="select"><option value="">Micro par défaut</option></select>
+
+          <div class="gain-row">
+            <label class="label" for="gain">Gain (amplification)</label>
+            <output id="gain-val" for="gain">0 dB</output>
+          </div>
+          <input type="range" id="gain" class="range" min="-12" max="24" step="1" value="0" />
+          <div class="range-scale"><span>−12 dB</span><span>0</span><span>+24 dB</span></div>
+          <div class="sc-actions">
+            <button class="btn sm" id="gain-auto" type="button" disabled title="Parle quelques secondes (test ou enregistrement), puis clique : le gain est réglé pour que ta voix soit dans la zone verte">Ajuster automatiquement</button>
+            <button class="btn sm ghost" id="sound-reset" type="button">Réglages par défaut</button>
+          </div>
+
+          <div class="sc-tools">
+            <span class="label">Optimiser la qualité</span>
+            <button class="btn sm" id="preset-laptop" type="button" title="Applique en un clic les réglages conseillés pour le micro intégré d’un PC portable"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>Optimiser pour le micro du PC</button>
+            <button class="btn sm" id="tool-diag" type="button" title="Mesure le bruit de fond, l’écart entre ta voix et le bruit, et l’écho de la pièce (≈ 15 s)"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/></svg>Diagnostic de la pièce</button>
+            <button class="btn sm" id="tool-calib" type="button" title="Tu lis 3 phrases ; chaque lecture teste un réglage et l’app mesure le pourcentage de mots justes (≈ 1 min)"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m15 17 2 2 4-4"/></svg>Calibrer par dictée</button>
+          </div>
+
+          <div class="sc-toggles">
+            <label class="switch" title="Le navigateur ajuste lui-même le volume en continu. À couper pour régler le gain à la main."><input type="checkbox" id="opt-agc" /><span class="track"></span>Gain automatique</label>
+            <label class="switch" title="Atténue les bruits de fond constants (ventilation, clavier, circulation)."><input type="checkbox" id="opt-ns" /><span class="track"></span>Réduction du bruit</label>
+            <label class="switch" title="Supprime l’écho des haut-parleurs (utile sans casque, en visio)."><input type="checkbox" id="opt-ec" /><span class="track"></span>Annulation d’écho</label>
+            <label class="switch" title="Coupe les grondements graves sous 90 Hz (chocs sur la table, souffle, moteur)."><input type="checkbox" id="opt-hp" /><span class="track"></span>Filtre des basses</label>
+          </div>
+          <p class="sc-hint" id="sc-hint"></p>
+        </div>
       </div>
     </section>
 
@@ -227,8 +293,21 @@
     </div>
   </div>
 
+  <!-- Fenêtre des outils (diagnostic, calibration) -->
+  <div class="modal" id="tool" hidden>
+    <div class="modal-box tool-box" role="dialog" aria-modal="true" aria-labelledby="tool-title">
+      <header class="tool-head">
+        <div><span class="tool-step" id="tool-step"></span><h3 id="tool-title"></h3></div>
+        <button class="icon-btn" id="tool-close" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </header>
+      <div class="tool-body" id="tool-body"></div>
+      <div class="tool-meter" id="tool-meter" hidden><div class="bar"><div class="bar-fill" id="tool-meter-fill"></div></div><span id="tool-timer"></span></div>
+      <div class="modal-actions" id="tool-actions"></div>
+    </div>
+  </div>
+
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=2026-11-17-4"></script>
 </body>
 </html>

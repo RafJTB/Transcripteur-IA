@@ -124,3 +124,120 @@ export class LiveSession {
     while (this.busy) await new Promise((r) => setTimeout(r, 50));
   }
 }
+
+/**
+ * Direct avec Voxtral Realtime : l'audio est envoyé en continu au worker, qui renvoie
+ * les phrases au fil de l'eau (~0,5 s de décalage). À l'arrêt, pas de re-transcription :
+ * on attend juste que le modèle ait fini de traiter l'audio déjà reçu.
+ * Même interface que LiveSession pour le reste de l'application.
+ */
+export class VoxtralLive {
+  constructor({ send, onUpdate, onError }) {
+    this.kind = 'voxtral';
+    this.send = send;
+    this.onUpdate = onUpdate;
+    this.onError = onError;
+    this.buf = new Float32Array(SR * 120);
+    this.len = 0;
+    this.pending = [];
+    this.committed = [];
+    this.tentative = [];
+    this.doneS = 0;
+    this.ready = false;
+    this.failed = false;
+    this.stopped = false;
+    this.finishing = false;
+    this.jobId = null;
+    this._done = null;
+  }
+
+  push(pcm) {
+    if (this.stopped) return;
+    if (this.len + pcm.length > this.buf.length) {
+      const b = new Float32Array(Math.max(this.buf.length * 2, this.len + pcm.length));
+      b.set(this.buf.subarray(0, this.len));
+      this.buf = b;
+    }
+    this.buf.set(pcm, this.len);
+    this.len += pcm.length;
+    if (this.failed) return;
+    if (this.ready) this._send(pcm);
+    else this.pending.push(pcm.slice());
+  }
+
+  _send(pcm) {
+    const copy = pcm.slice();
+    this.send({ type: 'stream-audio', pcm: copy }, [copy.buffer]);
+  }
+
+  /** Le modèle est chargé : on démarre le flux et on envoie l'audio mis en attente. */
+  start(jobId) {
+    this.jobId = jobId;
+    this.send({ type: 'stream-start', jobId });
+    for (const p of this.pending) this._send(p);
+    this.pending = [];
+    this.ready = true;
+    this.onUpdate?.(this);
+  }
+
+  /** Messages du worker. */
+  handle(m) {
+    if (m.jobId !== this.jobId) return;
+    if (m.type === 'stream-seg') {
+      this.committed.push(m.segment);
+      this.tentative = [];
+    } else if (m.type === 'stream-partial') {
+      this.tentative = m.partial ? [m.partial] : [];
+    } else if (m.type === 'stream-pos') {
+      this.doneS = m.doneS;
+    } else if (m.type === 'stream-done') {
+      this.tentative = [];
+      this._done?.(m.segments);
+      this._done = null;
+    }
+    this.onUpdate?.(this);
+  }
+
+  fail(e) {
+    if (this.failed) return;
+    this.failed = true;
+    this._done?.(null);
+    this._done = null;
+    this.onError?.(e);
+  }
+
+  get pcm() {
+    return this.buf.slice(0, this.len);
+  }
+
+  get committedS() {
+    return this.committed.length ? this.committed[this.committed.length - 1].end : 0;
+  }
+
+  get P() {
+    return Math.min(this.len, Math.round(this.committedS * SR));
+  }
+
+  /** Audio reçu mais pas encore traité par le modèle, en secondes. */
+  get lagS() {
+    return this.ready ? Math.max(0, this.len / SR - this.doneS) : 0;
+  }
+
+  /** Arrêt normal : renvoie toutes les phrases (null si le direct a échoué). */
+  finish() {
+    if (!this.ready || this.failed) return Promise.resolve(null);
+    this.finishing = true;
+    return new Promise((resolve) => {
+      this._done = resolve;
+      this.send({ type: 'stream-end' });
+    });
+  }
+
+  /** Arrêt sans rien garder. */
+  async stop() {
+    this.stopped = true;
+    if (this.ready && !this.failed) this.send({ type: 'stream-abort' });
+    this._done?.(null);
+    this._done = null;
+  }
+}

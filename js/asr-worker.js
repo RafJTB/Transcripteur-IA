@@ -12,15 +12,24 @@
 // Reprise : `resumeSeqs` contient les blocs déjà transcrits (renvoyés un par un dans les
 // messages 'progress') ; le découpage étant déterministe, on repart du bloc suivant.
 // Direct : fenêtre courte (chunkLengthS = 0), `quiet` = pas de messages de progression.
+//
+// Voxtral Realtime (kind 'voxtral') : vrai flux continu.
+//   { type: 'stream-start', jobId }   puis   { type: 'stream-audio', pcm }   …   { type: 'stream-end' }
+//   → 'stream-seg' (phrase validée), 'stream-partial' (phrase en cours), 'stream-pos', 'stream-done'
+//   { type: 'stream-abort' } arrête sans rien garder.
+//   'transcribe' fonctionne aussi avec Voxtral (fichiers, reprise par sessions de ~2 min).
 
 import { TRANSFORMERS_URL } from './config.js';
+import { VoxtralSession, planSessions, SESSION_SOFT_S, SESSION_HARD_S } from './voxtral-engine.js';
 
-const { pipeline, env, ModelRegistry } = await import(TRANSFORMERS_URL);
+const { pipeline, env, ModelRegistry, VoxtralRealtimeForConditionalGeneration, VoxtralRealtimeProcessor } = await import(TRANSFORMERS_URL);
 
 env.allowLocalModels = false; // tout vient du Hub (puis du cache navigateur)
 
 const TASK = 'automatic-speech-recognition';
-let asr = null;
+const SR = 16000;
+let asr = null; // Whisper (pipeline)
+let vox = null; // Voxtral { model, processor, tokenizer }
 let loadedKey = null;
 let cancelRequested = false;
 
@@ -55,7 +64,9 @@ async function cacheStatus(models) {
   const out = {};
   for (const m of models) {
     try {
-      out[m.id] = await ModelRegistry.is_pipeline_cached(TASK, m.repo, { device: m.device, dtype: m.dtype });
+      out[m.id] = m.kind === 'voxtral'
+        ? await ModelRegistry.is_cached(m.repo, { device: m.device, dtype: m.dtype })
+        : await ModelRegistry.is_pipeline_cached(TASK, m.repo, { device: m.device, dtype: m.dtype });
     } catch {
       out[m.id] = false;
     }
@@ -73,30 +84,45 @@ function classifyError(e) {
   return 'unknown';
 }
 
-async function load({ repo, device, dtype }) {
+async function unload() {
+  try { await asr?.dispose(); } catch { /* ignore */ }
+  try { await vox?.model.dispose(); } catch { /* ignore */ }
+  asr = null;
+  vox = null;
+  loadedKey = null;
+}
+
+async function load({ repo, device, dtype, kind }) {
   const key = `${repo}|${device}|${JSON.stringify(dtype)}`;
-  if (asr && loadedKey === key) return post({ type: 'ready', repo, device, cached: true });
-  if (asr) {
-    try { await asr.dispose(); } catch { /* ignore */ }
-    asr = null;
-    loadedKey = null;
-  }
+  if ((asr || vox) && loadedKey === key) return post({ type: 'ready', repo, device, cached: true });
+  await unload();
   post({ type: 'load-start', repo, device });
   const t0 = performance.now();
-  asr = await pipeline(TASK, repo, {
-    device,
-    dtype,
-    progress_callback: (p) => {
-      if (p.status === 'progress_total') {
-        post({ type: 'load-progress', progress: p.progress, loaded: p.loaded, total: p.total });
-      } else if (p.status === 'initiate' || p.status === 'download' || p.status === 'done') {
-        post({ type: 'load-file', status: p.status, file: p.file });
-      }
-    },
-  });
-  // Préchauffage : la première inférence WebGPU compile les shaders (plusieurs secondes).
-  post({ type: 'warmup' });
-  await asr(new Float32Array(16000), { language: 'fr', task: 'transcribe', max_new_tokens: 2 });
+  const progress_callback = (p) => {
+    if (p.status === 'progress_total') {
+      post({ type: 'load-progress', progress: p.progress, loaded: p.loaded, total: p.total });
+    } else if (p.status === 'initiate' || p.status === 'download' || p.status === 'done') {
+      post({ type: 'load-file', status: p.status, file: p.file });
+    }
+  };
+  if (kind === 'voxtral') {
+    const [model, processor] = await Promise.all([
+      VoxtralRealtimeForConditionalGeneration.from_pretrained(repo, { device, dtype, progress_callback }),
+      VoxtralRealtimeProcessor.from_pretrained(repo),
+    ]);
+    vox = { model, processor, tokenizer: processor.tokenizer };
+    post({ type: 'warmup' });
+    const s = new VoxtralSession(vox, {});
+    const run = s.run();
+    s.push(new Float32Array(16000));
+    s.finishInput();
+    await run;
+  } else {
+    asr = await pipeline(TASK, repo, { device, dtype, progress_callback });
+    // Préchauffage : la première inférence WebGPU compile les shaders (plusieurs secondes).
+    post({ type: 'warmup' });
+    await asr(new Float32Array(16000), { language: 'fr', task: 'transcribe', max_new_tokens: 2 });
+  }
   loadedKey = key;
   post({ type: 'ready', repo, device, seconds: (performance.now() - t0) / 1000 });
 }
@@ -132,9 +158,33 @@ function looksLikeLoop(text, hitMax) {
   return (top * 3) / w.length > 0.45 || uniq < 0.25 || (hitMax && uniq < 0.5);
 }
 
-/** Filet de sécurité : « x, x, x, x » (4 répétitions ou plus) → « x ». */
+/**
+ * Filet de sécurité : une suite de 1 à 6 mots répétée 4 fois ou plus d'affilée
+ * (« j'aime, j'aime, j'aime, j'aime ») est ramenée à une seule occurrence.
+ * Algorithme mot à mot, en temps linéaire (une expression régulière à rétro-références
+ * pouvait bloquer le navigateur sur un long texte répétitif).
+ */
 function collapseRepeats(text) {
-  return text.replace(/(?<![\p{L}\p{N}'’-])((?:[\p{L}\p{N}'’-]+[\s,.;!?]*){1,6}?)(?:\1){3,}/giu, '$1').replace(/\s{2,}/g, ' ').trim();
+  const parts = text.match(/\S+\s*/g);
+  if (!parts || parts.length < 4) return text.trim();
+  const norm = parts.map((p) => p.toLowerCase().replace(/[^\p{L}\p{N}'’-]/gu, ''));
+  const same = (a, b, n) => {
+    for (let k = 0; k < n; k++) if (!norm[a + k] || norm[a + k] !== norm[b + k]) return false;
+    return true;
+  };
+  const out = [];
+  let i = 0;
+  while (i < parts.length) {
+    let jump = 0;
+    for (let n = 1; n <= 6 && i + n * 4 <= parts.length; n++) {
+      let reps = 1;
+      while (i + (reps + 1) * n <= parts.length && same(i, i + reps * n, n)) reps++;
+      if (reps >= 4) { out.push(...parts.slice(i, i + n)); jump = reps * n; break; }
+    }
+    if (jump) i += jump;
+    else out.push(parts[i++]);
+  }
+  return out.join('').replace(/\s{2,}/g, ' ').trim();
 }
 
 function rms(a) {
@@ -159,7 +209,129 @@ function cleanSegments(chunks, offsetS) {
   return out;
 }
 
-async function transcribe({ jobId, audio, language, chunkLengthS = 30, strideLengthS = 5, offsetS = 0, resumeSeqs = [], quiet = false }) {
+async function transcribe(job) {
+  if (vox) return transcribeVoxtral(job);
+  return transcribeWhisper(job);
+}
+
+/** Fichier avec Voxtral : sessions de ~2 min ; chaque session terminée est sauvegardée (reprise). */
+async function transcribeVoxtral({ jobId, audio, offsetS = 0, resumeSeqs = [] }) {
+  cancelRequested = false;
+  const sessions = planSessions(audio);
+  const seqs = resumeSeqs.slice(0, sessions.length);
+  const first = seqs.length;
+  const all = () => seqs.flatMap((q) => q.segments || []);
+  const t0 = performance.now();
+  const totalS = audio.length / SR;
+  let lastTick = 0;
+  for (let i = first; i < sessions.length; i++) {
+    await new Promise((r) => setTimeout(r, 0));
+    if (cancelRequested) return post({ type: 'cancelled', jobId });
+    const w = sessions[i];
+    const partial = [];
+    const s = new VoxtralSession(vox, {
+      offsetS: offsetS + w.off / SR,
+      clean: collapseRepeats,
+      onSegment: (x) => partial.push(x),
+      onStep: (t) => {
+        if (cancelRequested) s.abort();
+        const now = performance.now();
+        if (now - lastTick < 1500) return;
+        lastTick = now;
+        // Signe de vie + progression fine (le chien de garde de l'interface s'en sert)
+        post({ type: 'tick', jobId, doneS: t - offsetS, totalS, segments: [...all(), ...cleanList(partial)] });
+      },
+    });
+    const run = s.run();
+    s.push(audio.subarray(w.off, w.end));
+    s.finishInput();
+    const segs = await run;
+    if (cancelRequested) return post({ type: 'cancelled', jobId });
+    seqs.push({ segments: cleanList(segs) });
+    const elapsed = (performance.now() - t0) / 1000;
+    const doneHere = i + 1 - first;
+    post({
+      type: 'progress', jobId, done: i + 1, total: sessions.length, index: i, seq: seqs[i], first, elapsed,
+      eta: (elapsed / doneHere) * (sessions.length - i - 1), segments: all(),
+    });
+  }
+  post({ type: 'result', jobId, segments: all(), seconds: (performance.now() - t0) / 1000, audioSeconds: totalS });
+}
+
+function cleanList(segs) {
+  return segs.filter((x) => x.text && !HALLUCINATIONS.some((r) => r.test(x.text)));
+}
+
+// ---------- Direct avec Voxtral ----------
+let live = null;
+
+async function streamStart({ jobId }) {
+  if (!vox) throw new Error('Modèle Voxtral non chargé');
+  const st = { jobId, ended: false, aborted: false, cur: null, overflow: [], all: [], doneS: 0 };
+  live = st;
+  let offset = 0; // échantillons déjà traités par les sessions précédentes
+  while (!st.aborted) {
+    const s = new VoxtralSession(vox, {
+      offsetS: offset / SR,
+      clean: collapseRepeats,
+      onSegment: (x) => {
+        if (!cleanList([x]).length) return;
+        st.all.push(x);
+        post({ type: 'stream-seg', jobId, segment: x });
+      },
+      onPartial: (x) => post({ type: 'stream-partial', jobId, partial: x }),
+      onStep: (t) => {
+        st.doneS = t;
+        if (Math.round(t / 0.08) % 6 === 0) post({ type: 'stream-pos', jobId, doneS: t });
+      },
+      yieldEvery: 2,
+    });
+    st.cur = s;
+    for (const p of st.overflow) s.push(p);
+    st.overflow = [];
+    if (st.ended) s.finishInput();
+    await s.run();
+    if (st.aborted || st.ended && !st.overflow.length && s.inputEnded && !st.cutPending) break;
+    offset += st.cutAt ?? s.len;
+    st.cutAt = null;
+    st.cutPending = false;
+  }
+  if (live === st) live = null;
+  if (!st.aborted) post({ type: 'stream-done', jobId, segments: st.all });
+}
+
+function streamAudio(pcm) {
+  const st = live;
+  if (!st || st.aborted) return;
+  const s = st.cur;
+  if (!s || s.inputEnded) return st.overflow.push(pcm);
+  s.push(pcm);
+  // Session longue : on coupe sur un silence pour libérer la mémoire du modèle.
+  const len = s.seconds;
+  if (len > SESSION_HARD_S || (len > SESSION_SOFT_S && rms(pcm) < 0.004)) {
+    st.cutAt = s.len;
+    st.cutPending = true;
+    s.finishInput();
+  }
+}
+
+function streamEnd() {
+  const st = live;
+  if (!st) return;
+  st.ended = true;
+  st.cutPending = false;
+  if (st.cur && !st.cur.inputEnded) st.cur.finishInput();
+}
+
+function streamAbort() {
+  const st = live;
+  if (!st) return;
+  st.aborted = true;
+  st.cur?.abort();
+  live = null;
+}
+
+async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, strideLengthS = 5, offsetS = 0, resumeSeqs = [], quiet = false }) {
   if (!asr) throw new Error('Modèle non chargé');
   cancelRequested = false;
   const { processor, model, tokenizer } = asr;
@@ -271,12 +443,9 @@ self.onmessage = async ({ data }) => {
         post({ type: 'cache', status: await cacheStatus(data.models) });
         break;
       case 'cache-clear':
-        if (asr && loadedKey?.startsWith(data.repo + '|')) {
-          try { await asr.dispose(); } catch { /* ignore */ }
-          asr = null;
-          loadedKey = null;
-        }
-        await ModelRegistry.clear_pipeline_cache(TASK, data.repo, { device: data.device, dtype: data.dtype });
+        if (loadedKey?.startsWith(data.repo + '|')) await unload();
+        if (data.kind === 'voxtral') await ModelRegistry.clear_cache(data.repo, { device: data.device, dtype: data.dtype });
+        else await ModelRegistry.clear_pipeline_cache(TASK, data.repo, { device: data.device, dtype: data.dtype });
         post({ type: 'cache-cleared', repo: data.repo });
         break;
       case 'load':
@@ -288,13 +457,27 @@ self.onmessage = async ({ data }) => {
       case 'cancel':
         cancelRequested = true;
         break;
+      case 'stream-start':
+        await streamStart(data);
+        break;
+      case 'stream-audio':
+        streamAudio(data.pcm);
+        break;
+      case 'stream-end':
+        streamEnd();
+        break;
+      case 'stream-abort':
+        streamAbort();
+        break;
     }
   } catch (e) {
     console.error(e);
     if (data.type === 'load') {
       asr = null;
+      vox = null;
       loadedKey = null;
     }
+    if (data.type === 'stream-start') live = null;
     post({ type: 'error', during: data.type, jobId: data.jobId, kind: classifyError(e), message: String(e?.message || e) });
   }
 };

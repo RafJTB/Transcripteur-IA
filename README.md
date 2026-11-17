@@ -30,7 +30,8 @@ sw.js               Service worker : en-têtes COOP/COEP → WASM multithread su
 js/config.js        Modèles, variantes WebGPU/WASM, langues, découpage, réglages V2
 js/asr-worker.js    Web Worker : chargement Whisper, découpage 30 s / chevauchement 5 s, fusion, progression
 js/app.js           Orchestration UI ↔ worker, reprise et repli automatiques, exports, historique
-js/live.js          Transcription en direct pendant l'enregistrement
+js/live.js          Transcription en direct (Whisper par fenêtres, Voxtral en flux continu)
+js/voxtral-engine.js Moteur Voxtral Realtime : flux continu, sessions de ~2 min, phrases horodatées
 js/pcm-worklet.js   Capture de l'audio brut du micro (AudioWorklet) pour le direct
 js/audio.js         Décodage (mp3, wav, m4a, webm, mp4…) en mono 16 kHz, enregistreur micro
 js/lexicon.js       Lexique de corrections (localStorage)
@@ -43,6 +44,7 @@ js/history.js       Stockage local (IndexedDB) : transcriptions, audios, morceau
 | Rapide | `onnx-community/whisper-base` | 206 Mo | 77 Mo |
 | Équilibré | `onnx-community/whisper-small` | 586 Mo | 249 Mo |
 | Précis | `onnx-community/whisper-large-v3-turbo` | 1,61 Go (759 Mo sans fp16) | 1,09 Go |
+| Temps réel | `onnx-community/Voxtral-Mini-4B-Realtime-2602-ONNX` (Mistral, Apache 2.0) | 2,83 Go (3,18 Go sans fp16) | indisponible |
 
 Les modèles sont téléchargés une seule fois puis gardés dans le cache du navigateur (Cache API).
 
@@ -51,6 +53,19 @@ Les modèles sont téléchargés une seule fois puis gardés dans le cache du na
 Interrupteur « Transcrire en direct » sous le micro. Toutes les ~3 s, la partie non validée est retranscrite ;
 les phrases terminées sont validées, la dernière reste provisoire (en italique). À l'arrêt, la fin est
 retranscrite normalement pour une qualité maximale. Décalage typique : 3 à 6 s avec le modèle Rapide.
+
+## Vrai temps réel avec Voxtral
+
+Modèle « Temps réel » (Voxtral Realtime de Mistral) : modèle conçu pour le flux continu, le texte suit
+la parole avec ~0,5 s de décalage, sans re-transcription à l'arrêt. Taux d'erreur publié en français :
+6,4 % (FLEURS, 480 ms de décalage). Langue détectée automatiquement.
+
+- Carte graphique (WebGPU) obligatoire ; grisé sinon.
+- 2,8 Go à télécharger une fois.
+- Le cache du modèle grossit avec la durée : la transcription est découpée en sessions de ~2 min
+  coupées sur un silence, pour ne pas saturer la mémoire d'une carte graphique intégrée.
+- Sur une carte graphique d'entrée de gamme (Intel intégrée), il peut ne pas suivre le rythme de la
+  parole : l'indicateur « retard » le signale, et le texte est complété à l'arrêt.
 
 ## Reprise automatique
 

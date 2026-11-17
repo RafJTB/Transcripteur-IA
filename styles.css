@@ -403,3 +403,12 @@ audio { width: 100%; height: 36px; color-scheme: dark; }
 
 /* Passages où le modèle était peu sûr de lui */
 .segment.low-conf .txt { text-decoration: underline wavy rgba(245, 180, 84, 0.75); text-decoration-thickness: 1px; text-underline-offset: 5px; }
+
+/* Bandeau si l'application n'a pas pu démarrer */
+.boot-error {
+  position: fixed; z-index: 100; top: 16px; left: 50%; transform: translateX(-50%); width: min(640px, calc(100vw - 32px));
+  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 14px 16px; border-radius: 12px;
+  background: #2a1a1e; border: 1px solid rgba(255, 107, 122, 0.45); color: var(--text); font-size: 14px; box-shadow: 0 20px 50px -10px #000;
+}
+.boot-error button { font: inherit; font-weight: 600; padding: 7px 12px; border-radius: 8px; border: 0; background: var(--err); color: #1a0b0e; cursor: pointer; }
+.boot-error span { color: var(--text-3); font-size: 12.5px; }

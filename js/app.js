@@ -1425,6 +1425,9 @@ async function init() {
   monitor = new Monitor($('#monitor-canvas'), { onState: renderMonitorState });
   bind();
   renderRec();
+  // Interface prête : désarme le filet de sécurité des mises à jour (voir index.html)
+  window.__appBoot = true;
+  try { sessionStorage.removeItem('boot-retry'); } catch { /* ignore */ }
   if (!window.Worker || !window.OfflineAudioContext) {
     status('Ce navigateur est trop ancien. Utilise une version récente de Chrome ou Edge.', 'err');
     return;

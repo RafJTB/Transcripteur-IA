@@ -6,7 +6,38 @@
   <title>Transcripteur local</title>
   <meta name="description" content="Transcription audio → texte 100 % locale dans le navigateur (Whisper, WebGPU/WASM). Aucun audio n'est envoyé." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111316'/%3E%3Cg fill='%237c9cff'%3E%3Crect x='7' y='13' width='3' height='6' rx='1.5'/%3E%3Crect x='12' y='9' width='3' height='14' rx='1.5'/%3E%3Crect x='17' y='6' width='3' height='20' rx='1.5'/%3E%3Crect x='22' y='11' width='3' height='10' rx='1.5'/%3E%3C/g%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="app-version" content="2026-11-17-4" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-17-4" />
+  <script>
+    // Filet de sécurité des mises à jour : si l'application ne démarre pas (souvent un mélange
+    // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
+    // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
+    (function () {
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-17-4', 'sw.js', 'js/app.js?v=2026-11-17-4', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
+      var done = false;
+      function refreshAll() {
+        return Promise.all(FILES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); }));
+      }
+      window.__forceUpdate = function () { refreshAll().then(function () { location.reload(); }); };
+      function fail() {
+        if (done || window.__appBoot) return;
+        done = true;
+        var tried = false;
+        try { tried = sessionStorage.getItem('boot-retry') === '1'; sessionStorage.setItem('boot-retry', '1'); } catch (e) {}
+        if (!tried) return window.__forceUpdate();
+        var b = document.createElement('div');
+        b.className = 'boot-error';
+        b.innerHTML = '<strong>L’application n’a pas pu démarrer.</strong> Ton navigateur garde peut-être une ancienne version en mémoire. ' +
+          '<button type="button">Recharger la dernière version</button><span>Si le problème continue : Ctrl + Maj + R.</span>';
+        b.querySelector('button').onclick = function () { window.__forceUpdate(); };
+        (document.body || document.documentElement).appendChild(b);
+      }
+      window.addEventListener('error', function () { setTimeout(fail, 300); });
+      window.addEventListener('unhandledrejection', function () { setTimeout(fail, 300); });
+      setTimeout(fail, 15000);
+    })();
+  </script>
   <script>
     // Active l'isolation cross-origin via un service worker (GitHub Pages ne permet pas
     // d'envoyer les en-têtes COOP/COEP). Elle autorise le WASM multithread (3-4× plus rapide sur CPU).
@@ -229,6 +260,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=2026-11-17-4"></script>
 </body>
 </html>

@@ -58,7 +58,6 @@
           <div class="rec-info">
             <div class="rec-time" id="rec-time">00:00</div>
             <div class="rec-state" id="rec-state">Prêt à enregistrer</div>
-            <div class="meter" id="meter" aria-hidden="true"></div>
           </div>
         </div>
         <div class="rec-actions">
@@ -122,6 +121,21 @@
       </div>
 
       <p class="status-line" id="status-line" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- MONITEUR -->
+    <section class="card" id="step-monitor" aria-labelledby="h-monitor">
+      <header class="card-head">
+        <h2 id="h-monitor"><span class="num"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>Moniteur</h2>
+      </header>
+      <div class="monitor" id="monitor">
+          <canvas id="monitor-canvas" role="img" aria-label="Graphique du volume du micro et de la compréhension du modèle"></canvas>
+          <div class="monitor-states">
+            <div class="mstate" id="vol-state"><span class="dot"></span><div><strong>Volume</strong><span class="val">—</span></div></div>
+            <div class="mstate" id="conf-state"><span class="dot"></span><div><strong>Compréhension</strong><span class="val">—</span></div></div>
+          </div>
+          <p class="monitor-hint" id="monitor-hint">Lance un enregistrement : le graphique montre si ta voix est au bon niveau et, en mode direct, si le modèle te comprend bien.</p>
+      </div>
     </section>
 
     <!-- 3. RÉSULTAT -->

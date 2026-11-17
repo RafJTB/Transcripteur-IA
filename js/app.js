@@ -6,6 +6,7 @@ import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
 import { History, Audios, RecChunks, clearAll, newId } from './history.js';
 import { LiveSession, VoxtralLive } from './live.js';
+import { Monitor, CONF } from './monitor.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -184,9 +185,11 @@ function onWorkerMessage(m) {
       renderSegments(applyLexiconTo([...r.doc.job.baseSegments, ...m.segments]), { editable: false });
       break;
     }
+    case 'stream-pos':
+      if (m.conf != null && state.live?.jobId === m.jobId) monitor?.addConf(m.doneS, m.conf);
+    // falls through
     case 'stream-seg':
     case 'stream-partial':
-    case 'stream-pos':
     case 'stream-done':
       state.live?.handle?.(m);
       break;
@@ -397,19 +400,10 @@ function selectTab(name) {
 // ======================================================================
 // Micro (+ direct, + sauvegarde continue)
 // ======================================================================
-const METER_BARS = 28;
-const levels = new Array(METER_BARS).fill(0);
-let meterTick = 0;
+let monitor = null; // graphique volume / compréhension (créé au démarrage)
 const recorder = new Recorder({
-  onLevel(l) {
-    if (++meterTick % 3 && l > 0) return; // ~20 fps
-    levels.shift();
-    levels.push(l);
-    $$('#meter i').forEach((b, i) => {
-      const v = levels[i];
-      b.style.transform = `scaleY(${Math.max(0.12, v)})`;
-      b.className = v > 0.85 ? 'hot' : v > 0.05 ? 'on' : '';
-    });
+  onLevel(_l, info) {
+    if (info) monitor?.addLevel(info.t, info.rms, info.peak);
   },
   onTick(s) {
     $('#rec-time').textContent = fmtClock(s);
@@ -442,6 +436,7 @@ async function recStart() {
   }
   const rec = { id: newId(), live, mime: recorder.mimeType, startedAt: Date.now(), pending: Promise.resolve() };
   state.rec = rec;
+  monitor?.start();
   store.set('rec.active', JSON.stringify({ id: rec.id, live, mime: rec.mime, startedAt: rec.startedAt }));
   clearAudio();
   hideResume();
@@ -478,7 +473,10 @@ function startLive(rec) {
     : new LiveSession({
       transcribeWindow: async (pcm, offsetS) => {
         const jobId = ++state.jobId;
+        const durS = pcm.length / SR;
         const r = await request({ type: 'transcribe', jobId, audio: pcm, language: state.language, chunkLengthS: 0, offsetS, quiet: true }, ['result', 'cancelled'], [pcm.buffer]);
+        const c = (r.segments || []).find((x) => x.conf != null)?.conf;
+        if (c != null) monitor?.addConf(offsetS + durS, c);
         return r.segments || [];
       },
       ...handlers,
@@ -524,6 +522,7 @@ async function recStop() {
   const rec = state.rec;
   const r = await recorder.stop();
   state.rec = null;
+  monitor?.stop();
   renderRec();
   if (!r || !rec) return;
   await rec.pending; // derniers morceaux écrits
@@ -576,6 +575,7 @@ async function recDiscard() {
   const rec = state.rec;
   state.rec = null;
   recorder.cancel();
+  monitor?.reset();
   // Effacement visible tout de suite ; le moteur termine son calcul en cours en arrière-plan.
   const live = state.live;
   state.live = null;
@@ -974,9 +974,38 @@ function renderMeta() {
     `${words} mots`,
     d.model + (d.device ? ` (${d.device === 'webgpu' ? 'WebGPU' : 'WASM'})` : ''),
     d.processingS ? `traité en ${fmtDuration(d.processingS)}` : null,
+    confSummary(state.segments),
     d.status === 'live' ? 'en direct' : d.status === 'interrupted' ? 'interrompue' : d.partial ? 'partiel' : null,
   ];
   $('#result-meta').textContent = parts.filter(Boolean).join(' · ');
+}
+
+function confSummary(segs) {
+  const withC = segs.filter((x) => x.conf != null);
+  if (!withC.length) return null;
+  const avg = withC.reduce((a, x) => a + x.conf, 0) / withC.length;
+  const low = withC.filter((x) => x.conf < CONF.fair).length;
+  return `confiance ${Math.round(avg * 100)} %` + (low ? ` · ${low} passage${low > 1 ? 's' : ''} à vérifier (soulignés)` : '');
+}
+
+/** Pastilles « Volume » / « Compréhension » + conseil sous le graphique. */
+function renderMonitorState({ volume, conf }) {
+  const set = (id, st, empty) => {
+    const el = $(id);
+    el.dataset.level = st?.level || '';
+    $('.val', el).textContent = st?.label || empty;
+  };
+  set('#vol-state', volume, recorder.state === 'idle' ? '—' : 'Mesure…');
+  set('#conf-state', conf, recorder.state === 'idle' ? '—' : state.live ? 'En attente du modèle…' : 'Mode direct désactivé');
+  const hint = (volume?.level === 'err' && volume.hint) || (conf?.level === 'err' && conf.hint) || volume?.hint || conf?.hint;
+  const el = $('#monitor-hint');
+  if (recorder.state === 'idle' && !hint) {
+    el.className = 'monitor-hint';
+    el.textContent = 'Lance un enregistrement : le graphique montre si ta voix est au bon niveau et, en mode direct, si le modèle te comprend bien.';
+  } else {
+    el.className = 'monitor-hint' + (hint ? ' warn' : '');
+    el.textContent = hint || (recorder.state === 'idle' ? '' : 'Tout va bien : continue à parler normalement.');
+  }
 }
 
 function showWaiting(on) {
@@ -1009,12 +1038,15 @@ function renderSegments(segs, { editable = true } = {}) {
     row.classList.toggle('partial', !editable);
     row.classList.toggle('tentative', !!s.tentative);
     row.classList.toggle('gap', i > 0 && s.start - segs[i - 1].end > 2);
+    const low = !s.tentative && s.conf != null && s.conf < CONF.fair;
+    row.classList.toggle('low-conf', low);
     const ts = $('.ts', row);
     ts.textContent = fmtClock(s.start);
     ts.dataset.start = s.start;
     ts.title = `${fmtClock(s.start)} → ${fmtClock(s.end)}`;
     const txt = $('.txt', row);
     txt.dataset.i = i;
+    txt.title = s.conf != null ? `Confiance du modèle : ${Math.round(s.conf * 100)} %${low ? ' — passage à vérifier' : ''}` : '';
     if (editable) txt.setAttribute('contenteditable', 'plaintext-only');
     else txt.removeAttribute('contenteditable');
     if (document.activeElement !== txt && txt.textContent !== s.text) txt.textContent = s.text;
@@ -1280,7 +1312,6 @@ function closeDrawers() {
 // ======================================================================
 function bind() {
   $$('.seg [data-tab]').forEach((b) => (b.onclick = () => selectTab(b.dataset.tab)));
-  $('#meter').innerHTML = '<i></i>'.repeat(METER_BARS);
   $('#rec-main').onclick = recToggle;
   $('#rec-stop').onclick = recStop;
   $('#rec-discard').onclick = recDiscard;
@@ -1332,7 +1363,10 @@ function bind() {
   $('#transcript').addEventListener('input', (e) => {
     const i = e.target.dataset?.i;
     if (i == null || !state.segments[i]) return;
-    state.segments[i] = { ...state.segments[i], text: e.target.textContent };
+    // Corrigé à la main : le passage n'est plus « à vérifier »
+    state.segments[i] = { ...state.segments[i], text: e.target.textContent, conf: undefined, edited: true };
+    e.target.closest('.segment')?.classList.remove('low-conf');
+    e.target.title = '';
     saveDoc(600);
   });
   $('#transcript').addEventListener('click', (e) => {
@@ -1388,6 +1422,7 @@ function bind() {
 // ======================================================================
 async function init() {
   $('#foot-version').textContent = TRANSFORMERS_VERSION;
+  monitor = new Monitor($('#monitor-canvas'), { onState: renderMonitorState });
   bind();
   renderRec();
   if (!window.Worker || !window.OfflineAudioContext) {

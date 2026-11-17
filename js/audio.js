@@ -157,9 +157,16 @@ export class Recorder {
     this._last = now;
     this.analyser.getFloatTimeDomainData(this._buf);
     let s = 0;
-    for (let i = 0; i < this._buf.length; i++) s += this._buf[i] * this._buf[i];
-    const level = this.state === 'recording' ? Math.min(1, Math.sqrt(s / this._buf.length) * 6) : 0;
-    this.onLevel?.(level);
+    let peak = 0;
+    for (let i = 0; i < this._buf.length; i++) {
+      const v = this._buf[i];
+      s += v * v;
+      if (Math.abs(v) > peak) peak = Math.abs(v);
+    }
+    const rms = Math.sqrt(s / this._buf.length);
+    const level = this.state === 'recording' ? Math.min(1, rms * 6) : 0;
+    // level : 0..1 pour le vumètre ; rms / peak bruts (0..1) pour le graphique en décibels
+    this.onLevel?.(level, this.state === 'recording' ? { rms, peak, t: this._elapsed } : null);
     this.onTick?.(this._elapsed);
     this._raf = requestAnimationFrame(() => this._loop());
   }

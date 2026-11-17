@@ -49,7 +49,7 @@ export function planSessions(audio) {
  * Nouvelle phrase : après ~0,8 s sans texte, sur une ponctuation finale, ou au-delà de 15 s.
  */
 class Segmenter {
-  constructor(tokenizer, offsetS, { onSegment, onPartial, onStep, clean }) {
+  constructor(tokenizer, offsetS, { onSegment, onPartial, onStep, clean, probe }) {
     this.tok = tokenizer;
     this.offsetS = offsetS;
     this.onSegment = onSegment;
@@ -57,8 +57,10 @@ class Segmenter {
     this.onStep = onStep;
     this.clean = clean || ((t) => t);
     this.special = new Set((tokenizer.all_special_ids || []).map(Number));
+    this.probe = probe;
     this.k = -1;
     this.ids = [];
+    this.probs = [];
     this.start = 0;
     this.lastT = 0;
     this.silence = 0;
@@ -72,8 +74,10 @@ class Segmenter {
   _token(id) {
     const t = this.offsetS + (this.k + 1) * STEP_S;
     this.k++;
-    this.onStep?.(t);
-    if (this.special.has(id) || id < 1000) {
+    const p = this.probe?.last ?? null; // confiance du modèle pour ce pas
+    const isText = !(this.special.has(id) || id < 1000);
+    this.onStep?.(t, p, isText);
+    if (!isText) {
       // Pas de texte sur ce pas (silence, remplissage)
       if (++this.silence >= 10 && this.ids.length) this.flush();
       return;
@@ -82,22 +86,29 @@ class Segmenter {
     if (this.ids.length && t - this.start > 15 && /^\s/.test(piece)) this.flush();
     if (!this.ids.length) this.start = Math.max(this.offsetS, t - 0.4);
     this.ids.push(id);
+    if (p != null) this.probs.push(p);
     this.lastT = t;
     this.silence = 0;
     const text = this.tok.decode(this.ids, { skip_special_tokens: true }).trim();
     if (/[.!?…]$/.test(text) && t - this.start > 1.5) return this.flush();
-    this.onPartial?.({ start: this.start, end: t, text });
+    this.onPartial?.({ start: this.start, end: t, text, conf: this._conf() });
   }
 
   end() {
     this.flush();
   }
 
+  _conf() {
+    if (!this.probs.length) return undefined;
+    return Math.round((this.probs.reduce((a, b) => a + b, 0) / this.probs.length) * 100) / 100;
+  }
+
   flush() {
     if (!this.ids.length) return;
     const text = this.clean(this.tok.decode(this.ids, { skip_special_tokens: true }).trim());
-    const seg = { start: this.start, end: this.lastT + STEP_S, text };
+    const seg = { start: this.start, end: this.lastT + STEP_S, text, conf: this._conf() };
     this.ids = [];
+    this.probs = [];
     this.silence = 0;
     if (text) this.onSegment?.(seg);
     this.onPartial?.(null);
@@ -203,9 +214,11 @@ export class VoxtralSession {
     const first = await processor(this.buf.slice(0, need), { is_streaming: true, is_first_audio_chunk: true });
     const seg = new Segmenter(tokenizer, this.offsetS, {
       ...this.handlers,
+      probe: this.vox.probe,
       onSegment: (s) => { segments.push(s); this.handlers.onSegment?.(s); },
     });
     await model.generate({
+      ...(this.vox.probe ? { logits_processor: [this.vox.probe] } : {}),
       input_ids: first.input_ids,
       input_features: await this._features(first.input_features),
       max_new_tokens: Math.ceil(SESSION_HARD_S / STEP_S) + 200,

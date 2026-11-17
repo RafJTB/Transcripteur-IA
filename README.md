@@ -30,6 +30,7 @@ sw.js               Service worker : en-têtes COOP/COEP → WASM multithread su
 js/config.js        Modèles, variantes WebGPU/WASM, langues, découpage, réglages V2
 js/asr-worker.js    Web Worker : chargement Whisper, découpage 30 s / chevauchement 5 s, fusion, progression
 js/app.js           Orchestration UI ↔ worker, reprise et repli automatiques, exports, historique
+js/monitor.js       Graphique volume / compréhension en temps réel
 js/live.js          Transcription en direct (Whisper par fenêtres, Voxtral en flux continu)
 js/voxtral-engine.js Moteur Voxtral Realtime : flux continu, sessions de ~2 min, phrases horodatées
 js/pcm-worklet.js   Capture de l'audio brut du micro (AudioWorklet) pour le direct
@@ -66,6 +67,19 @@ la parole avec ~0,5 s de décalage, sans re-transcription à l'arrêt. Taux d'er
   coupées sur un silence, pour ne pas saturer la mémoire d'une carte graphique intégrée.
 - Sur une carte graphique d'entrée de gamme (Intel intégrée), il peut ne pas suivre le rythme de la
   parole : l'indicateur « retard » le signale, et le texte est complété à l'arrêt.
+
+## Moniteur (volume et compréhension)
+
+Panneau à droite (en haut à droite sur écran moyen) qui défile sur les 30 dernières secondes :
+- **Volume** du micro en dBFS, avec la zone idéale en vert et les saturations en rouge.
+  Diagnostic sur 6 s : Bon niveau / Un peu faible / Trop faible / Trop fort / Aucune voix (après 8 s).
+- **Compréhension du modèle** (mode direct) : probabilité moyenne que le modèle accorde aux mots
+  qu'il écrit. ≥ 80 % bonne, 60–80 % moyenne, < 60 % faible.
+- Dans le résultat, les passages sous 60 % sont soulignés « à vérifier » ; le soulignement disparaît
+  quand tu corriges le passage. La confiance moyenne est affichée sous le titre.
+
+Limite : c'est la confiance du modèle, pas une garantie. Il peut se tromper avec assurance
+(noms propres, sigles), d'où le lexique.
 
 ## Reprise automatique
 

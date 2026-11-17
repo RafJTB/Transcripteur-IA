@@ -22,7 +22,38 @@
 import { TRANSFORMERS_URL } from './config.js';
 import { VoxtralSession, planSessions, SESSION_SOFT_S, SESSION_HARD_S } from './voxtral-engine.js';
 
-const { pipeline, env, ModelRegistry, VoxtralRealtimeForConditionalGeneration, VoxtralRealtimeProcessor } = await import(TRANSFORMERS_URL);
+const { pipeline, env, ModelRegistry, VoxtralRealtimeForConditionalGeneration, VoxtralRealtimeProcessor, LogitsProcessor } = await import(TRANSFORMERS_URL);
+
+/**
+ * Capteur de confiance : à chaque mot (token) généré, mesure la probabilité que le modèle
+ * accorde à son choix (0 à 1). Ne modifie rien. C'est une confiance du modèle, pas une
+ * garantie : il peut se tromper avec assurance (noms propres, jargon).
+ */
+class ConfidenceProbe extends LogitsProcessor {
+  constructor() {
+    super();
+    this.last = null;
+    this.lastId = -1;
+    this.onToken = null;
+  }
+
+  _call(input_ids, logits) {
+    const d = logits.data;
+    const V = logits.dims.at(-1);
+    let max = -Infinity;
+    let arg = 0;
+    for (let i = 0; i < V; i++) if (d[i] > max) { max = d[i]; arg = i; }
+    if (!Number.isFinite(max)) { this.last = null; return logits; }
+    let sum = 0;
+    for (let i = 0; i < V; i++) { const v = d[i]; if (v > -1e30) sum += Math.exp(v - max); }
+    this.last = 1 / sum;
+    this.lastId = arg;
+    this.onToken?.(arg, this.last);
+    return logits;
+  }
+}
+const probe = new ConfidenceProbe();
+const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
 
 env.allowLocalModels = false; // tout vient du Hub (puis du cache navigateur)
 
@@ -110,7 +141,7 @@ async function load({ repo, device, dtype, kind }) {
       VoxtralRealtimeForConditionalGeneration.from_pretrained(repo, { device, dtype, progress_callback }),
       VoxtralRealtimeProcessor.from_pretrained(repo),
     ]);
-    vox = { model, processor, tokenizer: processor.tokenizer };
+    vox = { model, processor, tokenizer: processor.tokenizer, probe };
     post({ type: 'warmup' });
     const s = new VoxtralSession(vox, {});
     const run = s.run();
@@ -209,6 +240,22 @@ function cleanSegments(chunks, offsetS) {
   return out;
 }
 
+/** Whisper : chaque phrase reçoit la confiance de la fenêtre de 30 s dont le centre est le plus proche. */
+function withConf(segs, seqs) {
+  for (const s of segs) {
+    const mid = (s.start + s.end) / 2;
+    let best = null;
+    let bestD = Infinity;
+    for (const q of seqs) {
+      if (q.conf == null || !q.span) continue;
+      const d = Math.abs((q.span[0] + q.span[1]) / 2 - mid);
+      if (mid >= q.span[0] && mid <= q.span[1] && d < bestD) { bestD = d; best = q.conf; }
+    }
+    if (best != null) s.conf = Math.round(best * 100) / 100;
+  }
+  return segs;
+}
+
 async function transcribe(job) {
   if (vox) return transcribeVoxtral(job);
   return transcribeWhisper(job);
@@ -267,7 +314,7 @@ let live = null;
 
 async function streamStart({ jobId }) {
   if (!vox) throw new Error('Modèle Voxtral non chargé');
-  const st = { jobId, ended: false, aborted: false, cur: null, overflow: [], all: [], doneS: 0 };
+  const st = { jobId, ended: false, aborted: false, cur: null, overflow: [], all: [], doneS: 0, probs: [] };
   live = st;
   let offset = 0; // échantillons déjà traités par les sessions précédentes
   while (!st.aborted) {
@@ -280,9 +327,13 @@ async function streamStart({ jobId }) {
         post({ type: 'stream-seg', jobId, segment: x });
       },
       onPartial: (x) => post({ type: 'stream-partial', jobId, partial: x }),
-      onStep: (t) => {
+      onStep: (t, p, isText) => {
         st.doneS = t;
-        if (Math.round(t / 0.08) % 6 === 0) post({ type: 'stream-pos', jobId, doneS: t });
+        if (isText && p != null) st.probs.push(p);
+        if (Math.round(t / 0.08) % 6 === 0) {
+          post({ type: 'stream-pos', jobId, doneS: t, conf: mean(st.probs) });
+          st.probs = [];
+        }
       },
       yieldEvery: 2,
     });
@@ -370,12 +421,18 @@ async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, st
     const w = windows[i];
     const sub = audio.subarray(w.off, w.end);
     let tokens = [];
+    let conf = null;
     if (rms(sub) > 0.0015) {
       const { input_features } = await processor(sub);
       // Plafond de tokens proportionnel à la durée : coupe court aux boucles de répétition.
       const maxTokens = Math.min(440, Math.ceil((sub.length / sr) * 10) + 24);
+      const special = new Set(tokenizer.all_special_ids.map(Number));
+      const tsBegin = tokenizer.timestamp_begin;
       for (let k = 0; k < DECODE_STRATEGIES.length; k++) {
+        const probs = [];
+        probe.onToken = (id, p) => { if (id < tsBegin && !special.has(id)) probs.push(p); };
         const out = await model.generate({
+          logits_processor: [probe],
           inputs: input_features,
           language,
           task: 'transcribe',
@@ -386,14 +443,15 @@ async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, st
         });
         const cand = (out[0].tolist ? out[0].tolist() : out.tolist()[0]).map(Number);
         const loop = looksLikeLoop(tokenizer.decode(cand, { skip_special_tokens: true }), cand.length >= maxTokens);
-        if (!tokens.length || !loop) tokens = cand;
+        if (!tokens.length || !loop) { tokens = cand; conf = mean(probs); }
         if (!loop) break;
         if (cancelRequested) break;
       }
+      probe.onToken = null;
       input_features.dispose?.();
     }
     const strideS = windows.length > 1 ? strideLengthS : 0;
-    seqs.push({ tokens, stride: [sub.length / sr, w.first ? 0 : strideS, w.last ? 0 : strideS] });
+    seqs.push({ tokens, conf, span: [offsetS + w.off / sr, offsetS + w.end / sr], stride: [sub.length / sr, w.first ? 0 : strideS, w.last ? 0 : strideS] });
     if (quiet) continue;
 
     // Aperçu : le dernier bloc est traité comme final (sa zone de chevauchement droite est incluse)
@@ -415,7 +473,7 @@ async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, st
       elapsed,
       first,
       eta: (elapsed / doneHere) * (windows.length - i - 1),
-      segments: cleanSegments(opt.chunks || [], offsetS),
+      segments: withConf(cleanSegments(opt.chunks || [], offsetS), seqs),
     });
   }
   const [, opt] = tokenizer._decode_asr(seqs, {
@@ -426,7 +484,7 @@ async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, st
   post({
     type: 'result',
     jobId,
-    segments: cleanSegments(opt.chunks || [], offsetS),
+    segments: withConf(cleanSegments(opt.chunks || [], offsetS), seqs),
     seconds: (performance.now() - t0) / 1000,
     audioSeconds: audio.length / sr,
   });

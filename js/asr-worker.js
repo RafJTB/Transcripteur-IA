@@ -6,10 +6,12 @@
 //   { type: 'cache-status', models: [{ id, repo, device, dtype }] }
 //   { type: 'cache-clear', repo, device, dtype }
 //   { type: 'load', repo, device, dtype }
-//   { type: 'transcribe', jobId, audio: Float32Array, language, chunkLengthS, strideLengthS, offsetS? }
+//   { type: 'transcribe', jobId, audio: Float32Array, language, chunkLengthS, strideLengthS,
+//     offsetS?, resumeSeqs?, quiet? }
 //   { type: 'cancel' }
-// La V2 « quasi temps réel » réutilisera 'transcribe' sur des blocs courts
-// (chunkLengthS = 0, offsetS = position du bloc) sans changer le protocole.
+// Reprise : `resumeSeqs` contient les blocs déjà transcrits (renvoyés un par un dans les
+// messages 'progress') ; le découpage étant déterministe, on repart du bloc suivant.
+// Direct : fenêtre courte (chunkLengthS = 0), `quiet` = pas de messages de progression.
 
 import { TRANSFORMERS_URL } from './config.js';
 
@@ -157,7 +159,7 @@ function cleanSegments(chunks, offsetS) {
   return out;
 }
 
-async function transcribe({ jobId, audio, language, chunkLengthS = 30, strideLengthS = 5, offsetS = 0 }) {
+async function transcribe({ jobId, audio, language, chunkLengthS = 30, strideLengthS = 5, offsetS = 0, resumeSeqs = [], quiet = false }) {
   if (!asr) throw new Error('Modèle non chargé');
   cancelRequested = false;
   const { processor, model, tokenizer } = asr;
@@ -182,9 +184,13 @@ async function transcribe({ jobId, audio, language, chunkLengthS = 30, strideLen
     windows.push({ off: 0, end: audio.length, first: true, last: true });
   }
 
-  const seqs = [];
+  const seqs = resumeSeqs.slice(0, windows.length);
+  const first = seqs.length;
   const t0 = performance.now();
-  for (let i = 0; i < windows.length; i++) {
+  for (let i = first; i < windows.length; i++) {
+    // Laisse passer les messages en attente (ex. « cancel ») : les await de l'inférence
+    // ne rendent pas la main à la boucle d'événements du worker.
+    await new Promise((r) => setTimeout(r, 0));
     if (cancelRequested) {
       post({ type: 'cancelled', jobId });
       return;
@@ -206,7 +212,7 @@ async function transcribe({ jobId, audio, language, chunkLengthS = 30, strideLen
           max_new_tokens: maxTokens,
           ...DECODE_STRATEGIES[k],
         });
-        const cand = out[0].tolist ? out[0].tolist() : out.tolist()[0];
+        const cand = (out[0].tolist ? out[0].tolist() : out.tolist()[0]).map(Number);
         const loop = looksLikeLoop(tokenizer.decode(cand, { skip_special_tokens: true }), cand.length >= maxTokens);
         if (!tokens.length || !loop) tokens = cand;
         if (!loop) break;
@@ -216,6 +222,7 @@ async function transcribe({ jobId, audio, language, chunkLengthS = 30, strideLen
     }
     const strideS = windows.length > 1 ? strideLengthS : 0;
     seqs.push({ tokens, stride: [sub.length / sr, w.first ? 0 : strideS, w.last ? 0 : strideS] });
+    if (quiet) continue;
 
     // Aperçu : le dernier bloc est traité comme final (sa zone de chevauchement droite est incluse)
     const preview = seqs.map((q, k) => (k === seqs.length - 1 ? { ...q, stride: [q.stride[0], q.stride[1], 0] } : q));
@@ -225,13 +232,17 @@ async function transcribe({ jobId, audio, language, chunkLengthS = 30, strideLen
       force_full_sequences: false,
     });
     const elapsed = (performance.now() - t0) / 1000;
+    const doneHere = i + 1 - first;
     post({
       type: 'progress',
       jobId,
       done: i + 1,
       total: windows.length,
+      index: i,
+      seq: seqs[i],
       elapsed,
-      eta: (elapsed / (i + 1)) * (windows.length - i - 1),
+      first,
+      eta: (elapsed / doneHere) * (windows.length - i - 1),
       segments: cleanSegments(opt.chunks || [], offsetS),
     });
   }

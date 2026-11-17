@@ -45,17 +45,47 @@ export function isAcceptedFile(file) {
 }
 
 /**
- * Enregistreur micro : démarrer / pause / reprendre / arrêter,
- * avec niveau sonore (0..1) et durée. Le résultat est un Blob (webm/opus).
- *
- * Point d'extension V2 (quasi temps réel) : `onBlock(Float32Array 16 kHz)`
- * sera alimenté par un AudioWorklet qui découpe le flux en blocs de quelques
- * secondes envoyés au worker pendant l'enregistrement.
+ * Rééchantillonneur en flux (fréquence native du micro → 16 kHz) par moyenne de blocs,
+ * suffisant pour la voix et sans état compliqué.
+ */
+class StreamResampler {
+  constructor(inRate, outRate = SAMPLE_RATE) {
+    this.ratio = inRate / outRate;
+    this.rest = new Float32Array(0);
+  }
+
+  push(input) {
+    const data = new Float32Array(this.rest.length + input.length);
+    data.set(this.rest);
+    data.set(input, this.rest.length);
+    const r = this.ratio;
+    const n = Math.floor(data.length / r);
+    const out = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = Math.floor(i * r);
+      const b = Math.max(a + 1, Math.floor((i + 1) * r));
+      let s = 0;
+      for (let j = a; j < b; j++) s += data[j];
+      out[i] = s / (b - a);
+    }
+    this.rest = data.slice(Math.floor(n * r));
+    return out;
+  }
+}
+
+/**
+ * Enregistreur micro : démarrer / pause / reprendre / arrêter / supprimer,
+ * avec niveau sonore (0..1) et durée.
+ *  - onChunk(blob, idx) : morceau compressé toutes les secondes (sauvegarde anti-plantage)
+ *  - onPcm(Float32Array 16 kHz) : audio brut pour la transcription en direct (si `pcm: true`)
+ * Le résultat final est un Blob (webm/opus).
  */
 export class Recorder {
-  constructor({ onLevel, onTick } = {}) {
+  constructor({ onLevel, onTick, onChunk, onPcm } = {}) {
     this.onLevel = onLevel;
     this.onTick = onTick;
+    this.onChunk = onChunk;
+    this.onPcm = onPcm;
     this.state = 'idle';
     this._elapsed = 0;
   }
@@ -64,7 +94,11 @@ export class Recorder {
     return !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined';
   }
 
-  async start() {
+  get mimeType() {
+    return this.mr?.mimeType || 'audio/webm';
+  }
+
+  async start({ pcm = false } = {}) {
     if (!(await Recorder.isAvailable())) throw new AudioError('mic-unsupported', 'Ce navigateur ne permet pas l’enregistrement audio.');
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
@@ -82,22 +116,40 @@ export class Recorder {
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
     this.chunks = [];
     this.mr = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
-    this.mr.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
+    this.mr.ondataavailable = (e) => {
+      if (!e.data.size) return;
+      this.chunks.push(e.data);
+      this.onChunk?.(e.data, this.chunks.length - 1);
+    };
     this.mr.start(1000);
 
     this.ctx = new AudioContext();
+    if (this.ctx.state === 'suspended') await this.ctx.resume().catch(() => {});
     const src = this.ctx.createMediaStreamSource(this.stream);
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 1024;
     src.connect(this.analyser);
     this._buf = new Float32Array(this.analyser.fftSize);
 
+    if (pcm) {
+      await this.ctx.audioWorklet.addModule(new URL('./pcm-worklet.js', import.meta.url));
+      const node = new AudioWorkletNode(this.ctx, 'pcm-capture');
+      const resampler = new StreamResampler(this.ctx.sampleRate);
+      node.port.onmessage = (e) => {
+        if (this.state !== 'recording') return; // pause : on ignore l'audio
+        this.onPcm?.(resampler.push(e.data));
+      };
+      const mute = this.ctx.createGain();
+      mute.gain.value = 0;
+      src.connect(node).connect(mute).connect(this.ctx.destination);
+      this._worklet = node;
+    }
+
     this.state = 'recording';
     this._elapsed = 0;
     this._last = performance.now();
     this._loop();
   }
-
   _loop() {
     if (this.state === 'idle') return;
     const now = performance.now();
@@ -139,6 +191,8 @@ export class Recorder {
   cancel() {
     if (this.mr && this.state !== 'idle') {
       this.mr.onstop = null;
+      this.mr.ondataavailable = null; // plus aucune sauvegarde
+      this.chunks = [];
       try { this.mr.stop(); } catch { /* ignore */ }
     }
     this._cleanup();
@@ -147,6 +201,7 @@ export class Recorder {
   _cleanup() {
     this.state = 'idle';
     cancelAnimationFrame(this._raf);
+    if (this._worklet) { this._worklet.port.onmessage = null; this._worklet = null; }
     this.stream?.getTracks().forEach((t) => t.stop());
     this.ctx?.close().catch(() => {});
     this.onLevel?.(0);

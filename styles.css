@@ -162,7 +162,28 @@ button { font: inherit; color: inherit; }
 .meter i { flex: 1; height: 100%; border-radius: 2px; background: rgba(255, 255, 255, 0.07); transform-origin: bottom; transform: scaleY(0.12); transition: transform 0.08s linear, background 0.15s; }
 .meter i.on { background: linear-gradient(to top, var(--accent), var(--accent-2)); }
 .meter i.hot { background: linear-gradient(to top, var(--warn), var(--rec)); }
-.rec-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rec-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.rec-actions .btn { padding: 0 8px; }
+.live-opt { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.live-hint { margin: 6px 0 0; font-size: 12.5px; color: var(--text-3); }
+.live-hint.warn { color: var(--warn); }
+.icon-btn.danger:hover { color: var(--err); background: rgba(255, 107, 122, 0.1); }
+
+.resume {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 12px 12px 12px 14px; border-radius: 12px;
+  background: rgba(245, 180, 84, 0.08); border: 1px solid rgba(245, 180, 84, 0.3); animation: rise 0.3s var(--ease);
+}
+.resume-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.resume-text strong { font-size: 13.5px; }
+.resume-text span { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.resume .btn svg { fill: currentColor; stroke: none; }
+.modal-check { display: flex; gap: 10px; align-items: center; margin: -6px 0 18px; font-size: 14px; color: var(--text); cursor: pointer; }
+.modal-check input { accent-color: var(--err); width: 16px; height: 16px; }
+.btn.primary.danger-fill { background: var(--err); color: #1a0b0e; box-shadow: none; }
+.segment.tentative .txt { color: var(--text-3); font-style: italic; }
+.live-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--rec); }
+.live-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--rec); animation: blink 1.2s infinite; }
+.badge.warn { background: rgba(245, 180, 84, 0.14); color: var(--warn); }
 
 /* ---------- Dropzone ---------- */
 .dropzone {

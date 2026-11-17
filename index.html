@@ -6,15 +6,15 @@
   <title>Transcripteur local</title>
   <meta name="description" content="Transcription audio → texte 100 % locale dans le navigateur (Whisper, WebGPU/WASM). Aucun audio n'est envoyé." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111316'/%3E%3Cg fill='%237c9cff'%3E%3Crect x='7' y='13' width='3' height='6' rx='1.5'/%3E%3Crect x='12' y='9' width='3' height='14' rx='1.5'/%3E%3Crect x='17' y='6' width='3' height='20' rx='1.5'/%3E%3Crect x='22' y='11' width='3' height='10' rx='1.5'/%3E%3C/g%3E%3C/svg%3E" />
-  <meta name="app-version" content="2026-11-17-5" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-17-5" />
+  <meta name="app-version" content="2026-11-17-6" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-17-6" />
   <script>
     // Filet de sécurité des mises à jour : si l'application ne démarre pas (souvent un mélange
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-17-5', 'sw.js', 'js/app.js?v=2026-11-17-5', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
-        'js/exporters.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-17-6', 'sw.js', 'js/app.js?v=2026-11-17-6', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/claude-export.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
         return Promise.all(FILES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); }));
@@ -218,6 +218,7 @@
             <button class="btn sm" data-export="md" type="button" disabled>.md</button>
             <button class="btn sm" data-export="srt" type="button" disabled>.srt</button>
           </div>
+          <button class="btn sm claude" id="btn-claude" type="button" title="Ouvrir la transcription dans Claude pour en faire un résumé" disabled><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>Résumer avec Claude</button>
         </div>
       </header>
 
@@ -308,6 +309,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-17-5"></script>
+  <script type="module" src="js/app.js?v=2026-11-17-6"></script>
 </body>
 </html>

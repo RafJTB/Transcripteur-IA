@@ -7,6 +7,7 @@ import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './ex
 import { History, Audios, RecChunks, clearAll, newId } from './history.js';
 import { LiveSession, VoxtralLive } from './live.js';
 import { Monitor, CONF } from './monitor.js';
+import { SUMMARY_TYPES, buildPrompt, claudeUrl, CLAUDE_NEW } from './claude-export.js';
 import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -1468,8 +1469,7 @@ function saveDoc(debounce = 0) {
 function exportName(ext) { return `${safeFilename(state.doc?.title)}.${ext}`; }
 const tsOn = () => $('#toggle-ts').checked;
 
-async function copyText() {
-  const text = toTxt(state.segments, { timestamps: tsOn() });
+async function writeClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -1479,7 +1479,61 @@ async function copyText() {
     document.execCommand('copy');
     ta.remove();
   }
+}
+
+async function copyText() {
+  await writeClipboard(toTxt(state.segments, { timestamps: tsOn() }));
   toast('Texte copié dans le presse-papiers.', 'ok', 2500);
+}
+
+function docMeta() {
+  const d = state.doc;
+  return [d?.source, d?.durationS ? `durée ${fmtClock(d.durationS)}` : null, new Date(d?.createdAt || Date.now()).toLocaleString('fr-FR')]
+    .filter(Boolean).join(' · ');
+}
+
+const lsGet = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* stockage indisponible */ } };
+
+/** Résumer avec Claude : choix du type de résumé, puis ouverture de claude.ai avec la consigne. */
+async function sendToClaude() {
+  if (!state.segments.length) return;
+  const last = lsGet('claude.type', 'cr');
+  const ts = lsGet('claude.ts', '1') === '1';
+  tool.open('Résumer avec Claude');
+  const go = await tool.show({
+    step: 'Export vers Claude',
+    html: `<p>Choisis le type de résumé. La transcription et la consigne s’ouvrent dans Claude, il n’y a plus qu’à envoyer.</p>
+      <div class="cl-types">${SUMMARY_TYPES.map((t) => `<label class="cl-type"><input type="radio" name="cl-type" value="${t.key}"${t.key === last ? ' checked' : ''} />
+        <span><strong>${esc(t.label)}</strong><small>${esc(t.short)}</small></span></label>`).join('')}</div>
+      <label class="cl-field"><span>Consignes en plus <em>(facultatif)</em></span>
+        <textarea id="cl-extra" rows="2" placeholder="Ex. : réunion de synthèse BIM, mets en avant les conflits entre lots">${esc(lsGet('claude.extra', ''))}</textarea></label>
+      <label class="modal-check"><input type="checkbox" id="cl-ts"${ts ? ' checked' : ''} /><span>Inclure les horodatages (Claude pourra citer les moments)</span></label>
+      <p class="cl-note">Confidentialité : jusqu’ici tout restait sur ton PC. À partir de ce clic, le texte est envoyé à Claude (ton compte claude.ai). L’audio, lui, ne quitte pas ton PC.</p>`,
+    actions: [{ label: 'Annuler', value: null }, { label: 'Ouvrir dans Claude', value: true, primary: true }],
+  });
+  if (!go) return;
+  const type = document.querySelector('input[name="cl-type"]:checked')?.value || 'cr';
+  const extra = $('#cl-extra').value;
+  const withTs = $('#cl-ts').checked;
+  lsSet('claude.type', type);
+  lsSet('claude.extra', extra);
+  lsSet('claude.ts', withTs ? '1' : '0');
+  const prompt = buildPrompt({
+    type, extra,
+    title: $('#result-title').value.trim() || state.doc?.title || '',
+    meta: docMeta(),
+    transcript: toTxt(state.segments, { timestamps: withTs }),
+  });
+  const url = claudeUrl(prompt);
+  // Ouverture tout de suite (le navigateur bloque les fenêtres ouvertes trop tard après le clic)
+  const win = window.open(url || CLAUDE_NEW, '_blank');
+  if (win) win.opener = null;
+  await writeClipboard(prompt);
+  tool.close();
+  if (!win) toast('Le navigateur a bloqué l’ouverture de Claude. La consigne est copiée : ouvre claude.ai et colle-la (Ctrl + V).', 'warn', 9000);
+  else if (url) toast('Claude s’ouvre avec ta transcription : vérifie et envoie. (Elle est aussi copiée, au cas où.)', 'ok', 7000);
+  else toast('Transcription longue : elle est copiée. Dans Claude, colle-la avec Ctrl + V puis envoie.', 'ok', 10000);
 }
 
 function exportAs(fmt) {
@@ -1506,7 +1560,7 @@ function updateButtons() {
     loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
   }[state.phase] || 'Transcrire';
   $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
-  $$('[data-export], #btn-copy, #btn-relex').forEach((b) => (b.disabled = !has));
+  $$('[data-export], #btn-copy, #btn-relex, #btn-claude').forEach((b) => (b.disabled = !has));
   $('#result-title').disabled = !state.doc;
   $$('#models input').forEach((i) => (i.disabled = busy || recording));
   $('#lang').disabled = busy || recording;
@@ -1778,6 +1832,7 @@ function bind() {
   $('#result-title').addEventListener('input', () => saveDoc(600));
 
   $('#btn-copy').onclick = copyText;
+  $('#btn-claude').onclick = sendToClaude;
   $$('[data-export]').forEach((b) => (b.onclick = () => exportAs(b.dataset.export)));
   $('#btn-relex').onclick = () => {
     state.segments = applyLexiconTo(state.segments);
@@ -1863,7 +1918,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
-  state, exportAs, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
+  state, exportAs, sendToClaude, buildPrompt, showDoc, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },
 };

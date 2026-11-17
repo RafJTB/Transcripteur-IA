@@ -38,6 +38,7 @@ js/pcm-worklet.js   Capture de l'audio brut du micro (AudioWorklet) pour le dire
 js/audio.js         Décodage (mp3, wav, m4a, webm, mp4…) en mono 16 kHz, enregistreur micro
 js/lexicon.js       Lexique de corrections (localStorage)
 js/exporters.js     .txt, .md, .srt
+js/claude-export.js consigne de résumé et lien vers Claude
 js/history.js       Stockage local (IndexedDB) : transcriptions, audios, morceaux d'enregistrement
 ```
 
@@ -107,6 +108,17 @@ Dans les réglages du son :
 
 Limites : l'écho est une estimation indicative ; deux lectures ne sont jamais identiques, seuls des écarts
 nets entre réglages sont significatifs.
+
+## Résumer avec Claude
+
+Le bouton **Résumer avec Claude** (barre du résultat) ouvre claude.ai avec la transcription et une consigne prête :
+compte rendu de réunion (décisions, actions avec responsable et échéance, points en suspens), résumé court,
+points clés ou résumé détaillé, plus des consignes libres. Il n'y a plus qu'à envoyer.
+
+- Transcription courte : le message est pré-rempli dans Claude.
+- Transcription longue (lien trop long) : Claude s'ouvre et la consigne est copiée, il suffit de coller (Ctrl + V).
+- Dans tous les cas la consigne est aussi copiée dans le presse-papiers.
+- Confidentialité : c'est le seul moment où du texte quitte le PC (vers ton compte claude.ai). L'audio reste local.
 
 ## Reprise automatique
 

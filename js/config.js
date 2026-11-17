@@ -84,7 +84,5 @@ export const LANGUAGES = [
 // chevauchement de 5 s de chaque côté, fusionné au niveau des tokens.
 export const CHUNKING = { chunkLengthS: 30, strideLengthS: 5 };
 
-// Préparé pour la V2 (quasi temps réel) : blocs courts pendant l'enregistrement.
-export const LIVE_MODE = { enabled: false, blockS: 5, contextS: 2 };
 
 export const SAMPLE_RATE = 16000;

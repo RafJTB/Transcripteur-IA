@@ -1,15 +1,18 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
-import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, pickVariant, lighterModel } from './config.js';
+// Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
+import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel } from './config.js';
 import { decodeToMono16k, isAcceptedFile, Recorder } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
-import { History, newId } from './history.js';
+import { History, Audios, RecChunks, clearAll, newId } from './history.js';
+import { LiveSession } from './live.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const store = {
   get: (k, d) => { try { return localStorage.getItem('transcripteur.' + k) ?? d; } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem('transcripteur.' + k, v); } catch { /* ignore */ } },
+  del: (k) => { try { localStorage.removeItem('transcripteur.' + k); } catch { /* ignore */ } },
 };
 
 const state = {
@@ -18,11 +21,13 @@ const state = {
   cache: {},
   modelId: MODELS.some((m) => m.id === store.get('model')) ? store.get('model') : DEFAULT_MODEL,
   language: store.get('lang', 'fr'),
-  audio: null, // { pcm, name, durationS, url }
-  phase: 'idle', // idle | loading | transcribing
+  audio: null, // { pcm, blob, name, durationS, url, audioId, docId }
+  phase: 'idle', // idle | loading | transcribing | live
   segments: [],
-  partial: [],
-  doc: null, // entrée d'historique courante
+  doc: null, // transcription affichée (entrée d'historique)
+  run: null, // transcription en cours { doc, jobId, lastAt, maxBlockMs, heavy }
+  rec: null, // enregistrement en cours { id, live, mime, startedAt, pending }
+  live: null, // LiveSession
   lexicon: loadLexicon(),
   jobId: 0,
 };
@@ -42,6 +47,7 @@ function fmtDuration(s) {
 }
 const modelById = (id) => MODELS.find((m) => m.id === id);
 const caps = () => ({ ...state.caps, webgpu: state.caps?.webgpu && !state.forceWasm });
+const recName = (d = new Date()) => `Enregistrement ${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
 
 function toast(text, kind = 'info', ms = 5000) {
   const el = document.createElement('div');
@@ -57,16 +63,21 @@ function status(text, kind = '') {
   el.className = `status-line ${kind}`;
 }
 
-function ask(title, text, okLabel = 'Continuer') {
+/** Confirmation. Renvoie false si annulé, sinon { checked } (case à cocher optionnelle). */
+function ask(title, text, okLabel = 'Continuer', { danger = false, checkbox = null, checked = true } = {}) {
   return new Promise((resolve) => {
     const m = $('#modal');
     $('#modal-title').textContent = title;
     $('#modal-text').textContent = text;
     $('#modal-ok').textContent = okLabel;
+    $('#modal-ok').classList.toggle('danger-fill', danger);
+    $('#modal-check').hidden = !checkbox;
+    $('#modal-check-label').textContent = checkbox || '';
+    $('#modal-check-input').checked = checked;
     m.hidden = false;
     $('#modal-ok').focus();
     const done = (v) => { m.hidden = true; $('#modal-ok').onclick = $('#modal-cancel').onclick = null; resolve(v); };
-    $('#modal-ok').onclick = () => done(true);
+    $('#modal-ok').onclick = () => done({ checked: !!checkbox && $('#modal-check-input').checked });
     $('#modal-cancel').onclick = () => done(false);
   });
 }
@@ -85,33 +96,43 @@ const progress = {
 };
 
 // ======================================================================
-// Worker
+// Worker (+ détection des plantages)
 // ======================================================================
 let worker;
 const listeners = new Set();
-let workerBoot;
 
 function startWorker() {
   worker?.terminate();
+  let booted = false;
   worker = new Worker(new URL('./asr-worker.js', import.meta.url), { type: 'module' });
-  workerBoot = new Promise((resolve, reject) => {
-    const l = (m) => { if (m.type === 'boot') { listeners.delete(l); resolve(); } };
+  const boot = new Promise((resolve, reject) => {
+    const l = (m) => { if (m.type === 'boot') { listeners.delete(l); booted = true; resolve(); } };
     listeners.add(l);
     worker.onerror = (e) => {
       e.preventDefault?.();
-      reject(new Error('Impossible de charger le moteur de transcription. Au premier lancement, cdn.jsdelivr.net doit être accessible.'));
+      if (!booted) reject(new Error('Impossible de charger le moteur de transcription. Au premier lancement, cdn.jsdelivr.net doit être accessible.'));
+      else signalCrash(`Erreur interne du moteur : ${e.message || 'inconnue'}`);
     };
   });
   worker.onmessage = (e) => { for (const l of [...listeners]) l(e.data); onWorkerMessage(e.data); };
   state.loadedKey = null;
-  return workerBoot;
+  state.loading = null;
+  return boot;
+}
+
+/** Le worker a planté ou ne répond plus : on fait échouer les requêtes en attente. */
+function signalCrash(message) {
+  for (const l of [...listeners]) {
+    l({ type: 'error', during: 'transcribe', kind: 'crash', message });
+    l({ type: 'error', during: 'load', kind: 'crash', message });
+  }
 }
 
 function request(msg, doneTypes, transfer) {
   return new Promise((resolve, reject) => {
     const l = (m) => {
       if (doneTypes.includes(m.type) && (m.jobId == null || m.jobId === msg.jobId)) { listeners.delete(l); resolve(m); }
-      else if (m.type === 'error' && m.during === msg.type) {
+      else if (m.type === 'error' && m.during === msg.type && (m.jobId == null || m.jobId === msg.jobId)) {
         listeners.delete(l);
         const err = new Error(m.message);
         err.kind = m.kind;
@@ -123,7 +144,14 @@ function request(msg, doneTypes, transfer) {
   });
 }
 
-// Messages de progression (non bloquants)
+// Chien de garde : un bloc qui ne finit jamais = moteur bloqué ou tué (mémoire).
+setInterval(() => {
+  const r = state.run;
+  if (!r || state.phase !== 'transcribing') return;
+  const limit = Math.max(r.heavy ? 300000 : 150000, r.maxBlockMs * 5);
+  if (performance.now() - r.lastAt > limit) signalCrash('Le moteur ne répond plus.');
+}, 5000);
+
 let dl = null;
 function onWorkerMessage(m) {
   switch (m.type) {
@@ -133,7 +161,7 @@ function onWorkerMessage(m) {
       const cached = state.cache[model.id];
       dl = { t0: performance.now(), cached };
       progress.show(cached ? `Chargement de ${model.name} depuis le cache…` : `Téléchargement de ${model.name} (${fmtMB(v.sizeMB)})`, { value: 0 });
-      status(cached ? 'Modèle déjà en cache : aucun téléchargement.' : 'Premier téléchargement : le modèle sera ensuite gardé en cache dans le navigateur.');
+      if (state.phase !== 'live') status(cached ? 'Modèle déjà en cache : aucun téléchargement.' : 'Premier téléchargement : le modèle sera ensuite gardé en cache dans le navigateur.');
       break;
     }
     case 'load-progress': {
@@ -149,14 +177,24 @@ function onWorkerMessage(m) {
       progress.show('Initialisation du moteur…', { sub: caps().webgpu ? 'Compilation des shaders WebGPU (quelques secondes, une seule fois par session)' : 'Préparation du moteur WASM' });
       break;
     case 'progress': {
-      const pct = (m.done / m.total) * 100;
-      const rt = state.audio ? (Math.min(m.done * 20 + 10, state.audio.durationS) / Math.max(m.elapsed, 0.01)) : 0;
+      const r = state.run;
+      if (!r || m.jobId !== r.jobId) break;
+      const now = performance.now();
+      r.maxBlockMs = Math.max(r.maxBlockMs, now - r.lastAt);
+      r.lastAt = now;
+      // Sauvegarde du bloc terminé : c'est ce qui permet de reprendre après un plantage.
+      const doc = r.doc;
+      doc.job.seqs[m.index] = m.seq;
+      doc.job.total = m.total;
+      doc.segments = [...doc.job.baseSegments, ...m.segments];
+      persist(doc);
+      const tailS = (state.audio?.durationS ?? 0) - doc.job.fromS;
+      const rt = m.elapsed > 0 ? (tailS * ((m.done - m.first) / m.total)) / m.elapsed : 0;
       progress.show(`Transcription · bloc ${m.done} / ${m.total}`, {
-        value: pct,
-        sub: m.done < m.total ? `≈ ${fmtDuration(m.eta)} restantes · ${rt ? `×${rt.toFixed(1).replace('.', ',')} temps réel` : ''}` : 'Finalisation…',
+        value: (m.done / m.total) * 100,
+        sub: m.done < m.total ? `≈ ${fmtDuration(m.eta)} restantes${rt ? ` · ×${rt.toFixed(1).replace('.', ',')} temps réel` : ''} · progression sauvegardée` : 'Finalisation…',
       });
-      state.partial = m.segments;
-      renderSegments(applyLexiconTo(m.segments), { partial: true });
+      renderSegments(applyLexiconTo(doc.segments), { editable: false });
       break;
     }
   }
@@ -207,6 +245,19 @@ function renderModels() {
       </span>`;
     box.appendChild(el);
   }
+  renderLiveHint();
+}
+
+function renderLiveHint() {
+  const el = $('#live-hint');
+  const m = modelById(state.modelId);
+  if (state.caps && !caps().webgpu && m.id !== 'base') {
+    el.className = 'live-hint warn';
+    el.textContent = `Sans carte graphique, ${m.name} risque de prendre du retard en direct : le modèle « Rapide » est conseillé. Le texte sera de toute façon complété à l’arrêt.`;
+  } else {
+    el.className = 'live-hint';
+    el.textContent = `Le texte s’affiche pendant que tu parles, avec quelques secondes de décalage (modèle : ${m.name}).`;
+  }
 }
 
 async function refreshCache() {
@@ -233,16 +284,17 @@ async function renderStorage() {
 // ======================================================================
 // Source audio
 // ======================================================================
-async function setAudioFromBlob(blob, name) {
+/** Charge un audio dans la zone 1. `pcm` évite un décodage si on l'a déjà (direct). */
+async function setAudioFromBlob(blob, name, { audioId = null, pcm = null, docId = null } = {}) {
   status('Décodage de l’audio…');
   try {
-    const pcm = await decodeToMono16k(blob);
-    const durationS = pcm.length / 16000;
+    pcm ??= await decodeToMono16k(blob);
+    const durationS = pcm.length / SR;
     if (state.audio?.url) URL.revokeObjectURL(state.audio.url);
-    state.audio = { pcm, name, durationS, url: URL.createObjectURL(blob) };
+    state.audio = { pcm, blob, name, durationS, url: URL.createObjectURL(blob), audioId, docId };
     $('#audio-card').hidden = false;
     $('#audio-name').textContent = name;
-    $('#audio-info').textContent = `${fmtClock(durationS)} · ${fmtBytes(blob.size)}`;
+    $('#audio-info').textContent = `${fmtClock(durationS)} · ${fmtBytes(blob.size)}${audioId ? ' · sauvegardé' : ''}`;
     $('#audio-player').src = state.audio.url;
     status(durationS > 7200 ? 'Audio très long : la transcription peut prendre beaucoup de temps et de mémoire.' : 'Audio prêt. Choisis un modèle puis lance la transcription.', durationS > 7200 ? 'warn' : '');
     if (durationS < 0.5) status('Audio très court (moins d’une demi-seconde).', 'warn');
@@ -262,14 +314,45 @@ function clearAudio() {
   updateButtons();
 }
 
+/** Sauvegarde l'audio courant dans le navigateur (nécessaire pour reprendre après fermeture). */
+async function ensureAudioStored() {
+  const a = state.audio;
+  if (a.audioId) return a.audioId;
+  const key = `${a.name}|${a.blob.size}|${a.blob.lastModified ?? ''}`;
+  const existing = await Audios.findByKey(key).catch(() => null);
+  if (existing) return (a.audioId = existing);
+  const id = newId();
+  try {
+    await Audios.put({ id, key, blob: a.blob, name: a.name, durationS: a.durationS, createdAt: Date.now() });
+    a.audioId = id;
+    return id;
+  } catch {
+    toast('Espace insuffisant pour sauvegarder l’audio : la reprise ne sera possible que tant que l’onglet reste ouvert.', 'warn', 8000);
+    return null;
+  }
+}
+
+/** Recharge l'audio d'une transcription depuis le stockage local. */
+async function loadDocAudio(doc) {
+  const a = state.audio;
+  if (a && ((doc.audioId && a.audioId === doc.audioId) || a.docId === doc.id)) return true;
+  if (!doc.audioId) return false;
+  const rec = await Audios.get(doc.audioId).catch(() => null);
+  if (!rec?.blob) return false;
+  await setAudioFromBlob(rec.blob, rec.name, { audioId: rec.id, docId: doc.id });
+  return !!state.audio;
+}
+
 function handleFiles(files) {
   const f = files?.[0];
   if (!f) return;
+  if (state.phase !== 'idle' || recorder.state !== 'idle') return toast('Attends la fin de l’enregistrement ou de la transcription en cours.', 'warn');
   if (!isAcceptedFile(f)) {
     toast(`Format non supporté : « ${f.name} ». Formats acceptés : mp3, wav, m4a, webm, mp4, ogg, flac…`, 'err');
     return;
   }
   selectTab('file');
+  hideResume();
   setAudioFromBlob(f, f.name);
 }
 
@@ -278,7 +361,9 @@ function selectTab(name) {
   $$('.tab-panel').forEach((p) => (p.hidden = p.dataset.panel !== name));
 }
 
-// ---------- Micro ----------
+// ======================================================================
+// Micro (+ direct, + sauvegarde continue)
+// ======================================================================
 const METER_BARS = 28;
 const levels = new Array(METER_BARS).fill(0);
 let meterTick = 0;
@@ -293,31 +378,179 @@ const recorder = new Recorder({
       b.className = v > 0.85 ? 'hot' : v > 0.05 ? 'on' : '';
     });
   },
-  onTick(s) { $('#rec-time').textContent = fmtClock(s); },
+  onTick(s) {
+    $('#rec-time').textContent = fmtClock(s);
+    if (state.live) renderRecState();
+  },
+  // Chaque seconde, le morceau compressé est sauvegardé : rien n'est perdu si l'onglet plante.
+  onChunk(blob, idx) {
+    const r = state.rec;
+    if (!r) return;
+    r.pending = r.pending.then(() => RecChunks.add(r.id, idx, blob)).catch(() => {});
+  },
+  onPcm(pcm) { state.live?.push(pcm); },
 });
 
 async function recToggle() {
-  if (recorder.state === 'idle') {
-    try {
-      await recorder.start();
-    } catch (e) {
-      status(e.message, 'err');
-      toast(e.message, 'err', 7000);
-      return;
-    }
-    clearAudio();
-    renderRec();
-  } else {
-    await recStop();
+  if (recorder.state === 'idle') await recStart();
+  else await recStop();
+}
+
+async function recStart() {
+  if (state.phase !== 'idle') return toast('Attends la fin de la transcription en cours.', 'warn');
+  const live = $('#toggle-live').checked && !!state.caps;
+  try {
+    await recorder.start({ pcm: live });
+  } catch (e) {
+    status(e.message, 'err');
+    toast(e.message, 'err', 7000);
+    return;
   }
+  const rec = { id: newId(), live, mime: recorder.mimeType, startedAt: Date.now(), pending: Promise.resolve() };
+  state.rec = rec;
+  store.set('rec.active', JSON.stringify({ id: rec.id, live, mime: rec.mime, startedAt: rec.startedAt }));
+  clearAudio();
+  hideResume();
+  if (live) startLive(rec);
+  renderRec();
+}
+
+function startLive(rec) {
+  const model = modelById(state.modelId);
+  const doc = newDoc({ id: rec.id, title: recName(), source: 'Micro (direct)', modelId: model.id, model: model.name, status: 'live', liveP: 0 });
+  showDoc(doc, { editable: false });
+  persist(doc);
+
+  let lastSave = 0;
+  const session = new LiveSession({
+    transcribeWindow: async (pcm, offsetS) => {
+      const jobId = ++state.jobId;
+      const r = await request({ type: 'transcribe', jobId, audio: pcm, language: state.language, chunkLengthS: 0, offsetS, quiet: true }, ['result', 'cancelled'], [pcm.buffer]);
+      return r.segments || [];
+    },
+    onUpdate: (s) => {
+      doc.segments = s.committed.slice();
+      state.segments = doc.segments;
+      renderMeta();
+      doc.liveP = s.committedS;
+      if (performance.now() - lastSave > 2000) { lastSave = performance.now(); persist(doc); }
+      renderLive();
+    },
+    onError: (e) => {
+      console.error(e);
+      toast(`Transcription en direct interrompue (${e.message}). L’enregistrement continue : le texte sera complété à l’arrêt.`, 'warn', 9000);
+      renderRecState();
+    },
+  });
+  state.live = session;
+  state.phase = 'live';
+  showWaiting(true);
+  updateButtons();
+
+  // Chargement du modèle en parallèle : l'audio est mis en mémoire en attendant.
+  ensureLoaded(model)
+    .then((v) => {
+      if (state.live !== session) return;
+      doc.device = v.device;
+      session.ready = true;
+      progress.hide();
+      status(`En direct · ${model.name} · ${v.device === 'webgpu' ? 'WebGPU' : 'WASM'}`);
+      renderRecState();
+    })
+    .catch((e) => {
+      if (state.live !== session) return;
+      session.failed = true;
+      progress.hide();
+      toast(`Modèle indisponible pour le direct (${e.message}). L’enregistrement continue ; tu pourras transcrire à l’arrêt.`, 'warn', 9000);
+      renderRecState();
+    });
+}
+
+function renderLive() {
+  const s = state.live;
+  if (!s) return;
+  const t = $('#transcript');
+  const nearBottom = t.scrollHeight - t.scrollTop - t.clientHeight < 80;
+  const segs = [...s.committed, ...s.tentative.map((x) => ({ ...x, tentative: true }))];
+  renderSegments(applyLexiconTo(segs), { editable: false });
+  if (nearBottom) t.scrollTop = t.scrollHeight;
+  renderRecState();
 }
 
 async function recStop() {
+  const rec = state.rec;
   const r = await recorder.stop();
+  state.rec = null;
   renderRec();
-  if (!r) return;
-  const d = new Date();
-  await setAudioFromBlob(r.blob, `Enregistrement ${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`);
+  if (!r || !rec) return;
+  await rec.pending; // derniers morceaux écrits
+  const name = recName(new Date(rec.startedAt));
+  let audioId = rec.id;
+  try {
+    await Audios.put({ id: audioId, blob: r.blob, name, durationS: r.seconds, createdAt: Date.now() });
+    await RecChunks.remove(rec.id);
+  } catch {
+    audioId = null;
+  }
+  store.del('rec.active');
+
+  if (rec.live && state.live) {
+    const s = state.live;
+    await s.stop();
+    state.live = null;
+    state.phase = 'idle';
+    const doc = state.doc;
+    const pcm = s.pcm;
+    await setAudioFromBlob(r.blob, name, { audioId, pcm, docId: doc.id });
+    Object.assign(doc, { audioId, source: name, durationS: pcm.length / SR, segments: s.committed.slice(), status: 'running' });
+    doc.job = { modelId: doc.modelId, language: state.language, fromS: s.committedS, baseSegments: s.committed.slice(), seqs: [], total: null };
+    if (pcm.length - Math.round(skipLeadingSilence(pcm, s.committedS) * SR) < SR * 0.5) return finalizeDoc(doc, []);
+    status('Finalisation : transcription de la fin de l’enregistrement…');
+    await runJob(doc);
+  } else {
+    await setAudioFromBlob(r.blob, name, { audioId });
+  }
+}
+
+/** Supprime l'enregistrement en cours sans rien garder. */
+async function recDiscard() {
+  if (recorder.state === 'idle') return;
+  const ok = await ask('Supprimer cet enregistrement ?', 'L’audio enregistré et le texte transcrit en direct seront définitivement effacés de ce navigateur.', 'Supprimer', { danger: true });
+  if (!ok || recorder.state === 'idle') return;
+  const rec = state.rec;
+  state.rec = null;
+  recorder.cancel();
+  if (state.live) {
+    await state.live.stop();
+    state.live = null;
+    state.phase = 'idle';
+    progress.hide();
+    showWaiting(false);
+  }
+  if (rec) {
+    await rec.pending;
+    await RecChunks.remove(rec.id).catch(() => {});
+    await History.remove(rec.id).catch(() => {});
+    await Audios.remove(rec.id).catch(() => {});
+  }
+  store.del('rec.active');
+  if (state.doc?.id === rec?.id) clearResult();
+  status('');
+  renderRec();
+  renderStorage();
+  toast('Enregistrement supprimé.', 'ok', 3000);
+}
+
+function renderRecState() {
+  const s = recorder.state;
+  let text = { idle: 'Prêt à enregistrer', recording: 'Enregistrement en cours…', paused: 'En pause' }[s];
+  const l = state.live;
+  if (l && s !== 'idle') {
+    if (l.failed) text += ' · direct interrompu';
+    else if (!l.ready) text += ' · chargement du modèle…';
+    else text += l.lagS > 8 ? ` · direct (retard ≈ ${Math.round(l.lagS)} s)` : ' · direct';
+  }
+  $('#rec-state').textContent = text;
 }
 
 function renderRec() {
@@ -326,24 +559,34 @@ function renderRec() {
   btn.classList.toggle('recording', s !== 'idle');
   btn.classList.toggle('paused', s === 'paused');
   btn.setAttribute('aria-label', s === 'idle' ? 'Démarrer l’enregistrement' : 'Arrêter l’enregistrement');
-  $('#rec-state').textContent = { idle: 'Prêt à enregistrer', recording: 'Enregistrement en cours…', paused: 'En pause' }[s];
+  renderRecState();
   $('#rec-pause').disabled = s === 'idle';
   $('#rec-stop').disabled = s === 'idle';
+  $('#rec-discard').disabled = s === 'idle';
+  $('#toggle-live').disabled = s !== 'idle';
   $('#rec-pause span').textContent = s === 'paused' ? 'Reprendre' : 'Pause';
   if (s === 'idle') $('#rec-time').textContent = '00:00';
   updateButtons();
 }
 
 // ======================================================================
-// Transcription (avec repli automatique)
+// Transcription (reprise + repli automatiques)
 // ======================================================================
 async function ensureLoaded(model) {
   const v = pickVariant(model, caps());
   const key = `${model.repo}|${v.device}|${JSON.stringify(v.dtype)}`;
   if (state.loadedKey === key) return v;
-  state.phase = 'loading';
-  updateButtons();
-  await request({ type: 'load', repo: model.repo, device: v.device, dtype: v.dtype }, ['ready']);
+  if (state.phase === 'idle') {
+    state.phase = 'loading';
+    updateButtons();
+  }
+  // Un seul chargement à la fois : on rejoint celui en cours s'il concerne le même modèle.
+  if (state.loading?.key !== key) {
+    const promise = request({ type: 'load', repo: model.repo, device: v.device, dtype: v.dtype }, ['ready'])
+      .finally(() => { if (state.loading?.promise === promise) state.loading = null; });
+    state.loading = { key, promise };
+  }
+  await state.loading.promise;
   state.loadedKey = key;
   state.cache[model.id] = true;
   renderModels();
@@ -351,10 +594,34 @@ async function ensureLoaded(model) {
   return v;
 }
 
-async function transcribe() {
-  if (!state.audio || state.phase !== 'idle' || recorder.state !== 'idle') return;
-  let model = modelById(state.modelId);
+function newDoc(fields) {
+  return {
+    id: newId(),
+    createdAt: Date.now(),
+    title: 'Transcription',
+    source: '',
+    audioId: null,
+    modelId: state.modelId,
+    model: modelById(state.modelId).name,
+    device: null,
+    language: state.language,
+    durationS: 0,
+    processingS: null,
+    status: 'done', // done | running | interrupted | live
+    job: null,
+    segments: [],
+    ...fields,
+  };
+}
 
+async function persist(doc = state.doc) {
+  if (!doc) return;
+  try { await History.put(structuredClone(doc)); } catch (e) { console.warn('Historique indisponible', e); }
+}
+
+async function startTranscription() {
+  if (!state.audio || state.phase !== 'idle' || recorder.state !== 'idle') return;
+  const model = modelById(state.modelId);
   if (model.heavy && !caps().webgpu) {
     const ok = await ask(
       'Modèle lourd sans carte graphique',
@@ -363,73 +630,170 @@ async function transcribe() {
     );
     if (!ok) return;
   }
+  const a = state.audio;
+  const audioId = await ensureAudioStored();
+  const doc = newDoc({
+    title: a.name.replace(/\.[a-z0-9]{2,4}$/i, ''),
+    source: a.name,
+    audioId,
+    modelId: model.id,
+    model: model.name,
+    durationS: a.durationS,
+    status: 'running',
+    job: { modelId: model.id, language: state.language, fromS: 0, baseSegments: [], seqs: [], total: null },
+  });
+  a.docId = doc.id;
+  await persist(doc);
+  await runJob(doc);
+}
 
-  state.partial = [];
-  state.segments = [];
-  renderSegments([], {});
-  showWaiting(true);
-  const jobId = ++state.jobId;
+/**
+ * Lance ou reprend une transcription. Les blocs déjà faits (doc.job.seqs) ne sont pas refaits.
+ * Plantage du moteur → redémarrage et reprise automatique (2 fois max).
+ */
+async function runJob(doc) {
+  if (state.phase !== 'idle' || recorder.state !== 'idle') return;
+  hideResume();
+  showDoc(doc, { editable: false });
+  if (!(await loadDocAudio(doc))) {
+    toast('L’audio de cette transcription n’est plus disponible : impossible de reprendre.', 'err');
+    doc.status = 'done';
+    doc.partial = true;
+    doc.job = null;
+    await persist(doc);
+    return showDoc(doc);
+  }
+  // Reprise en milieu d'audio : on démarre au début de la parole (Whisper date mal après un silence).
+  if (doc.job.fromS > 0 && !doc.job.seqs.length) doc.job.fromS = skipLeadingSilence(state.audio.pcm, doc.job.fromS);
+  let model = modelById(doc.job.modelId) || modelById(state.modelId);
   let v;
+  let crashes = 0;
+  showWaiting(true);
 
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     try {
       v = await ensureLoaded(model);
+      Object.assign(doc, { status: 'running', modelId: model.id, model: model.name, device: v.device });
+      doc.job.modelId = model.id;
+      await persist(doc);
       state.phase = 'transcribing';
       updateButtons();
-      progress.show('Transcription…', { value: 0, sub: 'Analyse du premier bloc' });
-      status(`${model.name} · ${v.device === 'webgpu' ? 'WebGPU' : 'WASM'} · ${LANGUAGES.find((l) => l[0] === state.language)?.[1] ?? state.language}`);
-      const pcm = state.audio.pcm.slice(); // copie transférée au worker
+      const done = doc.job.seqs.length;
+      progress.show(done ? `Reprise au bloc ${done + 1}${doc.job.total ? ` / ${doc.job.total}` : ''}…` : 'Transcription…', {
+        value: doc.job.total ? (done / doc.job.total) * 100 : 0,
+        sub: done ? 'Les blocs déjà transcrits ne sont pas refaits' : 'Analyse du premier bloc',
+      });
+      status(`${model.name} · ${v.device === 'webgpu' ? 'WebGPU' : 'WASM'} · ${LANGUAGES.find((l) => l[0] === doc.job.language)?.[1] ?? doc.job.language}`);
+      const pcm = state.audio.pcm.slice(Math.round(doc.job.fromS * SR));
+      const jobId = ++state.jobId;
+      state.run = { doc, jobId, lastAt: performance.now(), maxBlockMs: 0, heavy: !!model.heavy && v.device === 'wasm' };
       const res = await request(
-        { type: 'transcribe', jobId, audio: pcm, language: state.language, chunkLengthS: CHUNKING.chunkLengthS, strideLengthS: CHUNKING.strideLengthS },
+        {
+          type: 'transcribe', jobId, audio: pcm, language: doc.job.language,
+          chunkLengthS: CHUNKING.chunkLengthS, strideLengthS: CHUNKING.strideLengthS,
+          offsetS: doc.job.fromS, resumeSeqs: doc.job.seqs,
+        },
         ['result', 'cancelled'],
         [pcm.buffer]
       );
       if (res.type === 'cancelled') {
-        finish(state.partial, { model, v, partial: true });
-        toast('Transcription annulée. Le texte déjà obtenu est conservé.', 'warn');
+        stopByUser(doc);
       } else {
-        finish(res.segments, { model, v, seconds: res.seconds });
+        doc.processingS = (doc.processingS || 0) + res.seconds;
+        finalizeDoc(doc, res.segments);
         toast(`Transcription terminée en ${fmtDuration(res.seconds)}.`, 'ok');
       }
       break;
     } catch (err) {
       console.error(err);
-      if (err.kind === 'cancelled') break;
-      const next = fallbackFor(err, model, v);
+      if (err.kind === 'cancelled') { stopByUser(doc); break; }
+      if (err.kind === 'crash') {
+        if (++crashes > 2) {
+          status('Le moteur s’est arrêté plusieurs fois. Essaie un modèle plus léger, puis « Reprendre ».', 'err');
+          doc.status = 'interrupted';
+          break;
+        }
+        toast(`Le moteur de transcription s’est arrêté. Reprise automatique au bloc ${doc.job.seqs.length + 1}…`, 'warn', 7000);
+        await startWorker().catch(() => {});
+        continue;
+      }
+      const next = fallbackFor(err, model);
       if (!next) {
         const msg = err.kind === 'network'
           ? 'Téléchargement impossible : vérifie la connexion (huggingface.co doit être accessible pour le premier chargement).'
           : `Erreur : ${err.message}`;
         status(msg, 'err');
         toast(msg, 'err', 8000);
+        doc.status = 'interrupted';
         break;
       }
       toast(next.reason, 'warn', 8000);
       status(next.reason, 'warn');
       if (next.wasm) {
+        // Même modèle sur le processeur : les blocs déjà faits restent valables.
         state.forceWasm = true;
         renderEngine();
         await startWorker();
         await refreshCache();
       }
       if (next.model) {
+        // Autre modèle : on repart de zéro sur la partie restante.
         model = next.model;
         state.modelId = model.id;
         store.set('model', model.id);
+        doc.job.seqs = [];
+        doc.job.total = null;
         renderModels();
-        // Libère la mémoire du gros modèle en redémarrant le worker
         await startWorker();
       }
     }
   }
+  state.run = null;
+  if (doc.status === 'running') doc.status = 'interrupted';
+  await persist(doc);
   state.phase = 'idle';
   showWaiting(false);
   progress.hide();
-  updateButtons();
+  showDoc(doc);
+  renderResume(doc);
+}
+
+function skipLeadingSilence(pcm, fromS) {
+  const frame = SR / 10;
+  let i = Math.round(fromS * SR);
+  const start = i;
+  while (i + frame <= pcm.length) {
+    let e = 0;
+    for (let k = i; k < i + frame; k++) e += pcm[k] * pcm[k];
+    if (Math.sqrt(e / frame) > 0.006) break;
+    i += frame;
+  }
+  return Math.max(start, i - SR / 4) / SR;
+}
+
+function stopByUser(doc) {
+  doc.status = 'interrupted';
+  doc.stopReason = 'user';
+  toast('Transcription arrêtée. Le texte obtenu est conservé ; « Reprendre » continue là où elle s’est arrêtée.', 'warn', 7000);
+}
+
+function finalizeDoc(doc, newSegments) {
+  doc.segments = applyLexiconTo([...doc.job.baseSegments, ...newSegments]);
+  doc.status = 'done';
+  doc.job = null;
+  doc.stopReason = null;
+  doc.autoResumes = 0;
+  persist(doc);
+  state.phase = 'idle';
+  showWaiting(false);
+  progress.hide();
+  showDoc(doc);
+  if (matchMedia('(max-width: 980px)').matches) $('#step-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!doc.segments.length) status('Aucune parole détectée dans cet audio.', 'warn');
 }
 
 /** Décide du repli : WebGPU → WASM, ou gros modèle → modèle plus léger. */
-function fallbackFor(err, model, v) {
+function fallbackFor(err, model) {
   if (err.kind === 'network') return null;
   const lighter = lighterModel(model.id);
   if (err.kind === 'memory' && lighter)
@@ -443,7 +807,7 @@ function fallbackFor(err, model, v) {
 function cancel() {
   if (state.phase === 'transcribing') {
     worker.postMessage({ type: 'cancel' });
-    progress.show('Annulation…', { sub: 'Fin du bloc en cours' });
+    progress.show('Arrêt…', { sub: 'Fin du bloc en cours' });
   } else if (state.phase === 'loading') {
     // Impossible d'interrompre proprement un téléchargement : on redémarre le worker.
     for (const l of [...listeners]) l({ type: 'error', during: 'load', kind: 'cancelled', message: 'Chargement annulé' });
@@ -452,35 +816,73 @@ function cancel() {
   }
 }
 
+// ---------- Bloc « Reprendre » ----------
+let autoTimer = null;
+
+function isResumable(doc) {
+  return !!doc && doc.status === 'interrupted' && !!doc.job && (!!doc.audioId || state.audio?.docId === doc.id);
+}
+
+function hideResume() {
+  clearInterval(autoTimer);
+  autoTimer = null;
+  $('#resume-block').hidden = true;
+}
+
+/** Affiche « Reprendre » ; avec `auto`, la reprise se lance seule après un compte à rebours. */
+function renderResume(doc = state.doc, { auto = false } = {}) {
+  hideResume();
+  if (!isResumable(doc) || state.phase !== 'idle' || recorder.state !== 'idle') return;
+  const j = doc.job;
+  const done = j.seqs?.length || 0;
+  const what = j.total
+    ? `bloc ${done} / ${j.total} (${Math.round((done / j.total) * 100)} %)`
+    : j.fromS > 0 ? `reste à partir de ${fmtClock(j.fromS)}` : 'pas encore commencée';
+  const base = `${what} · ${modelById(j.modelId)?.name ?? ''}`;
+  $('#resume-title').textContent = doc.stopReason === 'user' ? 'Transcription arrêtée' : 'Transcription interrompue';
+  $('#resume-sub').textContent = base;
+  $('#resume-block').hidden = false;
+  $('#btn-resume').onclick = () => resumeDoc(doc);
+  if (auto) {
+    let n = 8;
+    const tick = () => {
+      if (n <= 0) return resumeDoc(doc, { auto: true });
+      $('#resume-sub').textContent = `${base} · reprise automatique dans ${n--} s`;
+    };
+    tick();
+    autoTimer = setInterval(tick, 1000);
+  }
+}
+
+async function resumeDoc(doc, { auto = false } = {}) {
+  hideResume();
+  if (auto) doc.autoResumes = (doc.autoResumes || 0) + 1;
+  doc.stopReason = null;
+  await runJob(doc);
+}
+
 // ======================================================================
 // Résultat
 // ======================================================================
 const lexRules = () => compileLexicon(state.lexicon);
 const applyLexiconTo = (segs) => { const r = lexRules(); return segs.map((s) => ({ ...s, text: applyLexicon(s.text, r) })); };
 
-function finish(rawSegments, { model, v, seconds, partial }) {
-  state.segments = applyLexiconTo(rawSegments || []);
-  const d = new Date();
-  const title = state.audio?.name?.replace(/\.[a-z0-9]{2,4}$/i, '') || `Transcription ${d.toLocaleDateString('fr-FR')}`;
-  state.doc = {
-    id: newId(),
-    createdAt: Date.now(),
-    title,
-    source: state.audio?.name || '',
-    model: model.name,
-    device: v?.device,
-    language: state.language,
-    durationS: state.audio?.durationS || 0,
-    processingS: seconds || null,
-    partial: !!partial,
-    segments: state.segments,
-  };
-  $('#result-title').value = title;
+function showDoc(doc, { editable = true } = {}) {
+  state.doc = doc;
+  state.segments = doc.segments || [];
+  $('#result-title').value = doc.title;
   renderMeta();
-  renderSegments(state.segments, {});
-  saveDoc();
-  if (matchMedia('(max-width: 980px)').matches) $('#step-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  if (!state.segments.length) status('Aucune parole détectée dans cet audio.', 'warn');
+  renderSegments(state.segments, { editable });
+}
+
+function clearResult() {
+  state.doc = null;
+  state.segments = [];
+  $('#result-title').value = '';
+  renderMeta();
+  showWaiting(false);
+  renderSegments([], {});
+  hideResume();
 }
 
 function renderMeta() {
@@ -493,7 +895,7 @@ function renderMeta() {
     `${words} mots`,
     d.model + (d.device ? ` (${d.device === 'webgpu' ? 'WebGPU' : 'WASM'})` : ''),
     d.processingS ? `traité en ${fmtDuration(d.processingS)}` : null,
-    d.partial ? 'partiel' : null,
+    d.status === 'live' ? 'en direct' : d.status === 'interrupted' ? 'interrompue' : d.partial ? 'partiel' : null,
   ];
   $('#result-meta').textContent = parts.filter(Boolean).join(' · ');
 }
@@ -510,7 +912,7 @@ function showWaiting(on) {
   }
 }
 
-function renderSegments(segs, { partial }) {
+function renderSegments(segs, { editable = true } = {}) {
   const t = $('#transcript');
   const typing = $('.typing', t);
   $('#empty-state').hidden = segs.length > 0 || !!typing;
@@ -525,7 +927,8 @@ function renderSegments(segs, { partial }) {
       row.innerHTML = '<button class="ts" type="button"></button><div class="txt" spellcheck="true"></div>';
       t.insertBefore(row, typing || null);
     }
-    row.classList.toggle('partial', !!partial);
+    row.classList.toggle('partial', !editable);
+    row.classList.toggle('tentative', !!s.tentative);
     row.classList.toggle('gap', i > 0 && s.start - segs[i - 1].end > 2);
     const ts = $('.ts', row);
     ts.textContent = fmtClock(s.start);
@@ -533,8 +936,8 @@ function renderSegments(segs, { partial }) {
     ts.title = `${fmtClock(s.start)} → ${fmtClock(s.end)}`;
     const txt = $('.txt', row);
     txt.dataset.i = i;
-    if (partial) txt.removeAttribute('contenteditable');
-    else txt.setAttribute('contenteditable', 'plaintext-only');
+    if (editable) txt.setAttribute('contenteditable', 'plaintext-only');
+    else txt.removeAttribute('contenteditable');
     if (document.activeElement !== txt && txt.textContent !== s.text) txt.textContent = s.text;
   });
   updateButtons();
@@ -542,12 +945,13 @@ function renderSegments(segs, { partial }) {
 
 let saveTimer;
 function saveDoc(debounce = 0) {
-  if (!state.doc) return;
+  const doc = state.doc;
+  if (!doc || doc.status === 'running' || doc.status === 'live') return;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    state.doc.segments = state.segments;
-    state.doc.title = $('#result-title').value.trim() || state.doc.title;
-    try { await History.put(structuredClone(state.doc)); } catch (e) { console.warn('Historique indisponible', e); }
+  saveTimer = setTimeout(() => {
+    doc.segments = state.segments;
+    doc.title = $('#result-title').value.trim() || doc.title;
+    persist(doc);
   }, debounce);
 }
 
@@ -583,16 +987,54 @@ function exportAs(fmt) {
 
 function updateButtons() {
   const busy = state.phase !== 'idle';
+  const recording = recorder.state !== 'idle';
   const has = state.segments.length > 0 && !busy;
   const btn = $('#btn-transcribe');
-  btn.disabled = !state.audio || busy || recorder.state !== 'idle' || !state.caps;
+  btn.disabled = !state.audio || busy || recording || !state.caps;
   btn.classList.toggle('busy', busy);
-  $('span', btn).textContent = state.phase === 'loading' ? 'Chargement du modèle…' : state.phase === 'transcribing' ? 'Transcription en cours…' : 'Transcrire';
-  $('#btn-cancel').hidden = !busy;
+  $('span', btn).textContent = {
+    loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
+  }[state.phase] || 'Transcrire';
+  $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
   $$('[data-export], #btn-copy, #btn-relex').forEach((b) => (b.disabled = !has));
   $('#result-title').disabled = !state.doc;
-  $$('#models input').forEach((i) => (i.disabled = busy));
-  $('#lang').disabled = busy;
+  $$('#models input').forEach((i) => (i.disabled = busy || recording));
+  $('#lang').disabled = busy || recording;
+  $('#audio-delete').disabled = busy;
+  $('#audio-clear').disabled = busy;
+  $('#btn-resume').disabled = busy || recording;
+}
+
+// ======================================================================
+// Suppression d'un enregistrement
+// ======================================================================
+async function deleteRecording() {
+  const a = state.audio;
+  if (!a || state.phase !== 'idle') return;
+  const linked = (await History.list().catch(() => [])).filter((d) => (a.audioId && d.audioId === a.audioId) || d.id === a.docId);
+  const r = await ask(
+    'Supprimer l’enregistrement ?',
+    `« ${a.name} » sera définitivement effacé de ce navigateur.`,
+    'Supprimer',
+    { danger: true, checkbox: linked.length ? (linked.length > 1 ? 'Supprimer aussi les transcriptions associées' : 'Supprimer aussi la transcription associée') : null, checked: true }
+  );
+  if (!r) return;
+  if (a.audioId) await Audios.remove(a.audioId).catch(() => {});
+  for (const d of linked) {
+    if (r.checked) {
+      await History.remove(d.id).catch(() => {});
+      if (state.doc?.id === d.id) clearResult();
+    } else {
+      d.audioId = null;
+      if (d.status === 'interrupted') Object.assign(d, { status: 'done', partial: true, job: null });
+      await persist(d);
+      if (state.doc?.id === d.id) showDoc(d);
+    }
+  }
+  clearAudio();
+  hideResume();
+  renderStorage();
+  toast(r.checked ? 'Enregistrement et transcription supprimés.' : 'Enregistrement supprimé (le texte est conservé).', 'ok', 3500);
 }
 
 // ======================================================================
@@ -631,24 +1073,49 @@ function renderLexicon() {
 async function renderHistory() {
   const list = $('#hist-list');
   let items = [];
-  try { items = await History.list(); } catch { list.innerHTML = '<p class="hist-empty">Historique indisponible dans ce navigateur.</p>'; return; }
+  let sizes = {};
+  try { [items, sizes] = await Promise.all([History.list(), Audios.sizes()]); } catch { list.innerHTML = '<p class="hist-empty">Historique indisponible dans ce navigateur.</p>'; return; }
   if (!items.length) { list.innerHTML = '<p class="hist-empty">Aucune transcription enregistrée pour l’instant.</p>'; return; }
   list.innerHTML = '';
   for (const it of items) {
     const el = document.createElement('div');
     el.className = 'hist-item' + (state.doc?.id === it.id ? ' current' : '');
     el.tabIndex = 0;
-    el.innerHTML = `<strong></strong><button class="icon-btn" type="button" aria-label="Supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button><small></small><p></p>`;
+    el.innerHTML = `<strong></strong><button class="icon-btn danger" type="button" aria-label="Supprimer" title="Supprimer la transcription et son audio"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button><small></small><p></p>`;
     $('strong', el).textContent = it.title;
-    $('small', el).textContent = [new Date(it.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }), it.durationS ? fmtClock(it.durationS) : null, it.model].filter(Boolean).join(' · ');
+    const audioSize = it.audioId ? sizes[it.audioId] : null;
+    $('small', el).textContent = [
+      new Date(it.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }),
+      it.durationS ? fmtClock(it.durationS) : null,
+      it.model,
+      audioSize != null ? `audio ${fmtBytes(audioSize)}` : null,
+    ].filter(Boolean).join(' · ');
+    if (it.status === 'interrupted' || it.status === 'running') {
+      const b = document.createElement('span');
+      b.className = 'badge warn';
+      b.textContent = 'Interrompue';
+      b.style.marginLeft = '8px';
+      $('small', el).appendChild(b);
+    }
     $('p', el).textContent = it.segments.map((s) => s.text).join(' ').slice(0, 220) || '(vide)';
     const open = () => openDoc(it);
     el.addEventListener('click', (e) => { if (!e.target.closest('.icon-btn')) open(); });
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
     $('.icon-btn', el).onclick = async () => {
+      if (state.run?.doc.id === it.id || state.doc?.id === it.id && state.phase !== 'idle') return toast('Cette transcription est en cours.', 'warn');
+      const ok = await ask('Supprimer cette transcription ?', `« ${it.title} »${it.audioId ? ' et son audio seront' : ' sera'} définitivement effacé${it.audioId ? 's' : 'e'} de ce navigateur.`, 'Supprimer', { danger: true });
+      if (!ok) return;
       await History.remove(it.id);
-      if (state.doc?.id === it.id) state.doc = null;
+      if (it.audioId) {
+        const others = (await History.list()).some((d) => d.audioId === it.audioId);
+        if (!others) {
+          await Audios.remove(it.audioId);
+          if (state.audio?.audioId === it.audioId) clearAudio();
+        }
+      }
+      if (state.doc?.id === it.id) clearResult();
       renderHistory();
+      renderStorage();
       updateButtons();
     };
     list.appendChild(el);
@@ -656,13 +1123,64 @@ async function renderHistory() {
 }
 
 function openDoc(it) {
-  if (state.phase !== 'idle') return toast('Attends la fin de la transcription en cours.', 'warn');
-  state.doc = it;
-  state.segments = it.segments;
-  $('#result-title').value = it.title;
-  renderMeta();
-  renderSegments(state.segments, {});
+  if (state.phase !== 'idle' || recorder.state !== 'idle') return toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
+  showDoc(it);
   closeDrawers();
+  renderResume(it);
+  // Recharge l'audio associé (réécoute, horodatages cliquables, reprise)
+  if (it.audioId && state.audio?.audioId !== it.audioId) {
+    const before = state.audio;
+    Audios.get(it.audioId).then((rec) => {
+      // Ne jamais écraser un audio choisi entre-temps par l'utilisateur
+      if (rec?.blob && state.doc?.id === it.id && state.phase === 'idle' && state.audio === before && recorder.state === 'idle') setAudioFromBlob(rec.blob, rec.name, { audioId: rec.id, docId: it.id }).then(() => renderResume(state.doc));
+    }).catch(() => {});
+  }
+}
+
+// ======================================================================
+// Récupération après fermeture ou plantage de l'onglet
+// ======================================================================
+async function recover() {
+  let autoDoc = null;
+  // 1. Enregistrement micro interrompu : on reconstitue l'audio à partir des morceaux sauvegardés.
+  let act = null;
+  try { act = JSON.parse(store.get('rec.active', 'null')); } catch { /* ignore */ }
+  store.del('rec.active');
+  if (act?.id) {
+    const blob = await RecChunks.blob(act.id, act.mime).catch(() => null);
+    if (blob?.size) {
+      const name = `Enregistrement récupéré (${new Date(act.startedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })})`;
+      await Audios.put({ id: act.id, blob, name, createdAt: Date.now() });
+      await RecChunks.remove(act.id);
+      const doc = await History.get(act.id).catch(() => null);
+      if (doc) {
+        Object.assign(doc, { audioId: act.id, source: name, status: 'interrupted', stopReason: 'crash' });
+        doc.job = { modelId: doc.modelId, language: doc.language, fromS: doc.liveP || 0, baseSegments: doc.segments || [], seqs: [], total: null };
+        await persist(doc);
+        autoDoc = doc;
+      } else {
+        await setAudioFromBlob(blob, name, { audioId: act.id });
+        toast('Un enregistrement interrompu a été récupéré : tu peux le transcrire.', 'ok', 9000);
+      }
+    }
+  }
+  // 2. Transcriptions qui tournaient quand l'onglet s'est fermé.
+  const docs = await History.list().catch(() => []);
+  for (const d of docs) {
+    if (d.status !== 'running' && d.status !== 'live') continue;
+    if (d.status === 'live') Object.assign(d, { status: 'done', partial: true, job: null }); // audio perdu
+    else Object.assign(d, { status: 'interrupted', stopReason: 'crash' });
+    await persist(d);
+    if (!autoDoc && d.status === 'interrupted') autoDoc = d;
+  }
+  if (!autoDoc) return false;
+  showDoc(autoDoc);
+  const rec = autoDoc.audioId ? await Audios.get(autoDoc.audioId).catch(() => null) : null;
+  if (rec?.blob) await setAudioFromBlob(rec.blob, rec.name, { audioId: rec.id, docId: autoDoc.id });
+  const auto = (autoDoc.autoResumes || 0) < 3;
+  renderResume(autoDoc, { auto });
+  toast(auto ? 'Une transcription a été interrompue : elle va reprendre automatiquement.' : 'Une transcription a été interrompue plusieurs fois : clique sur « Reprendre » quand tu veux.', 'warn', 8000);
+  return true;
 }
 
 // ======================================================================
@@ -686,19 +1204,24 @@ function bind() {
   $('#meter').innerHTML = '<i></i>'.repeat(METER_BARS);
   $('#rec-main').onclick = recToggle;
   $('#rec-stop').onclick = recStop;
+  $('#rec-discard').onclick = recDiscard;
   $('#rec-pause').onclick = () => { recorder.state === 'paused' ? recorder.resume() : recorder.pause(); renderRec(); };
+  $('#toggle-live').checked = store.get('live', '0') === '1';
+  $('#toggle-live').onchange = (e) => store.set('live', e.target.checked ? '1' : '0');
 
   const dz = $('#dropzone');
   $('#file-input').onchange = (e) => { handleFiles(e.target.files); e.target.value = ''; };
   ['dragenter', 'dragover'].forEach((t) => window.addEventListener(t, (e) => { e.preventDefault(); dz.classList.add('over'); }));
   ['dragleave', 'drop'].forEach((t) => window.addEventListener(t, (e) => { e.preventDefault(); if (t === 'drop' || !e.relatedTarget) dz.classList.remove('over'); }));
   window.addEventListener('drop', (e) => handleFiles(e.dataTransfer?.files));
-  $('#audio-clear').onclick = clearAudio;
+  $('#audio-clear').onclick = () => { clearAudio(); hideResume(); };
+  $('#audio-delete').onclick = deleteRecording;
 
   $('#models').addEventListener('change', (e) => {
     if (e.target.name !== 'model') return;
     state.modelId = e.target.value;
     store.set('model', state.modelId);
+    renderLiveHint();
   });
   $('#models').addEventListener('click', async (e) => {
     const id = e.target.dataset?.clear;
@@ -718,8 +1241,9 @@ function bind() {
   lang.value = state.language;
   lang.onchange = () => { state.language = lang.value; store.set('lang', lang.value); };
 
-  $('#btn-transcribe').onclick = transcribe;
+  $('#btn-transcribe').onclick = startTranscription;
   $('#btn-cancel').onclick = cancel;
+  $('#btn-resume-dismiss').onclick = hideResume;
 
   $('#toggle-ts').checked = store.get('ts', '1') === '1';
   $('#transcript').dataset.ts = $('#toggle-ts').checked ? 'on' : 'off';
@@ -766,10 +1290,14 @@ function bind() {
     renderLexicon();
   };
   $('#hist-clear').onclick = async () => {
-    if (!(await ask('Tout supprimer ?', 'Toutes les transcriptions de l’historique seront définitivement effacées de ce navigateur.', 'Tout supprimer'))) return;
-    await History.clear();
-    state.doc = null;
+    if (state.phase !== 'idle' || recorder.state !== 'idle') return toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
+    if (!(await ask('Tout supprimer ?', 'Toutes les transcriptions et tous les audios enregistrés seront définitivement effacés de ce navigateur.', 'Tout supprimer', { danger: true }))) return;
+    await clearAll();
+    store.del('rec.active');
+    clearAudio();
+    clearResult();
     renderHistory();
+    renderStorage();
     updateButtons();
   };
   window.addEventListener('beforeunload', (e) => { if (state.phase !== 'idle' || recorder.state !== 'idle') e.preventDefault(); });
@@ -801,14 +1329,14 @@ async function init() {
   updateButtons();
   await refreshCache();
   if (!state.caps.webgpu) status((state.caps.softwareGpu ? 'Pas de carte graphique exploitable (GPU logiciel détecté)' : 'WebGPU non disponible') + ' : la transcription utilisera le processeur (plus lent). Le modèle « Rapide » ou « Équilibré » est conseillé.', 'warn');
-  // Dernière transcription de l'historique
   try {
+    if (await recover()) return;
     const [last] = await History.list();
     if (last && !state.doc) openDoc(last);
-  } catch { /* ignore */ }
+  } catch (e) { console.warn(e); }
 }
 
 init();
 
 // Accès de débogage / tests automatisés
-window.__app = { state, exportAs, toTxt, toSrt, toMarkdown };
+window.__app = { state, exportAs, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks };

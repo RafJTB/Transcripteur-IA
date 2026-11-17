@@ -64,6 +64,11 @@
         <div class="rec-actions">
           <button class="btn" id="rec-pause" type="button" disabled><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
           <button class="btn" id="rec-stop" type="button" disabled><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Arrêter</button>
+          <button class="btn danger" id="rec-discard" type="button" disabled title="Supprimer cet enregistrement sans le garder"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Supprimer</button>
+        </div>
+        <div class="live-opt">
+          <label class="switch"><input type="checkbox" id="toggle-live" /><span class="track"></span>Transcrire en direct</label>
+          <p class="live-hint" id="live-hint">Le texte s’affiche pendant que tu parles, avec quelques secondes de décalage.</p>
         </div>
       </div>
 
@@ -80,7 +85,8 @@
         <div class="audio-meta">
           <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           <div><strong id="audio-name">—</strong><span id="audio-info">—</span></div>
-          <button class="icon-btn" id="audio-clear" type="button" title="Retirer cet audio" aria-label="Retirer cet audio"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          <button class="icon-btn danger" id="audio-delete" type="button" title="Supprimer l’enregistrement" aria-label="Supprimer l’enregistrement"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+          <button class="icon-btn" id="audio-clear" type="button" title="Fermer (l’audio reste dans l’historique)" aria-label="Fermer cet audio"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </div>
         <audio id="audio-player" controls preload="metadata"></audio>
       </div>
@@ -105,7 +111,7 @@
         <button class="btn primary" id="btn-transcribe" type="button" disabled>
           <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span>Transcrire</span>
         </button>
-        <button class="btn" id="btn-cancel" type="button" hidden>Annuler</button>
+        <button class="btn" id="btn-cancel" type="button" hidden>Arrêter</button>
       </div>
 
       <div class="progress-block" id="progress-block" hidden>
@@ -136,6 +142,15 @@
 
       <input class="title-input" id="result-title" placeholder="Titre de la transcription" aria-label="Titre de la transcription" disabled />
       <div class="result-meta" id="result-meta"></div>
+
+      <div class="resume" id="resume-block" hidden>
+        <div class="resume-text">
+          <strong id="resume-title">Transcription interrompue</strong>
+          <span id="resume-sub"></span>
+        </div>
+        <button class="btn primary sm" id="btn-resume" type="button"><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></svg>Reprendre</button>
+        <button class="icon-btn" id="btn-resume-dismiss" type="button" title="Ne pas reprendre" aria-label="Ne pas reprendre"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
 
       <div class="transcript" id="transcript" data-ts="on">
         <div class="empty" id="empty-state">
@@ -176,7 +191,7 @@
         <h3 id="h-hist">Historique</h3>
         <button class="icon-btn" data-close type="button" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </header>
-      <p class="drawer-intro">Stocké uniquement dans ce navigateur (IndexedDB). Les modifications du texte sont enregistrées automatiquement.</p>
+      <p class="drawer-intro">Stocké uniquement dans ce navigateur (IndexedDB), avec l’audio d’origine pour pouvoir reprendre ou réécouter. Les modifications du texte sont enregistrées automatiquement.</p>
       <div class="hist-list" id="hist-list"></div>
       <div class="drawer-actions">
         <button class="btn danger" id="hist-clear" type="button">Tout supprimer</button>
@@ -189,6 +204,7 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <h3 id="modal-title"></h3>
       <p id="modal-text"></p>
+      <label class="modal-check" id="modal-check" hidden><input type="checkbox" id="modal-check-input" /><span id="modal-check-label"></span></label>
       <div class="modal-actions">
         <button class="btn" id="modal-cancel" type="button">Annuler</button>
         <button class="btn primary" id="modal-ok" type="button">Continuer</button>

@@ -186,6 +186,13 @@
             <button class="btn sm ghost" id="sound-reset" type="button">Réglages par défaut</button>
           </div>
 
+          <div class="sc-tools">
+            <span class="label">Optimiser la qualité</span>
+            <button class="btn sm" id="preset-laptop" type="button" title="Applique en un clic les réglages conseillés pour le micro intégré d’un PC portable"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>Optimiser pour le micro du PC</button>
+            <button class="btn sm" id="tool-diag" type="button" title="Mesure le bruit de fond, l’écart entre ta voix et le bruit, et l’écho de la pièce (≈ 15 s)"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/></svg>Diagnostic de la pièce</button>
+            <button class="btn sm" id="tool-calib" type="button" title="Tu lis 3 phrases ; chaque lecture teste un réglage et l’app mesure le pourcentage de mots justes (≈ 1 min)"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m15 17 2 2 4-4"/></svg>Calibrer par dictée</button>
+          </div>
+
           <div class="sc-toggles">
             <label class="switch" title="Le navigateur ajuste lui-même le volume en continu. À couper pour régler le gain à la main."><input type="checkbox" id="opt-agc" /><span class="track"></span>Gain automatique</label>
             <label class="switch" title="Atténue les bruits de fond constants (ventilation, clavier, circulation)."><input type="checkbox" id="opt-ns" /><span class="track"></span>Réduction du bruit</label>
@@ -283,6 +290,19 @@
         <button class="btn" id="modal-cancel" type="button">Annuler</button>
         <button class="btn primary" id="modal-ok" type="button">Continuer</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Fenêtre des outils (diagnostic, calibration) -->
+  <div class="modal" id="tool" hidden>
+    <div class="modal-box tool-box" role="dialog" aria-modal="true" aria-labelledby="tool-title">
+      <header class="tool-head">
+        <div><span class="tool-step" id="tool-step"></span><h3 id="tool-title"></h3></div>
+        <button class="icon-btn" id="tool-close" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </header>
+      <div class="tool-body" id="tool-body"></div>
+      <div class="tool-meter" id="tool-meter" hidden><div class="bar"><div class="bar-fill" id="tool-meter-fill"></div></div><span id="tool-timer"></span></div>
+      <div class="modal-actions" id="tool-actions"></div>
     </div>
   </div>
 

@@ -131,6 +131,10 @@ nets entre réglages sont significatifs.
 - **Stockage** : l'audio d'origine est conservé avec chaque transcription (nécessaire pour reprendre et réécouter). Un enregistrement micro pèse environ 0,5 Mo/min ; un fichier importé garde sa taille. Supprime ce dont tu n'as plus besoin.
 - **Direct** : sans carte graphique, seul le modèle Rapide suit le rythme de la parole ; les autres prennent du retard (le texte est complété à l'arrêt).
 - **Langue** : Transformers.js ne détecte pas la langue automatiquement ; elle doit être choisie.
+- **Voix lointaines** : la détection de voix s'adapte au bruit de fond de la pièce (6 dB au-dessus), les
+  passages oubliés par Whisper (il s'arrête parfois après la 1re phrase d'un bloc bruité) sont retranscrits,
+  et pour Voxtral les voix faibles sont amplifiées (sans saturation). La qualité baisse quand même avec la
+  distance : rapproche le PC des personnes qui parlent.
 - **Hallucinations** : sur les silences, Whisper peut inventer des phrases (« Sous-titres réalisés par… ») ou boucler (« j’aime, j’aime, j’aime… »). Parades en place : blocs silencieux ignorés, formules connues filtrées, plafond de tokens, nouvel essai par échantillonnage si boucle détectée, fusion des répétitions. Une relecture reste nécessaire.
 - **GPU logiciel** : si Chrome n’expose qu’un GPU émulé (SwiftShader, WARP — fréquent en bureau à distance/VM), il est ignoré car plus lent que le processeur.
 

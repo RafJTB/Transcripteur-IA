@@ -1,7 +1,7 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming } from './config.js';
-import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones } from './audio.js';
+import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, speechStart, LevelBooster } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
 import { History, Audios, RecChunks, clearAll, newId } from './history.js';
@@ -426,7 +426,8 @@ const recorder = new Recorder({
     if (!r) return;
     r.pending = r.pending.then(() => RecChunks.add(r.id, idx, blob)).catch(() => {});
   },
-  onPcm(pcm) { state.live?.push(pcm); },
+  // Voxtral : voix faibles remontées pour le modèle ; l'enregistrement, lui, reste intact.
+  onPcm(pcm) { if (state.live) state.live.push(state.booster ? state.booster.process(pcm) : pcm); },
 });
 
 async function recToggle() {
@@ -453,6 +454,8 @@ async function recStart() {
   store.set('rec.active', JSON.stringify({ id: rec.id, live, mime: rec.mime, startedAt: rec.startedAt }));
   clearAudio();
   hideResume();
+  // Amplification réservée à Voxtral (sensible au volume absolu). Whisper normalise lui-même chaque bloc.
+  state.booster = live && isStreaming(modelById(state.modelId)) ? new LevelBooster() : null;
   if (live) startLive(rec);
   renderRec();
 }
@@ -851,16 +854,7 @@ async function runJob(doc) {
 }
 
 function skipLeadingSilence(pcm, fromS) {
-  const frame = SR / 10;
-  let i = Math.round(fromS * SR);
-  const start = i;
-  while (i + frame <= pcm.length) {
-    let e = 0;
-    for (let k = i; k < i + frame; k++) e += pcm[k] * pcm[k];
-    if (Math.sqrt(e / frame) > 0.006) break;
-    i += frame;
-  }
-  return Math.max(start, i - SR / 4) / SR;
+  return speechStart(pcm, Math.round(fromS * SR), pcm.length) / SR;
 }
 
 function stopByUser(doc) {

@@ -6,6 +6,7 @@
 // la dernière phrase, peut-être coupée, reste provisoire et sera retranscrite au tour suivant.
 // À l'arrêt, la fin non validée est retranscrite normalement (meilleure qualité).
 import { SAMPLE_RATE as SR } from './config.js';
+import { speechStart } from './audio.js';
 
 export class LiveSession {
   /**
@@ -56,17 +57,9 @@ export class LiveSession {
     return (this.len - this.lastRunLen) / SR;
   }
 
-  /** Saute le silence en début de fenêtre (Whisper date mal une phrase précédée de silence). */
+  /** Saute le silence en début de fenêtre (seuil adapté au bruit de la pièce). */
   _skipSilence(from, to) {
-    const frame = SR / 10; // 100 ms
-    let i = from;
-    while (i + frame <= to) {
-      let e = 0;
-      for (let k = i; k < i + frame; k++) e += this.buf[k] * this.buf[k];
-      if (Math.sqrt(e / frame) > 0.006) break;
-      i += frame;
-    }
-    return Math.max(from, i - SR / 4); // 250 ms de marge
+    return speechStart(this.buf, from, to);
   }
 
   async _tick() {
@@ -102,6 +95,9 @@ export class LiveSession {
     // Phrases stables : terminées au moins 1 s avant la fin de la fenêtre (jamais la dernière).
     let n = 0;
     for (let i = 0; i < segs.length - 1; i++) if (segs[i].end <= winEndS - 1) n = i + 1;
+    // Whisper a manifestement fini (plus rien depuis 3 s dans une fenêtre d'au moins 8 s) :
+    // on valide tout et la fenêtre suivante repart après, au lieu d'attendre qu'elle soit pleine.
+    if (segs.length && winDurS >= 8 && segs[segs.length - 1].end <= winEndS - 3) n = segs.length;
     // Fenêtre presque pleine sans coupure nette : on force la validation pour avancer.
     if (n === 0 && winDurS >= this.maxWindowS - 4 && segs.length) n = Math.max(1, segs.length - 1);
 

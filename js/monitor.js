@@ -104,10 +104,15 @@ export class Monitor {
     const clips = this.levels.filter((l) => l.t >= this.now - 3 && l.pk > VOLUME.clip).length;
     if (clips >= 3 || p90 > VOLUME.high)
       return { level: 'err', label: 'Trop fort', hint: 'Le son sature : éloigne-toi un peu du micro ou parle moins fort.' };
-    const last8 = this.levels.filter((l) => l.t >= this.now - 8);
-    if (this.now >= 8 && Math.max(...last8.map((l) => l.db)) < -50)
-      return { level: 'warn', label: 'Aucune voix', hint: 'Aucune voix depuis 8 s : vérifie que le bon micro est sélectionné et qu’il n’est pas coupé.' };
-    if (p90 < -50) return { level: 'idle', label: 'Pause', hint: null };
+    // Bruit de fond de la pièce et ce qui en ressort (seuil adaptatif, comme la transcription)
+    const last8 = this.levels.filter((l) => l.t >= this.now - 8).map((l) => l.db).sort((a, b) => a - b);
+    const floor = last8[Math.floor(last8.length * 0.15)];
+    const top8 = last8[last8.length - 1];
+    if (this.now >= 8 && (top8 < floor + 6 || top8 < -68))
+      return { level: 'warn', label: 'Aucune voix', hint: 'Rien ne ressort du bruit depuis 8 s : vérifie que le bon micro est sélectionné et qu’il n’est pas coupé.' };
+    if (p90 < floor + 6) return { level: 'idle', label: 'Pause', hint: null };
+    if (p90 < -50)
+      return { level: 'err', label: 'Voix très faibles', hint: 'Les voix arrivent très faiblement (loin du micro). Active le gain automatique ou monte le gain ; la transcription les amplifie, mais la qualité baisse avec la distance.' };
     if (p90 < VOLUME.low) return { level: 'err', label: 'Trop faible', hint: 'Rapproche-toi du micro ou parle plus fort.' };
     if (p90 < VOLUME.weak) return { level: 'warn', label: 'Un peu faible', hint: 'Rapproche-toi un peu du micro pour une meilleure transcription.' };
     return { level: 'ok', label: 'Bon niveau', hint: null };

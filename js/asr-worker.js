@@ -21,6 +21,7 @@
 
 import { TRANSFORMERS_URL } from './config.js';
 import { VoxtralSession, planSessions, SESSION_SOFT_S, SESSION_HARD_S } from './voxtral-engine.js';
+import { boostForAsr } from './audio.js';
 
 const { pipeline, env, ModelRegistry, VoxtralRealtimeForConditionalGeneration, VoxtralRealtimeProcessor, LogitsProcessor } = await import(TRANSFORMERS_URL);
 
@@ -218,6 +219,28 @@ function collapseRepeats(text) {
   return out.join('').replace(/\s{2,}/g, ' ').trim();
 }
 
+/**
+ * Y a-t-il quelque chose à transcrire dans ce bloc ? On ne saute que le silence numérique,
+ * ou un bruit faible et uniforme (rien ne dépasse le fond). Les voix lointaines, faibles
+ * mais qui ressortent du bruit, sont gardées (un seuil fixe les ignorait).
+ */
+function hasSpeech(a) {
+  const F = 1600;
+  const fr = [];
+  for (let k = 0; k + F <= a.length; k += F) {
+    let e = 0;
+    for (let i = k; i < k + F; i++) e += a[i] * a[i];
+    fr.push(Math.sqrt(e / F));
+  }
+  if (!fr.length) return rms(a) > 0.0004;
+  fr.sort((x, y) => x - y);
+  const p95 = fr[Math.floor(fr.length * 0.95)];
+  const p20 = fr[Math.floor(fr.length * 0.2)];
+  if (p95 < 0.0004) return false; // silence numérique (−68 dBFS)
+  if (p95 < 0.003 && p95 < p20 * 1.6) return false; // bruit faible et plat
+  return true;
+}
+
 function rms(a) {
   let s = 0;
   for (let i = 0; i < a.length; i += 4) s += a[i] * a[i];
@@ -264,6 +287,7 @@ async function transcribe(job) {
 /** Fichier avec Voxtral : sessions de ~2 min ; chaque session terminée est sauvegardée (reprise). */
 async function transcribeVoxtral({ jobId, audio, offsetS = 0, resumeSeqs = [] }) {
   cancelRequested = false;
+  audio = boostForAsr(audio); // Voxtral est sensible au volume absolu : on remonte les voix faibles
   const sessions = planSessions(audio);
   const seqs = resumeSeqs.slice(0, sessions.length);
   const first = seqs.length;
@@ -382,13 +406,104 @@ function streamAbort() {
   live = null;
 }
 
+/** Transcrit une fenêtre (≤ 30 s) : décodage glouton, puis nouvel essai si boucle de répétition. */
+async function generateWindow(sub, language) {
+  const { processor, model, tokenizer } = asr;
+  const hop = processor.feature_extractor.config.hop_length;
+  const { input_features } = await processor(sub);
+  // Plafond de tokens proportionnel à la durée : coupe court aux boucles de répétition.
+  const maxTokens = Math.min(440, Math.ceil((sub.length / SR) * 10) + 24);
+  const special = new Set(tokenizer.all_special_ids.map(Number));
+  const tsBegin = tokenizer.timestamp_begin;
+  let tokens = [];
+  let conf = null;
+  for (let k = 0; k < DECODE_STRATEGIES.length; k++) {
+    const probs = [];
+    probe.onToken = (id, p) => { if (id < tsBegin && !special.has(id)) probs.push(p); };
+    const out = await model.generate({
+      logits_processor: [probe],
+      inputs: input_features,
+      language,
+      task: 'transcribe',
+      return_timestamps: true,
+      num_frames: Math.floor(sub.length / hop),
+      max_new_tokens: maxTokens,
+      ...DECODE_STRATEGIES[k],
+    });
+    const cand = (out[0].tolist ? out[0].tolist() : out.tolist()[0]).map(Number);
+    const loop = looksLikeLoop(tokenizer.decode(cand, { skip_special_tokens: true }), cand.length >= maxTokens);
+    if (!tokens.length || !loop) { tokens = cand; conf = mean(probs); }
+    if (!loop || cancelRequested) break;
+  }
+  probe.onToken = null;
+  input_features.dispose?.();
+  return { tokens, conf };
+}
+
+function similar(a, b) {
+  const wa = new Set(a.toLowerCase().match(/[\p{L}\p{N}']+/gu) || []);
+  const wb = new Set(b.toLowerCase().match(/[\p{L}\p{N}']+/gu) || []);
+  if (!wa.size || !wb.size) return 0;
+  let inter = 0;
+  for (const w of wa) if (wb.has(w)) inter++;
+  return inter / (wa.size + wb.size - inter);
+}
+
+/** Segments d'une fenêtre isolée (sans chevauchement), décalés de offsetS. */
+function decodeSingle(tokens, conf, lenSamples, offsetS) {
+  const { processor, model, tokenizer } = asr;
+  const timePrecision = processor.feature_extractor.config.chunk_length / model.config.max_source_positions;
+  const [, opt] = tokenizer._decode_asr([{ tokens, stride: [lenSamples / SR, 0, 0] }], { time_precision: timePrecision, return_timestamps: true, force_full_sequences: false });
+  const segs = cleanSegments(opt.chunks || [], offsetS);
+  if (conf != null) for (const x of segs) x.conf = Math.round(conf * 100) / 100;
+  return segs;
+}
+
+/**
+ * Rattrapage : repère les passages de plus de 4 s sans texte où l'on entend pourtant des voix,
+ * et les transcrit à part. Les résultats très peu sûrs (< 25 %) sont écartés (bruit pris pour de la voix).
+ */
+async function fillGaps(audio, segs, { offsetS = 0, language, maxPasses = 8 }) {
+  const total = audio.length / SR;
+  const sorted = [...segs].sort((a, b) => a.start - b.start);
+  const gaps = [];
+  let prev = 0;
+  for (const x of sorted) {
+    const st = x.start - offsetS;
+    if (st - prev >= 4) gaps.push([prev, st]);
+    prev = Math.max(prev, x.end - offsetS);
+  }
+  if (total - prev >= 4) gaps.push([prev, total]);
+  const added = [];
+  let passes = 0;
+  for (const [g0, g1] of gaps) {
+    for (let a = g0; a < g1 - 1 && passes < maxPasses; a += 28) {
+      if (cancelRequested) break;
+      const b = Math.min(g1, a + 28);
+      const sub = audio.subarray(Math.round(a * SR), Math.round(b * SR));
+      if (!hasSpeech(sub)) continue;
+      passes++;
+      const { tokens, conf } = await generateWindow(sub, language);
+      if (conf != null && conf < 0.25) continue;
+      for (const x of decodeSingle(tokens, conf, sub.length, offsetS + a)) {
+        if (x.start - offsetS >= b) continue;
+        // Anti-doublon : même phrase que celle juste avant, collée à elle → déjà transcrite
+        const before = [...sorted, ...added].filter((y) => y.end <= x.start + 0.5).sort((p, q) => q.end - p.end)[0];
+        if (before && x.start - before.end < 1.5 && similar(before.text, x.text) >= 0.7) continue;
+        added.push(x);
+      }
+    }
+  }
+  if (!added.length) return segs;
+  return [...segs, ...added].sort((x, y) => x.start - y.start);
+}
+
 async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, strideLengthS = 5, offsetS = 0, resumeSeqs = [], quiet = false }) {
   if (!asr) throw new Error('Modèle non chargé');
   cancelRequested = false;
   const { processor, model, tokenizer } = asr;
   const fe = processor.feature_extractor.config;
   const sr = fe.sampling_rate;
-  const hop = fe.hop_length;
   const timePrecision = fe.chunk_length / model.config.max_source_positions;
 
   // Fenêtres avec chevauchement (même logique que le pipeline officiel,
@@ -420,36 +535,7 @@ async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, st
     }
     const w = windows[i];
     const sub = audio.subarray(w.off, w.end);
-    let tokens = [];
-    let conf = null;
-    if (rms(sub) > 0.0015) {
-      const { input_features } = await processor(sub);
-      // Plafond de tokens proportionnel à la durée : coupe court aux boucles de répétition.
-      const maxTokens = Math.min(440, Math.ceil((sub.length / sr) * 10) + 24);
-      const special = new Set(tokenizer.all_special_ids.map(Number));
-      const tsBegin = tokenizer.timestamp_begin;
-      for (let k = 0; k < DECODE_STRATEGIES.length; k++) {
-        const probs = [];
-        probe.onToken = (id, p) => { if (id < tsBegin && !special.has(id)) probs.push(p); };
-        const out = await model.generate({
-          logits_processor: [probe],
-          inputs: input_features,
-          language,
-          task: 'transcribe',
-          return_timestamps: true,
-          num_frames: Math.floor(sub.length / hop),
-          max_new_tokens: maxTokens,
-          ...DECODE_STRATEGIES[k],
-        });
-        const cand = (out[0].tolist ? out[0].tolist() : out.tolist()[0]).map(Number);
-        const loop = looksLikeLoop(tokenizer.decode(cand, { skip_special_tokens: true }), cand.length >= maxTokens);
-        if (!tokens.length || !loop) { tokens = cand; conf = mean(probs); }
-        if (!loop) break;
-        if (cancelRequested) break;
-      }
-      probe.onToken = null;
-      input_features.dispose?.();
-    }
+    const { tokens, conf } = hasSpeech(sub) ? await generateWindow(sub, language) : { tokens: [], conf: null };
     const strideS = windows.length > 1 ? strideLengthS : 0;
     seqs.push({ tokens, conf, span: [offsetS + w.off / sr, offsetS + w.end / sr], stride: [sub.length / sr, w.first ? 0 : strideS, w.last ? 0 : strideS] });
     if (quiet) continue;
@@ -481,10 +567,15 @@ async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, st
     return_timestamps: true,
     force_full_sequences: false,
   });
+  let segments = withConf(cleanSegments(opt.chunks || [], offsetS), seqs);
+  // Whisper s'arrête parfois après la 1re phrase d'un bloc (son faible ou bruité) :
+  // on retranscrit les trous de plus de 4 s où l'on entend pourtant des voix.
+  if (!quiet) segments = await fillGaps(audio, segments, { offsetS, language });
+  if (cancelRequested && !quiet) return post({ type: 'cancelled', jobId });
   post({
     type: 'result',
     jobId,
-    segments: withConf(cleanSegments(opt.chunks || [], offsetS), seqs),
+    segments,
     seconds: (performance.now() - t0) / 1000,
     audioSeconds: audio.length / sr,
   });

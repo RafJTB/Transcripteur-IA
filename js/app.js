@@ -1054,8 +1054,9 @@ const META_ICONS = {
   check: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
 };
 
-function metaChip(icon, text, { title = '', cls = '' } = {}) {
-  return `<span class="mchip${cls ? ` ${cls}` : ''}"${title ? ` title="${esc(title)}"` : ''}><svg viewBox="0 0 24 24">${META_ICONS[icon]}</svg>${esc(text)}</span>`;
+function metaChip(icon, text, { title = '', cls = '', dev = '' } = {}) {
+  const extra = dev ? `<span class="dev"> · ${esc(dev)}</span>` : '';
+  return `<span class="mchip${cls ? ` ${cls}` : ''}"${title ? ` title="${esc(title)}"` : ''}><svg viewBox="0 0 24 24">${META_ICONS[icon]}</svg>${esc(text)}${extra}</span>`;
 }
 
 function renderMeta() {
@@ -1077,10 +1078,9 @@ function renderMeta() {
   if (langs) chips.push(metaChip('lang', langs.replace(/^./, (c) => c.toUpperCase()), { title: 'Langues détectées' }));
   if (d.model) {
     const dev = d.device === 'webgpu' ? 'GPU' : d.device ? 'CPU' : '';
-    chips.push(metaChip('model', `${d.model.replace(/^Whisper /, '')}${dev ? ` · ${dev}` : ''}`,
-      { title: `${d.model}${d.device ? ` (${d.device === 'webgpu' ? 'carte graphique, WebGPU' : 'processeur, WASM'})` : ''}` }));
+    chips.push(metaChip('model', d.model.replace(/^Whisper /, ''), { cls: 'model', dev,
+      title: `${d.model}${d.device ? ` (${d.device === 'webgpu' ? 'carte graphique, WebGPU' : 'processeur, WASM'})` : ''}${d.processingS ? ` · transcrit en ${fmtDuration(d.processingS)}` : ''}` }));
   }
-  if (d.processingS) chips.push(metaChip('time', fmtDuration(d.processingS), { title: 'Temps de transcription' }));
   const withC = state.segments.filter((x) => x.conf != null);
   if (withC.length) {
     const avg = withC.reduce((a, x) => a + x.conf, 0) / withC.length;

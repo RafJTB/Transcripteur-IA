@@ -977,6 +977,7 @@ function finalizeDoc(doc, newSegments) {
   if (!doc.segments.length) status('Aucune parole détectée dans cet audio.', 'warn');
   autoTranslate(doc);
   if (state.autoSpk && doc.segments.length) identifySpeakers(doc);
+  if (doc.segments.length) notify({ kind: 'ok', title: 'Transcription terminée', text: `« ${doc.title} »${doc.durationS ? ` · ${fmtClock(doc.durationS)}` : ''}`, docId: doc.id, system: true });
 }
 
 /** Décide du repli : WebGPU → WASM, ou gros modèle → modèle plus léger. */
@@ -1373,6 +1374,98 @@ function bindSound() {
   };
   navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices(true));
   refreshDevices();
+}
+
+// ======================================================================
+// Centre de notifications (cloche) : événements importants, notifications Windows en option
+// ======================================================================
+const NOTIF_MAX = 30;
+const notifs = {
+  list() { try { return JSON.parse(store.get('notifs', '[]')); } catch { return []; } },
+  save(l) { store.set('notifs', JSON.stringify(l.slice(0, NOTIF_MAX))); },
+};
+
+/**
+ * Ajoute une notification.
+ * system : aussi une notification Windows si l'onglet est en arrière-plan (et si autorisé).
+ * docId : un clic ouvre la transcription ; action 'account' : ouvre le compte.
+ */
+function notify({ kind = 'ok', title, text = '', docId = null, action = null, system = false }) {
+  const n = { id: newId(), at: Date.now(), kind, title, text, docId, action, read: false };
+  notifs.save([n, ...notifs.list()]);
+  renderBell();
+  if (system && document.hidden && store.get('notifs.system') === '1' && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      const sys = new Notification(title, { body: text, icon: 'icons/icon-192.png', tag: n.id });
+      sys.onclick = () => { window.focus(); openNotif(n); sys.close(); };
+    } catch { /* ignore */ }
+  }
+}
+
+function ago(t) {
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 60) return 'à l’instant';
+  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
+  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
+  return new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function renderBell() {
+  const l = notifs.list();
+  const unread = l.filter((n) => !n.read).length;
+  const bell = $('#btn-bell');
+  bell.classList.toggle('has-new', unread > 0);
+  bell.setAttribute('aria-label', unread ? `Notifications (${unread} nouvelle${unread > 1 ? 's' : ''})` : 'Notifications');
+  $('#bell-count').textContent = unread > 9 ? '9+' : unread || '';
+  const box = $('#notif-list');
+  if (!l.length) { box.innerHTML = '<p class="notif-empty">Rien de nouveau. Tu seras prévenu ici quand une transcription, une traduction ou une synchronisation se termine.</p>'; return; }
+  box.innerHTML = l.map((n) => `<button type="button" class="notif ${n.read ? '' : 'unread'} n-${n.kind}" data-id="${n.id}"><i></i><span><b>${esc2(n.title)}</b><small>${esc2(n.text)}</small></span><time>${ago(n.at)}</time></button>`).join('');
+  const sysOk = 'Notification' in window;
+  $('#notif-system').hidden = !sysOk;
+  $('#notif-system-input').checked = sysOk && store.get('notifs.system') === '1' && Notification.permission === 'granted';
+}
+
+async function openNotif(n) {
+  $('#notif-panel').hidden = true;
+  if (n.action === 'account') return setView('settings');
+  if (!n.docId) return;
+  const d = await History.get(n.docId).catch(() => null);
+  if (!d || !isMine(d)) return toast('Cette transcription n’existe plus.', 'warn', 3000);
+  openDoc(d);
+}
+
+function bindBell() {
+  const panel = $('#notif-panel');
+  $('#btn-bell').onclick = (e) => {
+    e.stopPropagation();
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {
+      renderBell();
+      // Ouvrir le panneau = tout est vu (la pastille disparaît, les nouveautés restent surlignées)
+      setTimeout(() => { notifs.save(notifs.list().map((n) => ({ ...n, read: true }))); $('#btn-bell').classList.remove('has-new'); $('#bell-count').textContent = ''; }, 300);
+    }
+  };
+  document.addEventListener('click', (e) => { if (!e.target.closest('#notif-panel, #btn-bell')) panel.hidden = true; });
+  $('#notif-list').addEventListener('click', (e) => {
+    const b = e.target.closest('.notif');
+    if (!b) return;
+    const n = notifs.list().find((x) => x.id === b.dataset.id);
+    if (n) openNotif(n);
+  });
+  $('#notif-clear').onclick = () => { notifs.save([]); renderBell(); };
+  $('#notif-system-input').onchange = async (e) => {
+    if (!e.target.checked) { store.set('notifs.system', '0'); return; }
+    const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission().catch(() => 'denied');
+    if (perm === 'granted') {
+      store.set('notifs.system', '1');
+      toast('Tu seras prévenu par Windows quand une transcription se termine en arrière-plan.', 'ok', 4000);
+    } else {
+      e.target.checked = false;
+      toast('Notifications refusées par le navigateur : autorise-les dans la barre d’adresse (icône cadenas) pour activer l’option.', 'warn', 7000);
+    }
+  };
+  setInterval(() => { if (!panel.hidden) renderBell(); }, 60 * 1000);
+  renderBell();
 }
 
 // ======================================================================
@@ -2226,6 +2319,7 @@ function identifySpeakers(doc, { k = doc?.speakerCount ?? null, manual = false }
     applySpeakers(doc, items, k);
     const n = doc.speakers.length;
     spkStatus(n > 1 ? `${n} personnes reconnues` : 'Une seule voix reconnue', true);
+    if (n > 1) notify({ kind: 'ok', title: `${n} personnes reconnues`, text: `« ${doc.title} » : renomme-les dans l’onglet Transcription.`, docId: doc.id });
   })()
     .catch((e) => { spkStatus(''); toast(`Qui parle ? ${e.message}`, 'err', 8000); })
     .finally(() => { spkRun = null; });
@@ -2661,6 +2755,7 @@ async function autoTranslate(doc) {
     await persist(doc);
     if (state.doc === doc) renderView();
     trStatus(`Traduit en français (${[...engines].join(' + ')}) · ${done} phrase${done > 1 ? 's' : ''}`);
+    notify({ kind: 'ok', title: 'Traduction terminée', text: `« ${doc.title} » · ${done} phrase${done > 1 ? 's' : ''} traduite${done > 1 ? 's' : ''} en français`, docId: doc.id });
     trStatusTimer = setTimeout(() => trStatus(''), 5000);
   })().finally(() => {
     if (autoRun === run) autoRun = null;
@@ -3181,6 +3276,18 @@ function bindInstall() {
 function bindAccount(authResult) {
   state.folder = 'all';
   Sync.on(() => renderAccount());
+  // Problème de synchronisation : une notification (pas à chaque tentative)
+  let lastSyncIssue = '';
+  Sync.on((st) => {
+    const issue = st.status === 'error' ? `e:${st.error}` : st.status === 'expired' ? 'expired' : '';
+    if (issue && issue !== lastSyncIssue) {
+      notify(st.status === 'expired'
+        ? { kind: 'warn', title: 'Reconnexion à Google nécessaire', text: 'La synchronisation est en pause. Clique sur ta carte en bas à gauche pour te reconnecter.', action: 'account' }
+        : { kind: 'err', title: 'Synchronisation impossible', text: st.error || 'Google Drive ne répond pas.', action: 'account' });
+    }
+    if (st.status === 'ok' && lastSyncIssue) notify({ kind: 'ok', title: 'Synchronisation rétablie', text: 'Tes transcriptions sont à jour dans Google Drive.' });
+    if (st.status === 'ok' || issue) lastSyncIssue = issue;
+  });
   // Carte du compte (barre latérale)
   $('#user-card').onclick = (e) => {
     e.stopPropagation();
@@ -3278,6 +3385,7 @@ async function recover() {
       } else {
         await setAudioFromBlob(blob, name, { audioId: act.id });
         toast('Un enregistrement interrompu a été récupéré : tu peux le transcrire.', 'ok', 9000);
+        notify({ kind: 'warn', title: 'Enregistrement récupéré', text: `${name} : il a été sauvegardé avant la fermeture de l’onglet. Tu peux le transcrire.` });
       }
     }
   }
@@ -3297,6 +3405,7 @@ async function recover() {
   const auto = (autoDoc.autoResumes || 0) < 3;
   renderResume(autoDoc, { auto });
   toast(auto ? 'Une transcription a été interrompue : elle va reprendre automatiquement.' : 'Une transcription a été interrompue plusieurs fois : clique sur « Reprendre » quand tu veux.', 'warn', 8000);
+  notify({ kind: 'warn', title: 'Transcription interrompue', text: `« ${autoDoc.title} » ${auto ? 'reprend automatiquement' : 'attend que tu cliques sur « Reprendre »'}.`, docId: autoDoc.id });
   return true;
 }
 
@@ -3539,6 +3648,7 @@ async function init() {
   bind();
   bindAccount(authResult);
   bindInstall();
+  bindBell();
   $('#toggle-auto').onchange = (e) => setAutoTune(e.target.checked, e.target.checked ? 'Réglage automatique activé : le son et le modèle seront réglés avant chaque enregistrement.' : '');
   $('#auto-redo').onclick = async () => {
     if (micBusy() || state.phase !== 'idle') return toast('Attends la fin de l’enregistrement en cours.', 'warn');
@@ -3580,6 +3690,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
+  notify, notifs,
   Auth, Sync, Folders, syncNow, isMine,
   recorder, monitor: () => monitor, renderMeta, identifySpeakers, applySpeakers, spkCache,
   state, exportAs, sendToClaude, translateDoc, shownSegments, autoTranslate, guessLang, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,

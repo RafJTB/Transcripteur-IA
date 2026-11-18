@@ -117,6 +117,9 @@ export function boostForAsr(audio, { target = -20, maxGain = 30 } = {}) {
 /** Réglages du son par défaut (identiques au comportement d'origine). */
 export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
   deviceId: '',
+  deviceLabel: '',  // nom du micro : retrouve le micro si Windows change son identifiant
+  outputId: '',     // sortie audio de la relecture ('' = sortie par défaut)
+  outputLabel: '',
   gainDb: 0,
   autoGainControl: true,
   noiseSuppression: true,
@@ -132,6 +135,55 @@ export async function listMicrophones() {
   } catch {
     return [];
   }
+}
+
+/** Sorties audio (casque, haut-parleurs). Vide si le navigateur ne permet pas de choisir la sortie. */
+export async function listSpeakers() {
+  if (!canPickOutput()) return [];
+  try {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    return all.filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'communications');
+  } catch {
+    return [];
+  }
+}
+
+/** Choix de la sortie audio possible (Chrome, Edge ; pas Safari). */
+export const canPickOutput = () => typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+
+/** Casque ou micro Bluetooth (AirPods, mains libres…), d'après son nom. */
+export const isBluetooth = (label) => /airpods|bluetooth|hands-?free|mains libres|headset|\bbt\b|buds|wh-1000|bose|jabra|beats/i.test(label || '');
+
+/** Capture du son d'une visio possible (Chrome, Edge sur ordinateur). */
+export const canCaptureSystem = () => !!navigator.mediaDevices?.getDisplayMedia && !/Android|iPhone|iPad/i.test(navigator.userAgent);
+
+/**
+ * Son d'un onglet ou de tout l'ordinateur, via la fenêtre de partage d'écran.
+ * Chrome impose de partager une image : elle est coupée aussitôt, seul le son est gardé.
+ */
+async function captureSystemAudio() {
+  if (!canCaptureSystem()) throw new AudioError('sys-unsupported', 'Ce navigateur ne permet pas de capter le son d’une visio. Utilise Chrome ou Edge sur ordinateur.');
+  let s;
+  try {
+    s = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      systemAudio: 'include',
+      selfBrowserSurface: 'exclude',
+      surfaceSwitching: 'include',
+      preferCurrentTab: false,
+    });
+  } catch (e) {
+    if (e.name === 'NotAllowedError' || e.name === 'AbortError')
+      throw new AudioError('sys-cancelled', 'Partage annulé : rien n’a été enregistré.');
+    throw new AudioError('sys-error', `Capture du son impossible : ${e.message || e.name}`);
+  }
+  s.getVideoTracks().forEach((t) => { t.stop(); s.removeTrack(t); });
+  if (!s.getAudioTracks().length) {
+    s.getTracks().forEach((t) => t.stop());
+    throw new AudioError('sys-no-audio', 'Aucun son partagé. Recommence et coche « Partager l’audio de l’onglet » (ou « du système » pour l’écran entier) dans la fenêtre de partage.');
+  }
+  return s;
 }
 
 export class AudioError extends Error {
@@ -211,8 +263,9 @@ class StreamResampler {
  * Le résultat final est un Blob (webm/opus).
  */
 export class Recorder {
-  constructor({ onLevel, onTick, onChunk, onPcm } = {}) {
+  constructor({ onLevel, onTick, onChunk, onPcm, onDeviceLost } = {}) {
     this.onLevel = onLevel;
+    this.onDeviceLost = onDeviceLost;
     this.onTick = onTick;
     this.onChunk = onChunk;
     this.onPcm = onPcm;
@@ -235,8 +288,18 @@ export class Recorder {
    * Chaîne audio : micro → filtre des basses (option) → gain → [enregistrement, transcription, mesure]
    * Le gain est donc appliqué à tout : ce que tu vois sur le graphique est ce que le modèle entend.
    */
-  async start({ pcm = false, preview = false, settings = DEFAULT_AUDIO_SETTINGS } = {}) {
+  async start({ pcm = false, preview = false, settings = DEFAULT_AUDIO_SETTINGS, capture = 'mic', _fellBack = false } = {}) {
     if (!(await Recorder.isAvailable())) throw new AudioError('mic-unsupported', 'Ce navigateur ne permet pas l’enregistrement audio.');
+    if (preview) capture = 'mic'; // le test ne concerne que le micro
+    // Son de la visio : demandé en premier (la fenêtre de partage de Chrome)
+    this.sysStream = null;
+    if (capture !== 'mic') this.sysStream = await captureSystemAudio();
+    if (capture === 'system') {
+      this.stream = null;
+      this.deviceLabel = '';
+      this.fellBack = false;
+      return this._build({ pcm, preview, settings });
+    }
     const audio = {
       channelCount: 1,
       echoCancellation: settings.echoCancellation,
@@ -248,9 +311,13 @@ export class Recorder {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio });
     } catch (e) {
       if (e.name === 'OverconstrainedError' && settings.deviceId) {
-        // Micro choisi débranché : on reprend le micro par défaut
-        return this.start({ pcm, preview, settings: { ...settings, deviceId: '' } });
+        // Micro choisi débranché : on reprend le micro par défaut (le partage déjà accordé est gardé)
+        const sys = this.sysStream;
+        this.sysStream = null;
+        return this._withSys(sys, () => this.start({ pcm, preview, settings: { ...settings, deviceId: '' }, capture: 'mic', _fellBack: true }));
       }
+      this.sysStream?.getTracks().forEach((t) => t.stop());
+      this.sysStream = null;
       if (e.name === 'NotAllowedError' || e.name === 'SecurityError')
         throw new AudioError('mic-denied', 'Accès au micro refusé. Autorise le micro dans la barre d’adresse (icône cadenas) puis réessaie.');
       if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError')
@@ -259,29 +326,55 @@ export class Recorder {
         throw new AudioError('mic-busy', 'Le micro est déjà utilisé par une autre application (Teams, Zoom…).');
       throw new AudioError('mic-error', `Erreur micro : ${e.message || e.name}`);
     }
-    this.deviceLabel = this.stream.getAudioTracks()[0]?.label || '';
+    const track = this.stream.getAudioTracks()[0];
+    this.deviceLabel = track?.label || '';
+    /** Vrai si le micro choisi était absent et que le micro par défaut a pris le relais. */
+    this.fellBack = _fellBack;
+    // Micro débranché en cours de route (casque Bluetooth éteint, hors de portée…)
+    const stream = this.stream;
+    track?.addEventListener('ended', () => { if (this.stream === stream) this.onDeviceLost?.(this.deviceLabel, 'mic'); });
+    return this._build({ pcm, preview, settings });
+  }
 
+  /** Relance `fn` en gardant un partage audio déjà accordé (évite de redemander la fenêtre de partage). */
+  async _withSys(sys, fn) {
+    const r = await fn();
+    if (sys) {
+      // Ajout du son de la visio au mélange déjà construit
+      this.sysStream = sys;
+      this._connectSys();
+    }
+    return r;
+  }
+
+  /**
+   * Chaîne audio : [micro → filtre des basses → gain] + [son de la visio] → mélange →
+   * [enregistrement, transcription, mesure].
+   */
+  async _build({ pcm, preview, settings }) {
     this.ctx = new AudioContext();
     if (this.ctx.state === 'suspended') await this.ctx.resume().catch(() => {});
-    const src = this.ctx.createMediaStreamSource(this.stream);
+    this.mix = this.ctx.createGain();
     this.highpass = this.ctx.createBiquadFilter();
     this.highpass.type = 'highpass';
     this.highpass.Q.value = 0.7;
     this.gain = this.ctx.createGain();
-    src.connect(this.highpass).connect(this.gain);
+    if (this.stream) this.ctx.createMediaStreamSource(this.stream).connect(this.highpass);
+    this.highpass.connect(this.gain).connect(this.mix);
     this.setHighpass(settings.highpass);
     this.setGain(settings.gainDb);
+    this._connectSys();
 
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 1024;
-    this.gain.connect(this.analyser);
+    this.mix.connect(this.analyser);
     this._buf = new Float32Array(this.analyser.fftSize);
 
     this.mr = null;
     if (!preview) {
       // On enregistre le son APRÈS réglages (gain, filtre)
       const dest = this.ctx.createMediaStreamDestination();
-      this.gain.connect(dest);
+      this.mix.connect(dest);
       const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
       this.chunks = [];
       this.mr = new MediaRecorder(dest.stream, mime ? { mimeType: mime } : undefined);
@@ -303,7 +396,7 @@ export class Recorder {
       };
       const mute = this.ctx.createGain();
       mute.gain.value = 0;
-      this.gain.connect(node).connect(mute).connect(this.ctx.destination);
+      this.mix.connect(node).connect(mute).connect(this.ctx.destination);
       this._worklet = node;
     }
 
@@ -312,6 +405,20 @@ export class Recorder {
     this._last = performance.now();
     this._loop();
   }
+
+  /** Branche le son de la visio sur le mélange (non affecté par le gain du micro). */
+  _connectSys() {
+    if (!this.sysStream || !this.ctx || this._sysNode) return;
+    this._sysNode = this.ctx.createMediaStreamSource(this.sysStream);
+    this._sysNode.connect(this.mix);
+    const sys = this.sysStream;
+    sys.getAudioTracks()[0]?.addEventListener('ended', () => {
+      if (this.sysStream === sys && this.state !== 'idle') this.onDeviceLost?.('', 'system');
+    });
+  }
+
+  /** Vrai si le son d'une visio (onglet, écran) est capté. */
+  get capturingSystem() { return !!this.sysStream; }
 
   /** Gain en décibels (−12 à +24), réglable pendant l'enregistrement. */
   setGain(db) {
@@ -392,6 +499,9 @@ export class Recorder {
     cancelAnimationFrame(this._raf);
     if (this._worklet) { this._worklet.port.onmessage = null; this._worklet = null; }
     this.stream?.getTracks().forEach((t) => t.stop());
+    this.sysStream?.getTracks().forEach((t) => t.stop());
+    this.sysStream = null;
+    this._sysNode = null;
     this.ctx?.close().catch(() => {});
     this.gain = null;
     this.highpass = null;

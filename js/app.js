@@ -1,7 +1,7 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming } from './config.js';
-import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, speechStart, LevelBooster } from './audio.js';
+import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, listSpeakers, canPickOutput, isBluetooth, canCaptureSystem, speechStart, LevelBooster } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
 import { History, Audios, RecChunks, clearAll, newId } from './history.js';
@@ -28,6 +28,7 @@ const state = {
   modelId: MODELS.some((m) => m.id === store.get('model')) ? store.get('model') : DEFAULT_MODEL,
   language: store.get('lang', 'auto'),
   autoTr: store.get('autotr', '1') === '1', // traduire automatiquement en français
+  capture: ['mic', 'mix', 'system'].includes(store.get('capture', 'mic')) ? store.get('capture', 'mic') : 'mic', // ce qu'on enregistre
   view: store.get('view', 'tr'), // texte affiché quand une traduction existe : orig | tr | both
   audio: null, // { pcm, blob, name, durationS, url, audioId, docId }
   phase: 'idle', // idle | loading | transcribing | live
@@ -448,7 +449,25 @@ const recorder = new Recorder({
   },
   // Voxtral : voix faibles remontées pour le modèle ; l'enregistrement, lui, reste intact.
   onPcm(pcm) { if (state.live) state.live.push(state.booster ? state.booster.process(pcm) : pcm); },
+  // Casque Bluetooth éteint ou hors de portée pendant l'enregistrement
+  onDeviceLost(label, kind) {
+    if (kind === 'system') {
+      if (!recorder.stream) toast('Partage arrêté : le son de la visio n’arrive plus. Arrête l’enregistrement (ce qui précède est conservé).', 'err', 12000);
+      else toast('Partage arrêté : seul ton micro est encore enregistré.', 'warn', 8000);
+      return;
+    }
+    const name = label ? `« ${label} »` : 'Le micro';
+    if (micBusy()) toast(`${name} s’est déconnecté : l’enregistrement n’entend plus rien. Arrête-le (ce qui précède est conservé), puis relance avec un autre micro.`, 'err', 12000);
+    else if (recorder.state === 'preview') { stopMicTest(); toast(`${name} s’est déconnecté.`, 'warn', 5000); }
+  },
 });
+
+/** Prévient si le micro choisi était absent et que le micro par défaut a pris le relais. */
+function warnFallback() {
+  if (!recorder.fellBack) return;
+  const name = sound.deviceLabel ? `« ${sound.deviceLabel} »` : 'Le micro choisi';
+  toast(`${name} est introuvable (débranché ou éteint ?) : le micro par défaut est utilisé${recorder.deviceLabel ? ` (${recorder.deviceLabel})` : ''}.`, 'warn', 8000);
+}
 
 async function recToggle() {
   if (!micBusy()) await recStart();
@@ -461,12 +480,13 @@ async function recStart() {
   if (live && !(await confirmBigDownload(modelById(state.modelId)))) return;
   stopMicTest();
   try {
-    await recorder.start({ pcm: live, settings: sound });
+    await recorder.start({ pcm: live, settings: sound, capture: captureMode() });
   } catch (e) {
     status(e.message, 'err');
     toast(e.message, 'err', 7000);
     return;
   }
+  warnFallback();
   const rec = { id: newId(), live, mime: recorder.mimeType, startedAt: Date.now(), pending: Promise.resolve() };
   state.rec = rec;
   monitor?.start();
@@ -642,6 +662,8 @@ async function recDiscard() {
 function renderRecState() {
   const s = micBusy() ? recorder.state : 'idle';
   let text = { idle: 'Prêt à enregistrer', recording: 'Enregistrement en cours…', paused: 'En pause' }[s];
+  if (s !== 'idle' && recorder.capturingSystem) text = text.replace('Enregistrement', recorder.stream ? 'Enregistrement voix + visio' : 'Enregistrement de la visio');
+  else if (s === 'idle' && captureMode() !== 'mic') text = captureMode() === 'mix' ? 'Prêt : ta voix + la visio' : 'Prêt : son de la visio';
   const l = state.live;
   if (l && s !== 'idle') {
     if (l.failed) text += ' · direct interrompu';
@@ -649,6 +671,27 @@ function renderRecState() {
     else text += l.lagS > 8 ? ` · direct (retard ≈ ${Math.round(l.lagS)} s)` : ' · direct';
   }
   $('#rec-state').textContent = text;
+}
+
+// ======================================================================
+// Ce qu'on enregistre : ma voix, ma voix + la visio, ou la visio seule
+// ======================================================================
+const CAPTURE_HINTS = {
+  mic: '',
+  mix: 'Au démarrage, choisis l’onglet de la visio (Meet, Teams ou Zoom dans le navigateur) et coche « Partager l’audio ». Appli Teams ou Zoom : choisis « Écran entier » et coche « Partager l’audio du système ». Avec un casque, pas d’écho.',
+  system: 'Seul le son partagé est enregistré (visio où tu ne parles pas, webinaire, vidéo…), pas ton micro. Au démarrage, coche « Partager l’audio ».',
+};
+const captureMode = () => (canCaptureSystem() ? state.capture : 'mic');
+
+function renderCapture() {
+  const m = captureMode();
+  $('#capture-row').hidden = !canCaptureSystem();
+  $$('#capture-seg button').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.capture === m));
+    b.disabled = micBusy();
+  });
+  $('#capture-hint').textContent = CAPTURE_HINTS[m];
+  $('#capture-hint').hidden = !CAPTURE_HINTS[m];
 }
 
 function renderRec() {
@@ -664,6 +707,7 @@ function renderRec() {
   $('#rec-pause span').textContent = s === 'paused' ? 'Reprendre' : 'Pause';
   if (s === 'idle') $('#rec-time').textContent = '00:00';
   $('#step-source').dataset.rec = s;
+  renderCapture();
   renderSound();
   updateButtons();
 }
@@ -1049,6 +1093,9 @@ function renderSound() {
   $('#opt-hp').checked = sound.highpass;
   $('#mic-device').value = sound.deviceId;
   if ($('#mic-device').value !== sound.deviceId) $('#mic-device').value = '';
+  $('#out-device').value = sound.outputId;
+  if ($('#out-device').value !== sound.outputId) $('#out-device').value = '';
+  renderBtHint();
   renderSoundSummary();
   const busy = micBusy();
   const testing = recorder.state === 'preview';
@@ -1079,11 +1126,102 @@ function renderSoundSummary() {
   $('#sound-chips').innerHTML = chips.map(([l, on]) => `<span class="chip${on ? '' : ' off'}">${l}</span>`).join('');
 }
 
-async function refreshDevices() {
-  const sel = $('#mic-device');
-  const mics = (await listMicrophones()).filter((d) => d.deviceId && d.deviceId !== 'default');
-  sel.replaceChildren(new Option('Micro par défaut', ''), ...mics.map((d, i) => new Option(d.label || `Micro ${i + 1}`, d.deviceId)));
+/**
+ * Options d'une liste d'appareils : « Par défaut (nom réel) », puis chaque appareil.
+ * Un appareil choisi mais absent reste affiché « non connecté » : le choix est gardé pour son retour.
+ */
+function deviceOptions(list, kind, chosenId, chosenLabel) {
+  const def = list.find((d) => d.deviceId === 'default');
+  const defName = def?.label?.replace(/^(par défaut|default)\s*[-–:]\s*/i, '');
+  const word = kind === 'in' ? 'Micro' : 'Sortie';
+  const real = list.filter((d) => d.deviceId && d.deviceId !== 'default');
+  const opts = [new Option(defName ? `Par défaut (${defName})` : `${word} par défaut`, '')];
+  real.forEach((d, i) => opts.push(new Option(d.label || `${word} ${i + 1}`, d.deviceId)));
+  if (chosenId && !real.some((d) => d.deviceId === chosenId)) opts.push(new Option(`${chosenLabel || word + ' choisi'} — non connecté`, chosenId));
+  return { real, opts };
+}
+
+/** Windows peut changer l'identifiant d'un casque : on le retrouve par son nom. */
+function relink(real, idKey, labelKey) {
+  if (!sound[idKey] || real.some((d) => d.deviceId === sound[idKey])) return false;
+  const same = sound[labelKey] && real.find((d) => d.label === sound[labelKey]);
+  if (!same) return false;
+  sound[idKey] = same.deviceId;
+  return true;
+}
+
+let knownDevices = null;
+async function refreshDevices(fromEvent = false) {
+  const mics = await listMicrophones();
+  const outs = await listSpeakers();
+  const realIn = mics.filter((d) => d.deviceId && d.deviceId !== 'default');
+  const realOut = outs.filter((d) => d.deviceId && d.deviceId !== 'default');
+  const changed = relink(realIn, 'deviceId', 'deviceLabel') | relink(realOut, 'outputId', 'outputLabel');
+  if (changed) saveSound();
+  $('#mic-device').replaceChildren(...deviceOptions(mics, 'in', sound.deviceId, sound.deviceLabel).opts);
+  $('#out-device').replaceChildren(...deviceOptions(outs, 'out', sound.outputId, sound.outputLabel).opts);
+  $('#out-row').hidden = !canPickOutput();
+  // Annonce discrète d'un casque qui vient d'être connecté
+  const ids = new Set([...realIn, ...realOut].map((d) => d.deviceId));
+  if (fromEvent && knownDevices?.size) {
+    const fresh = [...realIn, ...realOut].filter((d) => !knownDevices.has(d.deviceId) && d.label);
+    const names = [...new Set(fresh.map((d) => d.label))];
+    if (names.length) toast(`Appareil connecté : ${names[0]}. Choisis-le dans « Réglages du son » si tu veux l’utiliser.`, 'ok', 5000);
+  }
+  knownDevices = ids;
+  await applyOutput(false);
   renderSound();
+}
+
+/** Envoie la relecture vers la sortie choisie (casque, haut-parleurs). */
+async function applyOutput(loud = true) {
+  if (!canPickOutput()) return;
+  const el = $('#audio-player');
+  const id = $('#out-device').value === sound.outputId ? sound.outputId : '';
+  if (el.sinkId === id) return;
+  try {
+    await el.setSinkId(id);
+  } catch (e) {
+    if (loud) toast(`Impossible d’utiliser cette sortie : ${e.message || e.name}`, 'err', 6000);
+  }
+}
+
+/** Conseil Bluetooth : le micro d'un casque sans fil dégrade le son (profil « mains libres »). */
+function renderBtHint() {
+  const sel = $('#mic-device');
+  const label = sel.selectedOptions[0]?.textContent || '';
+  $('#bt-hint').hidden = !isBluetooth(label);
+}
+
+/** Petit carillon joué sur la sortie choisie. */
+let chimeUrl = null;
+async function testOutput() {
+  if (!chimeUrl) {
+    const rate = 22050;
+    const n = Math.round(rate * 0.7);
+    const buf = new ArrayBuffer(44 + n * 2);
+    const v = new DataView(buf);
+    const str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, 'data'); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) {
+      const t = i / rate;
+      const f = t < 0.25 ? 660 : 880;
+      const local = t < 0.25 ? t : t - 0.25;
+      const env = Math.min(1, local * 80) * Math.exp(-local * 6);
+      v.setInt16(44 + i * 2, Math.sin(2 * Math.PI * f * t) * env * 0.35 * 32767, true);
+    }
+    chimeUrl = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+  const a = new Audio(chimeUrl);
+  try {
+    if (sound.outputId && canPickOutput()) await a.setSinkId(sound.outputId);
+    await a.play();
+  } catch (e) {
+    toast(`Lecture impossible sur cette sortie : ${e.message || e.name}`, 'err', 6000);
+  }
 }
 
 /** Applique un changement de réglage. Gain et filtre : immédiat. Autres : rouvre le micro en test. */
@@ -1105,6 +1243,7 @@ async function startMicTest() {
     toast(e.message, 'err', 7000);
     return;
   }
+  warnFallback();
   monitor.start();
   refreshDevices(); // les noms des micros sont visibles après autorisation
   renderSound();
@@ -1132,7 +1271,18 @@ function bindSound() {
   $('#opt-ns').onchange = (e) => applySound('noiseSuppression', e.target.checked);
   $('#opt-ec').onchange = (e) => applySound('echoCancellation', e.target.checked);
   $('#opt-hp').onchange = (e) => applySound('highpass', e.target.checked);
-  $('#mic-device').onchange = (e) => applySound('deviceId', e.target.value);
+  $('#mic-device').onchange = (e) => {
+    sound.deviceLabel = e.target.value ? e.target.selectedOptions[0].textContent.replace(/ — non connecté$/, '') : '';
+    applySound('deviceId', e.target.value);
+  };
+  $('#out-device').onchange = async (e) => {
+    sound.outputId = e.target.value;
+    sound.outputLabel = e.target.value ? e.target.selectedOptions[0].textContent.replace(/ — non connecté$/, '') : '';
+    saveSound();
+    await applyOutput();
+    renderSound();
+  };
+  $('#out-test').onclick = testOutput;
   $('#mic-test').onclick = () => (recorder.state === 'preview' ? stopMicTest() : startMicTest());
   $('#gain-auto').onclick = autoGain;
   $('#preset-laptop').onclick = applyLaptopPreset;
@@ -1142,13 +1292,14 @@ function bindSound() {
   $('#sound-reset').onclick = async () => {
     Object.assign(sound, DEFAULT_AUDIO_SETTINGS);
     saveSound();
+    applyOutput(false);
     recorder.setGain(0);
     recorder.setHighpass(false);
     if (recorder.state === 'preview') { stopMicTest(); await startMicTest(); }
     renderSound();
     toast('Réglages du son par défaut rétablis.', 'ok', 2500);
   };
-  navigator.mediaDevices?.addEventListener?.('devicechange', refreshDevices);
+  navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices(true));
   refreshDevices();
 }
 
@@ -2172,6 +2323,13 @@ function closeDrawers() {
 // ======================================================================
 function bind() {
   $$('.seg [data-tab]').forEach((b) => (b.onclick = () => selectTab(b.dataset.tab)));
+  $$('#capture-seg button').forEach((b) => (b.onclick = () => {
+    state.capture = b.dataset.capture;
+    store.set('capture', state.capture);
+    renderCapture();
+    renderRecState();
+  }));
+  renderCapture();
   $('#rec-main').onclick = recToggle;
   $('#rec-stop').onclick = recStop;
   $('#rec-discard').onclick = recDiscard;
@@ -2396,6 +2554,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
+  recorder,
   state, exportAs, sendToClaude, translateDoc, shownSegments, autoTranslate, guessLang, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },

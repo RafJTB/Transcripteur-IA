@@ -817,3 +817,16 @@ kbd { font: 600 10.5px var(--mono); color: var(--text-2); border: 1px solid var(
 .mchip.tocheck:hover { background: rgb(var(--warn-rgb) / 0.08); }
 .segment.flash { animation: flash 1.2s var(--ease); }
 @keyframes flash { 0%, 40% { background: rgb(var(--warn-rgb) / 0.16); } 100% { background: transparent; } }
+
+/* Ligne d'infos : une seule ligne même sur une colonne étroite */
+.ts-switch .ts-ico { display: none; width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; color: var(--text-2); }
+@container result (max-width: 760px) {
+  .result-meta { gap: 4px; }
+  .mchip { padding: 0 7px; gap: 4px; font-size: 11.5px; }
+  .mchip .dev { display: none; }
+  .ts-switch .sw-lbl { display: none; }
+  .ts-switch .ts-ico { display: block; }
+}
+@container result (max-width: 600px) {
+  .mchip svg { display: none; }
+}

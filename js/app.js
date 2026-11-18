@@ -1597,6 +1597,14 @@ function renderMonitorState({ volume, conf }) {
     $('.val', el).textContent = st?.label || empty;
   };
   const testing = recorder.state === 'preview';
+  if (monitor?.replaying) {
+    set('#vol-state', volume, '—');
+    set('#conf-state', conf, '—');
+    const el = $('#monitor-hint');
+    el.className = 'monitor-hint';
+    el.textContent = 'Relecture : le graphique suit la lecture. Les points de compréhension sont ceux de la transcription, phrase par phrase.';
+    return;
+  }
   set('#vol-state', volume, recorder.state === 'idle' ? '—' : 'Mesure…');
   set('#conf-state', conf, recorder.state === 'idle' ? '—' : testing ? 'Test du micro (pas de transcription)' : state.live ? 'En attente du modèle…' : 'Mode direct désactivé');
   const hint = (volume?.level === 'err' && volume.hint) || (conf?.level === 'err' && conf.hint) || volume?.hint || conf?.hint;
@@ -1690,7 +1698,31 @@ function renderSegments(segs, { editable = true } = {}) {
 // Lecture : phrase en cours surlignée
 // ======================================================================
 let playingRow = -1;
+
+/** Le moniteur suit la relecture (dès qu'on lance la lecture, puis aux déplacements). */
+const monitorPb = { url: null, segs: null };
+function syncMonitor(t, playing) {
+  if (!monitor || recorder.state !== 'idle') return;
+  if (t < 0 || !state.audio?.pcm) {
+    monitorPb.url = null;
+    monitor.clearPlayback();
+    return renderMonitorState({ volume: null, conf: null });
+  }
+  if (!playing && !monitor.replaying) return; // simple chargement : on ne remplace pas le graphique
+  if (monitorPb.url !== state.audio.url || !monitor.playback) {
+    monitor.setPlayback(state.audio.pcm);
+    monitorPb.url = state.audio.url;
+    monitorPb.segs = null;
+  }
+  if (monitorPb.segs !== state.segments) {
+    monitor.setPlaybackConfs(state.audio.docId === state.doc?.id || !state.audio.docId ? state.segments : []);
+    monitorPb.segs = state.segments;
+  }
+  monitor.showAt(t);
+}
+
 function onPlayerTime(t, playing) {
+  syncMonitor(t, playing);
   const rows = $$('#transcript .segment');
   const i = t < 0 ? -1 : segmentAt(state.segments, t);
   if (i === playingRow) return;
@@ -2828,7 +2860,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
-  recorder, identifySpeakers, applySpeakers, spkCache,
+  recorder, monitor: () => monitor, identifySpeakers, applySpeakers, spkCache,
   state, exportAs, sendToClaude, translateDoc, shownSegments, autoTranslate, guessLang, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },

@@ -86,6 +86,10 @@ Panneau à droite (en haut à droite sur écran moyen) qui défile sur les 30 de
   qu'il écrit. ≥ 80 % bonne, 60–80 % moyenne, < 60 % faible.
 - Dans le résultat, les passages sous 60 % sont soulignés « à vérifier » ; le soulignement disparaît
   quand tu corriges le passage. La confiance moyenne est affichée sous le titre.
+- **Relecture** : dès que tu lances la lecture d'un audio, le graphique suit la position
+  (20 s avant, 10 s après, tête de lecture). Il suit aussi les déplacements, même en pause.
+  La compréhension affichée est celle de chaque phrase transcrite. Le direct reprend la main
+  dès qu'un enregistrement ou un test du micro démarre.
 
 Limite : c'est la confiance du modèle, pas une garantie. Il peut se tromper avec assurance
 (noms propres, sigles), d'où le lexique.

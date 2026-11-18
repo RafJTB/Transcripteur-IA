@@ -8,6 +8,7 @@
   --bg-2: #0e131b;
   --card: rgb(16 22 31 / 0.86);
   --card-solid: #111823;
+  --card-solid-rgb: 17 24 35;
   --ov: 255 255 255;           /* voiles et bordures (blanc sur fond sombre) */
   --well: 0 0 0;               /* creux : champs, zones de texte, ombres */
   --line: rgb(var(--ov) / 0.07);
@@ -51,6 +52,7 @@
   --bg-2: #e9edf3;
   --card: rgb(255 255 255 / 0.96);
   --card-solid: #ffffff;
+  --card-solid-rgb: 255 255 255;
   --ov: 15 23 42;
   --well: 203 213 225;          /* creux très légers : champs presque blancs */
   --line: rgb(var(--ov) / 0.09);

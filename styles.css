@@ -551,7 +551,7 @@ kbd { font: 600 10.5px var(--mono); color: var(--text-2); border: 1px solid var(
 
 /* Barre d'outils du résultat */
 .r-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.find { flex: 1 1 180px; min-width: 170px; max-width: 320px; margin-right: auto; }
+.find { flex: 1 1 130px; min-width: 130px; max-width: 320px; margin-right: auto; }
 .find input::-webkit-search-cancel-button { display: none; }
 .find.none { border-color: rgba(255, 107, 122, 0.5); }
 .find-count { font: 500 11.5px var(--mono); color: var(--text-3); white-space: nowrap; }
@@ -647,3 +647,19 @@ kbd { font: 600 10.5px var(--mono); color: var(--text-2); border: 1px solid var(
 .r-sub { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .r-sub .result-meta { flex: 1; margin: 0; }
 .r-sub .switch { flex: none; margin: 0; font-size: 12.5px; }
+
+/* Traduction */
+.segment .tr { grid-column: 2; display: none; outline: none; white-space: pre-wrap; word-break: break-word; }
+.transcript[data-ts='off'] .segment .tr { grid-column: 1; }
+.transcript[data-view='tr'] .segment .txt { display: none; }
+.transcript[data-view='tr'] .segment .tr { display: block; font-size: 15.5px; line-height: 1.7; color: var(--text); grid-row: 1; }
+.transcript[data-view='both'] .segment .tr { display: block; font-size: 14.5px; line-height: 1.6; color: #b9c6ff; margin: -2px 0 2px; padding-left: 10px; border-left: 2px solid rgba(124, 156, 255, 0.35); }
+.transcript[data-view='tr'] .segment .tr:empty::before, .transcript[data-view='both'] .segment .tr:empty::before { content: '(non traduit)'; color: var(--text-3); font-style: italic; }
+.view-switch { flex: none; padding: 2px; }
+.view-switch button { padding: 3px 9px; font-size: 12px; }
+.r-sub { align-items: center; flex-wrap: wrap; }
+.tr-engine { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); font-size: 13px; color: var(--text); }
+.tr-engine .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; }
+.tr-engine[data-ok='1'] .dot { background: var(--ok); box-shadow: 0 0 8px rgba(79, 209, 165, 0.5); }
+.tr-engine[data-ok='0'] .dot { background: var(--err); }
+.cl-note.warn { color: var(--warn); }

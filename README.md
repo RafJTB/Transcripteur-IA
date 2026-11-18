@@ -40,6 +40,8 @@ js/lexicon.js       Lexique de corrections (localStorage)
 js/exporters.js     .txt, .md, .srt
 js/claude-export.js consigne de résumé et lien vers Claude
 js/player.js        lecteur du résultat : forme d'onde, réécoute au clic, vitesse
+js/translate.js     traduction locale : traducteur de Chrome, sinon modèle Opus-MT / NLLB
+js/translate-worker.js  modèle de traduction (Transformers.js) dans son propre worker
 js/history.js       Stockage local (IndexedDB) : transcriptions, audios, morceaux d'enregistrement
 ```
 
@@ -124,6 +126,19 @@ Trois colonnes qui tiennent dans l'écran (une seule colonne sur petit écran) :
 
 Raccourcis : `Espace` pause de l'enregistrement ou lecture/pause ; `Ctrl + Espace` lecture/pause même pendant
 la correction du texte ; `Ctrl + Entrée` transcrire ; `Ctrl + F` rechercher ; `Échap` fermer ou effacer la recherche.
+
+## Traduire en français
+
+Pour comprendre un enregistrement dans une autre langue : choisis la **langue parlée** sous le modèle
+(ex. Anglais), transcris, puis clique **Traduire**. Chaque phrase est traduite en gardant ses horodatages.
+
+- Moteur : le **traducteur intégré de Chrome** s'il est disponible (local, petit pack de langue téléchargé une fois),
+  sinon un **modèle local** : Opus-MT (≈ 107 Mo) pour anglais, espagnol, allemand, italien, néerlandais, roumain, russe ;
+  NLLB-200 (≈ 900 Mo) pour les autres langues. Rien n'est envoyé sur Internet.
+- Affichage : **langue d'origine / Français / Les deux** (traduction sous chaque phrase). La traduction est modifiable,
+  enregistrée dans l'historique, et c'est le texte affiché qui est copié, exporté et envoyé à Claude.
+- Limite : les petits modèles traduisent mal le vocabulaire technique (ex. « load bearing walls » → « parois de roulement »).
+  Pour un texte important, relis la vue « Les deux » ou demande à Claude de traduire.
 
 ## Résumer avec Claude
 

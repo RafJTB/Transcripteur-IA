@@ -54,8 +54,7 @@ export class Player {
     this.duration = 0;
     this._raf = 0;
     this.ctx = this.canvas.getContext('2d');
-    const css = getComputedStyle(document.documentElement);
-    this.col = { accent: css.getPropertyValue('--accent').trim() || '#7c9cff', warn: css.getPropertyValue('--warn').trim() || '#f5b454' };
+    this.refreshColors();
 
     this.play.onclick = () => this.toggle();
     this.speed.onclick = () => {
@@ -84,6 +83,19 @@ export class Player {
     this.audio.addEventListener('seeked', () => this._tick());
     this.audio.addEventListener('timeupdate', () => { if (this.audio.paused) this._tick(); });
     new ResizeObserver(() => this.draw()).observe(this.canvas);
+  }
+
+  /** Couleurs lues dans le thème (clair ou sombre). */
+  refreshColors() {
+    const css = getComputedStyle(document.documentElement);
+    const v = (n, d) => css.getPropertyValue(n).trim() || d;
+    this.col = {
+      accent: v('--accent', '#4d8dff'),
+      warn: v('--warn', '#f2b24c'),
+      idle: `rgb(${v('--ov', '255 255 255')} / 0.2)`,
+      head: v('--text', '#e7eaf0'),
+    };
+    if (this.ctx) this.draw();
   }
 
   /** Nouvel audio (pcm 16 kHz pour la forme d'onde, durée connue même pour un webm sans durée). */
@@ -170,7 +182,7 @@ export class Player {
       let v = 0;
       for (let k = a; k < b; k++) if (this.peaks[k] > v) v = this.peaks[k];
       const h = Math.max(2, v * (H - 10));
-      g.fillStyle = i / n < pos ? this.col.accent : 'rgba(255,255,255,0.2)';
+      g.fillStyle = i / n < pos ? this.col.accent : this.col.idle;
       g.fillRect(i * bar, mid - h / 2, bar - 1.2, h);
     }
     // Passages à vérifier
@@ -180,7 +192,7 @@ export class Player {
       g.fillRect(Math.round((t / this.duration) * W) - 1, 0, 2, 4);
     }
     // Tête de lecture
-    g.fillStyle = '#e9eaee';
+    g.fillStyle = this.col.head;
     g.fillRect(Math.round(pos * W), 0, 1.5, H);
   }
 }

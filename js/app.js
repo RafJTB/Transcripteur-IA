@@ -1510,6 +1510,8 @@ function renderSegments(segs, { editable = true } = {}) {
   });
   renderView();
   updateButtons();
+  // Le surlignage de lecture est recalculé : on retire l'ancien (les lignes sont réutilisées)
+  for (const r of $$('#transcript .segment.playing')) r.classList.toggle('playing', false);
   playingRow = -1;
   find.refresh();
   player?.draw();
@@ -2332,6 +2334,12 @@ function bind() {
 // ======================================================================
 // Démarrage
 // ======================================================================
+function applyThemeColors() {
+  monitor?.refreshColors();
+  player?.refreshColors();
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());
+}
+
 async function init() {
   // Détection automatique de la langue par défaut (une seule fois, l'utilisateur peut revenir au français)
   if (store.get('lang.auto', '') !== '1') {
@@ -2340,11 +2348,19 @@ async function init() {
   }
   $('#foot-version').textContent = TRANSFORMERS_VERSION;
   monitor = new Monitor($('#monitor-canvas'), { onState: renderMonitorState });
+  // Thème clair / sombre
+  $('#btn-theme').onclick = () => {
+    const t = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+    store.set('theme', t);
+    applyThemeColors();
+  };
   player = new Player({
     root: $('#player'), audio: $('#audio-player'), canvas: $('#pl-wave'), play: $('#pl-play'),
     time: $('#pl-time'), dur: $('#pl-dur'), speed: $('#pl-speed'), fmt: fmtClock, onTime: onPlayerTime,
     markers: () => state.segments.filter((x) => !x.tentative && x.conf != null && x.conf < CONF.fair).map((x) => x.start),
   });
+  applyThemeColors();
   renderHistory();
   bind();
   bindSound();

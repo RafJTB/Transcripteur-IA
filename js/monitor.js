@@ -30,17 +30,28 @@ export class Monitor {
     this.running = false;
     this._lastEmit = 0;
     this._lastDraw = 0;
+    this.refreshColors();
+    new ResizeObserver(() => this.draw()).observe(canvas);
+    this.draw();
+  }
+
+  /** Couleurs lues dans le thème (clair ou sombre). À rappeler quand le thème change. */
+  refreshColors() {
     const css = getComputedStyle(document.documentElement);
     const v = (n, d) => css.getPropertyValue(n).trim() || d;
+    const rgb = (n, a, d) => `rgb(${v(n, d)} / ${a})`;
     this.col = {
-      accent: v('--accent', '#7c9cff'),
-      ok: v('--ok', '#4fd1a5'),
-      warn: v('--warn', '#f5b454'),
-      err: v('--err', '#ff6b7a'),
-      text: v('--text-3', '#6d7280'),
-      line: 'rgba(255,255,255,0.08)',
+      accent: v('--accent', '#4d8dff'),
+      ok: v('--ok', '#34c690'),
+      warn: v('--warn', '#f2b24c'),
+      err: v('--err', '#f26b79'),
+      text: v('--text-3', '#6c7588'),
+      line: rgb('--ov', 0.08, '255 255 255'),
+      path: rgb('--ov', 0.15, '255 255 255'),
+      zone: rgb('--ok-rgb', 0.1, '52 198 144'),
+      clipLine: rgb('--err-rgb', 0.35, '242 107 121'),
+      peak: rgb('--accent-rgb', 0.25, '77 141 255'),
     };
-    new ResizeObserver(() => this.draw()).observe(canvas);
     this.draw();
   }
 
@@ -184,9 +195,9 @@ export class Monitor {
     g.textAlign = 'left';
 
     // Zone de volume idéale + ligne de saturation
-    g.fillStyle = 'rgba(79, 209, 165, 0.09)';
+    g.fillStyle = this.col.zone;
     g.fillRect(0, yDb(VOLUME.high), W, yDb(VOLUME.weak) - yDb(VOLUME.high));
-    g.strokeStyle = 'rgba(255, 107, 122, 0.35)';
+    g.strokeStyle = this.col.clipLine;
     g.setLineDash([3, 4]);
     g.beginPath();
     g.moveTo(0, yDb(-1));
@@ -209,7 +220,7 @@ export class Monitor {
     if (pts.length > 1) {
       g.beginPath();
       pts.forEach((p, i) => (i ? g.lineTo(x(p.t), yDb(p.pk)) : g.moveTo(x(p.t), yDb(p.pk))));
-      g.strokeStyle = 'rgba(124, 156, 255, 0.25)';
+      g.strokeStyle = this.col.peak;
       g.lineWidth = 1;
       g.stroke();
       g.beginPath();
@@ -226,7 +237,7 @@ export class Monitor {
     if (cs.length > 1) {
       g.beginPath();
       cs.forEach((p, i) => (i ? g.lineTo(x(p.t), yConf(p.v)) : g.moveTo(x(p.t), yConf(p.v))));
-      g.strokeStyle = 'rgba(255,255,255,0.15)';
+      g.strokeStyle = this.col.path;
       g.lineWidth = 1;
       g.stroke();
     }

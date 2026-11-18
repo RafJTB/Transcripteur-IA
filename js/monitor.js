@@ -353,17 +353,5 @@ export class Monitor {
       g.fillRect(px + 1, volTop, W - px - 1, volH);
       g.fillRect(px + 1, confTop + 1, W - px - 2, confH - 2);
     }
-    if (!cs.length && this.replaying) {
-      g.fillStyle = this.col.text;
-      g.textBaseline = 'middle';
-      g.font = '11px system-ui, sans-serif';
-      g.fillText('Pas de mesure de compréhension pour ce passage', 8, confTop + confH / 2);
-    }
-    if (!cs.length && this.running) {
-      g.fillStyle = this.col.text;
-      g.textBaseline = 'middle';
-      g.font = '11px system-ui, sans-serif';
-      g.fillText('S’affiche quand le modèle transcrit (mode direct)', 8, confTop + confH / 2);
-    }
   }
 }

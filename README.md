@@ -39,6 +39,7 @@ js/audio.js         Décodage (mp3, wav, m4a, webm, mp4…) en mono 16 kHz, enre
 js/lexicon.js       Lexique de corrections (localStorage)
 js/exporters.js     .txt, .md, .srt
 js/claude-export.js consigne de résumé et lien vers Claude
+js/player.js        lecteur du résultat : forme d'onde, réécoute au clic, vitesse
 js/history.js       Stockage local (IndexedDB) : transcriptions, audios, morceaux d'enregistrement
 ```
 
@@ -108,6 +109,21 @@ Dans les réglages du son :
 
 Limites : l'écho est une estimation indicative ; deux lectures ne sont jamais identiques, seuls des écarts
 nets entre réglages sont significatifs.
+
+## Interface
+
+Trois colonnes qui tiennent dans l'écran (une seule colonne sur petit écran) :
+
+- **Gauche** : source (micro ou fichier), choix du modèle et de la langue (replié sur une ligne, s'ouvre au clic),
+  et l'**historique** toujours visible, avec une recherche dans les titres et le texte.
+- **Centre** : le texte, en grand. Barre d'outils : recherche dans le texte (surligne tous les résultats,
+  Entrée pour passer au suivant), lexique, copier, menu Exporter (.txt, .md, .srt), Résumer avec Claude.
+  En bas, le **lecteur** : forme d'onde cliquable, repères orange sur les passages à vérifier, vitesse 0,75× à 2×.
+  Clic sur un horodatage : l'audio repart à cette phrase, et la phrase lue est surlignée pendant la lecture.
+- **Droite** : le moniteur, puis les réglages repliés (son, optimisation, raccourcis), avec un résumé de ce qui est actif.
+
+Raccourcis : `Espace` pause de l'enregistrement ou lecture/pause ; `Ctrl + Espace` lecture/pause même pendant
+la correction du texte ; `Ctrl + Entrée` transcrire ; `Ctrl + F` rechercher ; `Échap` fermer ou effacer la recherche.
 
 ## Résumer avec Claude
 

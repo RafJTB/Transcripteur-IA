@@ -8,6 +8,7 @@ import { History, Audios, RecChunks, clearAll, newId } from './history.js';
 import { LiveSession, VoxtralLive } from './live.js';
 import { Monitor, CONF } from './monitor.js';
 import { SUMMARY_TYPES, buildPrompt, claudeUrl, CLAUDE_NEW } from './claude-export.js';
+import { Player, segmentAt } from './player.js';
 import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -273,8 +274,21 @@ function renderModels() {
       </span>`;
     box.appendChild(el);
   }
+  renderModelPick();
   renderLangHint();
   renderLiveHint();
+}
+
+/** Ligne résumée du modèle choisi (le détail s'ouvre au clic). */
+function renderModelPick() {
+  const m = modelById(state.modelId);
+  const v = state.caps ? pickVariant(m, caps()) : m.variants.webgpu;
+  $('#pk-label').textContent = m.label;
+  $('#pk-name').textContent = m.name;
+  const size = v ? fmtMB(v.sizeMB) : '';
+  $('#pk-sub').textContent = !state.caps ? 'Détection du matériel…'
+    : !v ? 'Indisponible sur ce PC'
+    : state.cache[m.id] ? `Prêt · ${size} en cache` : `À télécharger · ${size}`;
 }
 
 function renderLangHint() {
@@ -333,7 +347,7 @@ async function setAudioFromBlob(blob, name, { audioId = null, pcm = null, docId 
     $('#audio-card').hidden = false;
     $('#audio-name').textContent = name;
     $('#audio-info').textContent = `${fmtClock(durationS)} · ${fmtBytes(blob.size)}${audioId ? ' · sauvegardé' : ''}`;
-    $('#audio-player').src = state.audio.url;
+    player.load(state.audio.url, pcm, durationS);
     status(durationS > 7200 ? 'Audio très long : la transcription peut prendre beaucoup de temps et de mémoire.' : 'Audio prêt. Choisis un modèle puis lance la transcription.', durationS > 7200 ? 'warn' : '');
     if (durationS < 0.5) status('Audio très court (moins d’une demi-seconde).', 'warn');
   } catch (e) {
@@ -347,7 +361,7 @@ function clearAudio() {
   if (state.audio?.url) URL.revokeObjectURL(state.audio.url);
   state.audio = null;
   $('#audio-card').hidden = true;
-  $('#audio-player').removeAttribute('src');
+  player.clear();
   status('');
   updateButtons();
 }
@@ -403,6 +417,7 @@ function selectTab(name) {
 // Micro (+ direct, + sauvegarde continue)
 // ======================================================================
 let monitor = null; // graphique volume / compréhension (créé au démarrage)
+let player = null; // lecteur audio du résultat (créé au démarrage)
 
 /** Micro occupé par un enregistrement (le simple test du micro ne bloque rien). */
 const micBusy = () => recorder.state === 'recording' || recorder.state === 'paused';
@@ -643,6 +658,7 @@ function renderRec() {
   $('#toggle-live').disabled = s !== 'idle';
   $('#rec-pause span').textContent = s === 'paused' ? 'Reprendre' : 'Pause';
   if (s === 'idle') $('#rec-time').textContent = '00:00';
+  $('#step-source').dataset.rec = s;
   renderSound();
   updateButtons();
 }
@@ -700,6 +716,13 @@ function newDoc(fields) {
 async function persist(doc = state.doc) {
   if (!doc) return;
   try { await History.put(structuredClone(doc)); } catch (e) { console.warn('Historique indisponible', e); }
+  scheduleHistory();
+}
+
+let histTimer = 0;
+function scheduleHistory() {
+  clearTimeout(histTimer);
+  histTimer = setTimeout(renderHistory, 800);
 }
 
 /** Premier téléchargement d'un gros modèle : on prévient avant. */
@@ -1011,6 +1034,7 @@ function renderSound() {
   $('#opt-hp').checked = sound.highpass;
   $('#mic-device').value = sound.deviceId;
   if ($('#mic-device').value !== sound.deviceId) $('#mic-device').value = '';
+  renderSoundSummary();
   const busy = micBusy();
   const testing = recorder.state === 'preview';
   // Ces réglages imposent de rouvrir le micro : figés pendant un enregistrement
@@ -1030,6 +1054,14 @@ function renderSound() {
     hint.className = 'sc-hint';
     hint.textContent = testing ? 'Test en cours : parle normalement et règle le gain pour que la courbe reste dans la zone verte.' : 'Astuce : « Tester le micro » montre le niveau sans rien enregistrer.';
   }
+}
+
+function renderSoundSummary() {
+  const sel = $('#mic-device');
+  const name = sel.selectedOptions[0]?.textContent || 'Micro par défaut';
+  $('#sound-sum').textContent = `${name.length > 28 ? name.slice(0, 27) + '…' : name} · gain ${fmtGain(sound.gainDb)}`;
+  const chips = [['Gain auto', sound.autoGainControl], ['Anti-bruit', sound.noiseSuppression], ['Anti-écho', sound.echoCancellation], ['Filtre basses', sound.highpass]];
+  $('#sound-chips').innerHTML = chips.map(([l, on]) => `<span class="chip${on ? '' : ' off'}">${l}</span>`).join('');
 }
 
 async function refreshDevices() {
@@ -1452,7 +1484,89 @@ function renderSegments(segs, { editable = true } = {}) {
     if (document.activeElement !== txt && txt.textContent !== s.text) txt.textContent = s.text;
   });
   updateButtons();
+  playingRow = -1;
+  find.refresh();
+  player?.draw();
 }
+
+// ======================================================================
+// Lecture : phrase en cours surlignée
+// ======================================================================
+let playingRow = -1;
+function onPlayerTime(t, playing) {
+  const rows = $$('#transcript .segment');
+  const i = t < 0 ? -1 : segmentAt(state.segments, t);
+  if (i === playingRow) return;
+  rows[playingRow]?.classList.remove('playing');
+  playingRow = i;
+  const row = rows[i];
+  if (!row) return;
+  row.classList.add('playing');
+  // Suit la lecture, sauf si l'utilisateur est en train de corriger le texte
+  if (playing && !$('#transcript').contains(document.activeElement)) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+// ======================================================================
+// Recherche dans le texte (surlignage sans toucher au texte éditable)
+// ======================================================================
+const fold = (c) => {
+  const n = c.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  return n.length === 1 ? n : c.toLowerCase().slice(0, 1) || c;
+};
+const find = {
+  hits: [],
+  cur: -1,
+  _t: 0,
+  refresh() {
+    clearTimeout(this._t);
+    if ($('#find').value.trim()) this._t = setTimeout(() => this.run(false), 150);
+  },
+  run(jump = true) {
+    const q = [...$('#find').value.trim()].map(fold).join('');
+    this.hits = [];
+    if (q) {
+      for (const txt of $$('#transcript .segment .txt')) {
+        const walker = document.createTreeWalker(txt, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const hay = [...node.data].map(fold).join('');
+          if (hay.length !== node.data.length) continue; // sécurité (caractères spéciaux)
+          for (let i = hay.indexOf(q); i >= 0; i = hay.indexOf(q, i + q.length)) {
+            const r = new Range();
+            r.setStart(node, i);
+            r.setEnd(node, i + q.length);
+            this.hits.push(r);
+          }
+        }
+      }
+    }
+    if (this.cur >= this.hits.length || jump) this.cur = this.hits.length ? 0 : -1;
+    this.paint(jump);
+  },
+  step(d) {
+    if (!this.hits.length) return this.run();
+    this.cur = (this.cur + d + this.hits.length) % this.hits.length;
+    this.paint(true);
+  },
+  clear() {
+    $('#find').value = '';
+    this.hits = [];
+    this.cur = -1;
+    this.paint(false);
+  },
+  paint(scroll) {
+    const n = this.hits.length;
+    const q = $('#find').value.trim();
+    $('#find-count').textContent = !q ? '' : n ? `${this.cur + 1} / ${n}` : 'aucun';
+    $('#find-box').classList.toggle('none', !!q && !n);
+    $('#find-prev').hidden = $('#find-next').hidden = n < 2;
+    if (window.CSS?.highlights && window.Highlight) {
+      CSS.highlights.set('find', new Highlight(...this.hits));
+      CSS.highlights.set('find-cur', new Highlight(...(this.hits[this.cur] ? [this.hits[this.cur]] : [])));
+    }
+    const r = this.hits[this.cur];
+    if (scroll && r) r.startContainer.parentElement?.closest('.segment')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  },
+};
 
 let saveTimer;
 function saveDoc(debounce = 0) {
@@ -1561,6 +1675,10 @@ function updateButtons() {
   }[state.phase] || 'Transcrire';
   $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
   $$('[data-export], #btn-copy, #btn-relex, #btn-claude').forEach((b) => (b.disabled = !has));
+  $('#export-menu').classList.toggle('disabled', !has);
+  if (!has) $('#export-menu').open = false;
+  $('#find').disabled = !state.segments.length;
+  $('#player-note').hidden = !(recording && !state.audio);
   $('#result-title').disabled = !state.doc;
   $$('#models input').forEach((i) => (i.disabled = busy || recording));
   $('#lang').disabled = busy || recording;
@@ -1639,7 +1757,12 @@ async function renderHistory() {
   let items = [];
   let sizes = {};
   try { [items, sizes] = await Promise.all([History.list(), Audios.sizes()]); } catch { list.innerHTML = '<p class="hist-empty">Historique indisponible dans ce navigateur.</p>'; return; }
+  $('#hist-count').textContent = items.length ? `${items.length} transcription${items.length > 1 ? 's' : ''}` : '';
   if (!items.length) { list.innerHTML = '<p class="hist-empty">Aucune transcription enregistrée pour l’instant.</p>'; return; }
+  const q = [...$('#hist-search').value.trim()].map(fold).join('');
+  const textOf = (it) => [...`${it.title} ${it.segments.map((x) => x.text).join(' ')}`].map(fold).join('');
+  if (q) items = items.filter((it) => textOf(it).includes(q));
+  if (!items.length) { list.innerHTML = '<p class="hist-empty">Aucun résultat.</p>'; return; }
   list.innerHTML = '';
   for (const it of items) {
     const el = document.createElement('div');
@@ -1661,7 +1784,14 @@ async function renderHistory() {
       b.style.marginLeft = '8px';
       $('small', el).appendChild(b);
     }
-    $('p', el).textContent = it.segments.map((s) => s.text).join(' ').slice(0, 220) || '(vide)';
+    const all = it.segments.map((x) => x.text).join(' ');
+    let preview = all.slice(0, 160);
+    if (q) {
+      // Montre le passage qui contient le mot cherché
+      const at = [...all].map(fold).join('').indexOf(q);
+      if (at > 40) preview = '…' + all.slice(at - 40, at + 120);
+    }
+    $('p', el).textContent = preview || '(vide)';
     const open = () => openDoc(it);
     el.addEventListener('click', (e) => { if (!e.target.closest('.icon-btn')) open(); });
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
@@ -1690,6 +1820,7 @@ function openDoc(it) {
   if (state.phase !== 'idle' || micBusy()) return toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
   showDoc(it);
   closeDrawers();
+  renderHistory();
   renderResume(it);
   // Recharge l'audio associé (réécoute, horodatages cliquables, reprise)
   if (it.audioId && state.audio?.audioId !== it.audioId) {
@@ -1784,6 +1915,8 @@ function bind() {
     if (e.target.name !== 'model') return;
     state.modelId = e.target.value;
     store.set('model', state.modelId);
+    renderModelPick();
+    $('#model-pick').open = false;
     renderLiveHint();
     renderLangHint();
   });
@@ -1825,9 +1958,7 @@ function bind() {
   $('#transcript').addEventListener('click', (e) => {
     const ts = e.target.closest('.ts');
     if (!ts || !state.audio) return;
-    const p = $('#audio-player');
-    p.currentTime = Number(ts.dataset.start);
-    p.play().catch(() => {});
+    player.seek(Number(ts.dataset.start), { play: true });
   });
   $('#result-title').addEventListener('input', () => saveDoc(600));
 
@@ -1842,7 +1973,38 @@ function bind() {
   };
 
   $('#btn-lexicon').onclick = () => { renderLexicon(); openDrawer('#drawer-lexicon'); };
-  $('#btn-history').onclick = () => { renderHistory(); openDrawer('#drawer-history'); };
+  $('#hist-search').addEventListener('input', () => renderHistory());
+  $('#find').addEventListener('input', () => find.run());
+  $('#find').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); find.step(e.shiftKey ? -1 : 1); }
+    if (e.key === 'Escape') { e.stopPropagation(); find.clear(); $('#find').blur(); }
+  });
+  $('#find-prev').onclick = (e) => { e.preventDefault(); find.step(-1); };
+  $('#find-next').onclick = (e) => { e.preventDefault(); find.step(1); };
+  // Menu Exporter : fermé après un choix ou un clic ailleurs, inactif sans texte
+  $('#export-btn').addEventListener('click', (e) => { if ($('#export-menu').classList.contains('disabled')) e.preventDefault(); });
+  $$('#export-menu [data-export]').forEach((b) => b.addEventListener('click', () => ($('#export-menu').open = false)));
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#export-menu')) $('#export-menu').open = false;
+    if (!e.target.closest('#model-pick')) $('#model-pick').open = false;
+  });
+  // Raccourcis clavier
+  document.addEventListener('keydown', (e) => {
+    if (!$('#modal').hidden || !$('#tool').hidden) return;
+    const el = e.target;
+    const typing = el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+    if (e.ctrlKey && e.key === 'Enter') {
+      if (!$('#btn-transcribe').disabled) { e.preventDefault(); startTranscription(); }
+    } else if (e.ctrlKey && (e.key === 'f' || e.key === 'F') && state.segments.length) {
+      e.preventDefault();
+      $('#find').focus();
+      $('#find').select();
+    } else if (e.code === 'Space' && (e.ctrlKey || !typing) && !e.repeat) {
+      if (!e.ctrlKey && /^(BUTTON|SUMMARY|A)$/.test(el.tagName)) return; // Espace active déjà le bouton
+      if (micBusy() && !e.ctrlKey) { e.preventDefault(); $('#rec-pause').click(); }
+      else if (player.loaded) { e.preventDefault(); player.toggle(); }
+    }
+  });
   $$('.drawer').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) closeDrawers(); }));
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
@@ -1882,6 +2044,12 @@ function bind() {
 async function init() {
   $('#foot-version').textContent = TRANSFORMERS_VERSION;
   monitor = new Monitor($('#monitor-canvas'), { onState: renderMonitorState });
+  player = new Player({
+    root: $('#player'), audio: $('#audio-player'), canvas: $('#pl-wave'), play: $('#pl-play'),
+    time: $('#pl-time'), dur: $('#pl-dur'), speed: $('#pl-speed'), fmt: fmtClock, onTime: onPlayerTime,
+    markers: () => state.segments.filter((x) => !x.tentative && x.conf != null && x.conf < CONF.fair).map((x) => x.start),
+  });
+  renderHistory();
   bind();
   bindSound();
   renderRec();
@@ -1918,7 +2086,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
-  state, exportAs, sendToClaude, buildPrompt, showDoc, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
+  state, exportAs, sendToClaude, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },
 };

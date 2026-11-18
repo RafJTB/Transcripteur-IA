@@ -1,6 +1,7 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming } from './config.js';
+import { clusterSpeakers, buildTimeline, assignSpeakers, orderSpeakers, speakingTime, speakerColor, defaultSpeakerName } from './speakers.js';
 import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, listSpeakers, canPickOutput, isBluetooth, canCaptureSystem, speechStart, LevelBooster } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
@@ -28,6 +29,7 @@ const state = {
   modelId: MODELS.some((m) => m.id === store.get('model')) ? store.get('model') : DEFAULT_MODEL,
   language: store.get('lang', 'auto'),
   autoTr: store.get('autotr', '1') === '1', // traduire automatiquement en français
+  autoSpk: store.get('autospk', '1') === '1', // identifier qui parle après chaque transcription
   capture: ['mic', 'mix', 'system'].includes(store.get('capture', 'mic')) ? store.get('capture', 'mic') : 'mic', // ce qu'on enregistre
   view: store.get('view', 'tr'), // texte affiché quand une traduction existe : orig | tr | both
   audio: null, // { pcm, blob, name, durationS, url, audioId, docId }
@@ -938,6 +940,7 @@ function stopByUser(doc) {
 
 function finalizeDoc(doc, newSegments) {
   doc.segments = applyLexiconTo([...doc.job.baseSegments, ...newSegments]);
+  delete doc.speakers; // nouveau texte : intervenants à recalculer
   doc.status = 'done';
   doc.job = null;
   doc.stopReason = null;
@@ -950,6 +953,7 @@ function finalizeDoc(doc, newSegments) {
   if (matchMedia('(max-width: 980px)').matches) $('#step-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (!doc.segments.length) status('Aucune parole détectée dans cet audio.', 'warn');
   autoTranslate(doc);
+  if (state.autoSpk && doc.segments.length) identifySpeakers(doc);
 }
 
 /** Décide du repli : WebGPU → WASM, ou gros modèle → modèle plus léger. */
@@ -1034,6 +1038,7 @@ function showDoc(doc, { editable = true } = {}) {
   $('#result-title').value = doc.title;
   renderMeta();
   renderSegments(state.segments, { editable });
+  renderSpeakers();
 }
 
 function clearResult() {
@@ -1043,6 +1048,7 @@ function clearResult() {
   renderMeta();
   showWaiting(false);
   renderSegments([], {});
+  renderSpeakers();
   hideResume();
 }
 
@@ -1625,12 +1631,14 @@ function renderSegments(segs, { editable = true } = {}) {
   let rows = $$('.segment', t);
   rows.slice(segs.length).forEach((r) => r.remove());
   rows = rows.slice(0, segs.length);
+  const people = state.doc?.speakers;
+  const multi = editable && people?.length > 1;
   segs.forEach((s, i) => {
     let row = rows[i];
     if (!row) {
       row = document.createElement('div');
       row.className = 'segment';
-      row.innerHTML = '<button class="ts" type="button"></button><div class="txt" spellcheck="true"></div><div class="tr" spellcheck="true" lang="fr"></div>';
+      row.innerHTML = '<button class="spk" type="button" title="Changer l’intervenant de ce passage"></button><button class="ts" type="button"></button><div class="txt" spellcheck="true"></div><div class="tr" spellcheck="true" lang="fr"></div>';
       t.insertBefore(row, typing || null);
     }
     row.classList.toggle('partial', !editable);
@@ -1658,6 +1666,16 @@ function renderSegments(segs, { editable = true } = {}) {
     row.classList.toggle('pending-tr', s.tr == null && !!s.lang && s.lang !== 'fr');
     const trText = s.tr ?? '';
     if (document.activeElement !== tr && tr.textContent !== trText) tr.textContent = trText;
+    // Intervenant : couleur sur toute la ligne, nom au début de chaque prise de parole
+    const who = multi && s.spk != null ? people[s.spk] : null;
+    row.classList.toggle('has-spk', !!who);
+    row.classList.toggle('spk-start', !!who && (i === 0 || segs[i - 1].spk !== s.spk));
+    const chip = $('.spk', row);
+    if (who) {
+      row.style.setProperty('--spk', speakerColor(s.spk));
+      chip.textContent = who.name;
+      chip.dataset.i = i;
+    } else row.style.removeProperty('--spk');
   });
   renderView();
   updateButtons();
@@ -1775,7 +1793,7 @@ async function writeClipboard(text) {
 }
 
 async function copyText() {
-  await writeClipboard(toTxt(shownSegments(), { timestamps: tsOn() }));
+  await writeClipboard(toTxt(shownSegments(), { timestamps: tsOn(), speakers: speakerNames() }));
   toast('Texte copié dans le presse-papiers.', 'ok', 2500);
 }
 
@@ -1816,7 +1834,8 @@ async function sendToClaude() {
     type, extra,
     title: $('#result-title').value.trim() || state.doc?.title || '',
     meta: docMeta(),
-    transcript: toTxt(shownSegments(), { timestamps: withTs }),
+    transcript: toTxt(shownSegments(), { timestamps: withTs, speakers: speakerNames() }),
+    speakers: speakerNames(),
     language: langName(state.doc?.language || 'fr').toLowerCase(),
     translatedFrom: currentView() !== 'orig' ? (langSummary(state.segments) || langName(state.doc?.translation?.from).toLowerCase()) : null,
     both: currentView() === 'both',
@@ -1864,6 +1883,257 @@ function shownSegments() {
   const view = currentView();
   if (view === 'orig') return state.segments;
   return state.segments.map((s) => ({ ...s, text: view === 'tr' ? (s.tr || s.text) : s.tr ? `${s.text}\n→ ${s.tr}` : s.text }));
+}
+
+// ======================================================================
+// Qui parle ? (pyannote + WeSpeaker, dans un worker ; ~33 Mo téléchargés une fois)
+// ======================================================================
+const SPK_WORKER = new URL('./speaker-worker.js', import.meta.url);
+let spkWorker = null;
+let spkSeq = 0;
+let spkRun = null;
+/** Empreintes vocales déjà calculées, par transcription : changer le nombre de personnes est instantané. */
+const spkCache = new Map();
+
+/** Noms des intervenants (pour les exports), ou null s'il n'y en a pas plusieurs. */
+function speakerNames() {
+  const sp = state.doc?.speakers;
+  return sp?.length > 1 ? sp.map((p) => p.name) : null;
+}
+
+function spkEngine() {
+  if (!spkWorker) {
+    spkWorker = new Promise((resolve, reject) => {
+      const w = new Worker(SPK_WORKER, { type: 'module' });
+      const fail = (msg) => { clearTimeout(t); w.terminate(); reject(new Error(msg)); };
+      const t = setTimeout(() => fail('le module ne démarre pas.'), 60000);
+      w.onerror = (e) => { e.preventDefault?.(); fail('impossible de charger le module (cdn.jsdelivr.net et huggingface.co doivent être accessibles au premier lancement).'); };
+      w.onmessage = ({ data }) => {
+        if (data.type !== 'boot') return;
+        clearTimeout(t);
+        w.onmessage = null;
+        w.onerror = null;
+        resolve(w);
+      };
+    });
+    spkWorker.catch(() => (spkWorker = null));
+  }
+  return spkWorker;
+}
+
+/** Empreintes vocales de l'audio (voir speaker-worker.js). */
+async function analyseVoices(pcm, onProgress) {
+  const w = await spkEngine();
+  const id = ++spkSeq;
+  return new Promise((resolve, reject) => {
+    const h = ({ data }) => {
+      if (data.id !== id) return;
+      if (data.type === 'progress') return onProgress?.(data);
+      w.removeEventListener('message', h);
+      if (data.type === 'result') resolve(data.items);
+      else reject(new Error(data.message));
+    };
+    w.addEventListener('message', h);
+    w.postMessage({ type: 'run', id, pcm });
+  });
+}
+
+let spkStatusTimer = 0;
+function spkStatus(text, done = false) {
+  clearTimeout(spkStatusTimer);
+  const el = $('#spk-status');
+  el.hidden = !text;
+  el.classList.toggle('done', done);
+  $('#spk-status-text').textContent = text;
+  if (done) spkStatusTimer = setTimeout(() => (el.hidden = true), 5000);
+}
+
+/**
+ * Identifie les intervenants d'une transcription.
+ * k : nombre de personnes imposé (null = automatique). manual : lancé par le bouton.
+ */
+function identifySpeakers(doc, { k = doc?.speakerCount ?? null, manual = false } = {}) {
+  if (!doc?.segments?.length) return null;
+  if (spkRun) {
+    if (manual) toast('Analyse des voix déjà en cours…', 'warn', 3000);
+    return spkRun;
+  }
+  spkRun = (async () => {
+    let items = spkCache.get(doc.id);
+    if (!items) {
+      spkStatus('Qui parle ? Préparation…');
+      const pcm = (await loadDocAudio(doc)) ? state.audio.pcm : null;
+      if (!pcm) {
+        spkStatus('');
+        if (manual) toast('L’audio de cette transcription n’est plus disponible : impossible de reconnaître les voix.', 'warn', 6000);
+        return;
+      }
+      items = await analyseVoices(pcm, (p) => {
+        const pct = `${Math.round((p.value || 0) * 100)} %`;
+        spkStatus(p.stage === 'load' ? `Qui parle ? Téléchargement du module (≈ 33 Mo, une seule fois)… ${pct}` : `Qui parle ? Analyse des voix… ${pct}`);
+      });
+      spkCache.set(doc.id, items);
+    }
+    // La traduction numérote les phrases : on attend qu'elle ait fini avant d'en couper
+    await autoRun?.promise?.catch(() => {});
+    if (doc.status === 'running' || doc.status === 'live') return spkStatus('');
+    if (!items.length) {
+      spkStatus('');
+      if (manual) toast('Aucune voix nette détectée dans cet audio.', 'warn', 5000);
+      return;
+    }
+    applySpeakers(doc, items, k);
+    const n = doc.speakers.length;
+    spkStatus(n > 1 ? `${n} personnes reconnues · clique sur un nom pour le renommer` : 'Une seule voix reconnue', true);
+  })()
+    .catch((e) => { spkStatus(''); toast(`Qui parle ? ${e.message}`, 'err', 8000); })
+    .finally(() => { spkRun = null; });
+  return spkRun;
+}
+
+/** Regroupe les voix et attribue chaque phrase (rapide : empreintes déjà calculées). */
+function applySpeakers(doc, items, k) {
+  const labels = clusterSpeakers(items, { k });
+  const timeline = buildTimeline(items, labels);
+  const base = doc.segments.map(({ spk, ...rest }) => rest);
+  const names = (doc.speakers || []).map((p) => p.name);
+  const { segments, speakers } = orderSpeakers(assignSpeakers(base, timeline), names);
+  doc.segments = segments;
+  doc.speakers = speakers;
+  doc.speakerCount = k;
+  if (state.doc === doc) {
+    state.segments = doc.segments;
+    renderSegments(state.segments, {});
+    renderSpeakers();
+    renderMeta();
+  }
+  persist(doc);
+}
+
+/** Barre des intervenants : noms modifiables, temps de parole, nombre de personnes. */
+function renderSpeakers() {
+  const d = state.doc;
+  const sp = d?.speakers;
+  $('#spk-panel').hidden = !sp?.length;
+  if (!sp?.length) return;
+  const t = speakingTime(state.segments, sp.length);
+  const tot = t.reduce((a, b) => a + b, 0) || 1;
+  const list = $('#spk-list');
+  const focused = document.activeElement?.closest?.('#spk-list') ? document.activeElement.dataset.n : null;
+  list.replaceChildren(...sp.map((p, n) => {
+    const item = document.createElement('label');
+    item.className = 'spk-item';
+    item.style.setProperty('--spk', speakerColor(n));
+    item.title = 'Clique pour renommer';
+    item.innerHTML = '<span class="dot"></span><input class="spk-name" spellcheck="false" maxlength="40" /><small></small>';
+    const input = $('input', item);
+    input.value = p.name;
+    input.dataset.n = n;
+    input.size = Math.max(6, Math.min(22, p.name.length + 1));
+    input.setAttribute('aria-label', `Nom de ${p.name}`);
+    $('small', item).textContent = `${Math.round((t[n] / tot) * 100)} %`;
+    return item;
+  }));
+  if (focused != null) $(`#spk-list input[data-n="${focused}"]`)?.focus();
+  $('#spk-count').value = d.speakerCount ? String(d.speakerCount) : '';
+}
+
+/** Après une correction : retire les intervenants sans phrase et renumérote. */
+function compactSpeakers(d) {
+  const used = [...new Set(state.segments.map((s) => s.spk).filter((x) => x != null))].sort((a, b) => a - b);
+  const map = new Map(used.map((o, n) => [o, n]));
+  // Les noms par défaut suivent la nouvelle numérotation ; les noms choisis sont gardés
+  d.speakers = used.map((o, n) => {
+    const p = d.speakers[o] || { name: '' };
+    return { ...p, name: !p.name || /^Personne \d+$/.test(p.name) ? defaultSpeakerName(n) : p.name };
+  });
+  state.segments = state.segments.map((s) => (s.spk == null ? s : { ...s, spk: map.get(s.spk) }));
+  d.segments = state.segments;
+}
+
+/** Menu d'une étiquette : attribuer cette prise de parole à quelqu'un d'autre. */
+function openSpeakerMenu(chip) {
+  const d = state.doc;
+  const i = Number(chip.dataset.i);
+  if (!d?.speakers || !state.segments[i]) return;
+  const pop = $('#spk-pop');
+  const from = state.segments[i].spk;
+  const opts = d.speakers.map((p, n) => ({ n, label: p.name })).filter((o) => o.n !== from);
+  opts.push({ n: d.speakers.length, label: 'Nouvelle personne' });
+  pop.innerHTML = '<p>Ce passage est dit par…</p>';
+  for (const o of opts) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = '<span class="dot"></span>';
+    b.append(o.label);
+    b.style.setProperty('--spk', speakerColor(o.n));
+    b.onclick = () => {
+      if (o.n >= d.speakers.length) d.speakers.push({ name: defaultSpeakerName(o.n), seconds: 0 });
+      for (let j = i; j < state.segments.length && state.segments[j].spk === from; j++) state.segments[j] = { ...state.segments[j], spk: o.n };
+      compactSpeakers(d);
+      closeSpeakerMenu();
+      renderSegments(state.segments, {});
+      renderSpeakers();
+      saveDoc();
+    };
+    pop.append(b);
+  }
+  const r = chip.getBoundingClientRect();
+  pop.hidden = false;
+  pop.style.left = `${Math.min(r.left, innerWidth - pop.offsetWidth - 12)}px`;
+  pop.style.top = `${r.bottom + pop.offsetHeight + 8 > innerHeight ? r.top - pop.offsetHeight - 6 : r.bottom + 6}px`;
+  pop.querySelector('button')?.focus();
+}
+
+function closeSpeakerMenu() { $('#spk-pop').hidden = true; }
+
+function bindSpeakers() {
+  $('#btn-speakers').onclick = () => {
+    const d = state.doc;
+    if (!d) return;
+    if (d.status === 'running' || d.status === 'live') return toast('Attends la fin de la transcription.', 'warn', 3000);
+    identifySpeakers(d, { manual: true });
+  };
+  $('#spk-list').addEventListener('input', (e) => {
+    const d = state.doc;
+    const n = Number(e.target.dataset.n);
+    if (!d?.speakers?.[n]) return;
+    d.speakers[n].name = e.target.value.trim() || defaultSpeakerName(n);
+    e.target.size = Math.max(6, Math.min(22, e.target.value.length + 1));
+    for (const c of $$('#transcript .segment.spk-start .spk')) {
+      const s = state.segments[Number(c.dataset.i)];
+      if (s?.spk === n) c.textContent = d.speakers[n].name;
+    }
+    saveDoc(600);
+  });
+  $('#spk-list').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+  $('#spk-count').onchange = (e) => {
+    const d = state.doc;
+    if (!d) return;
+    const k = e.target.value ? Number(e.target.value) : null;
+    const items = spkCache.get(d.id);
+    if (items?.length) applySpeakers(d, items, k);
+    else identifySpeakers(d, { k, manual: true });
+  };
+  $('#spk-clear').onclick = () => {
+    const d = state.doc;
+    if (!d) return;
+    delete d.speakers;
+    delete d.speakerCount;
+    state.segments = state.segments.map(({ spk, ...rest }) => rest);
+    d.segments = state.segments;
+    renderSegments(state.segments, {});
+    renderSpeakers();
+    persist(d);
+  };
+  $('#toggle-autospk').checked = state.autoSpk;
+  $('#toggle-autospk').onchange = (e) => {
+    state.autoSpk = e.target.checked;
+    store.set('autospk', state.autoSpk ? '1' : '0');
+  };
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#spk-pop, .spk')) closeSpeakerMenu(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSpeakerMenu(); });
+  addEventListener('scroll', closeSpeakerMenu, true);
 }
 
 const TR_WORKER = new URL('./translate-worker.js', import.meta.url);
@@ -2081,13 +2351,14 @@ function exportAs(fmt) {
   const segs = shownSegments();
   if (!segs.length) return;
   const d = state.doc;
-  if (fmt === 'txt') download(exportName('txt'), toTxt(segs, { timestamps: tsOn() }), 'text/plain');
+  const speakers = speakerNames();
+  if (fmt === 'txt') download(exportName('txt'), toTxt(segs, { timestamps: tsOn(), speakers }), 'text/plain');
   if (fmt === 'md') {
     const meta = [d?.source, d?.durationS ? `durée ${fmtClock(d.durationS)}` : null, d?.model, currentView() !== 'orig' ? `traduit ${langFrom(d?.translation?.from)} (${d?.translation?.engine})` : null, new Date(d?.createdAt || Date.now()).toLocaleString('fr-FR')]
       .filter(Boolean).join(' · ');
-    download(exportName('md'), toMarkdown(segs, { timestamps: tsOn(), title: d?.title || 'Transcription', meta }), 'text/markdown');
+    download(exportName('md'), toMarkdown(segs, { timestamps: tsOn(), title: d?.title || 'Transcription', meta, speakers }), 'text/markdown');
   }
-  if (fmt === 'srt') download(exportName('srt'), toSrt(segs), 'application/x-subrip');
+  if (fmt === 'srt') download(exportName('srt'), toSrt(segs, { speakers }), 'application/x-subrip');
 }
 
 function updateButtons() {
@@ -2101,7 +2372,7 @@ function updateButtons() {
     loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
   }[state.phase] || 'Transcrire';
   $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
-  $$('[data-export], #btn-copy, #btn-relex, #btn-claude, #btn-translate').forEach((b) => (b.disabled = !has));
+  $$('[data-export], #btn-copy, #btn-relex, #btn-claude, #btn-translate, #btn-speakers').forEach((b) => (b.disabled = !has));
   $('#export-menu').classList.toggle('disabled', !has);
   if (!has) $('#export-menu').open = false;
   $('#find').disabled = !state.segments.length;
@@ -2398,6 +2669,8 @@ function bind() {
     saveDoc(600);
   });
   $('#transcript').addEventListener('click', (e) => {
+    const chip = e.target.closest('.spk');
+    if (chip) return openSpeakerMenu(chip);
     const ts = e.target.closest('.ts');
     if (!ts || !state.audio) return;
     player.seek(Number(ts.dataset.start), { play: true });
@@ -2407,6 +2680,7 @@ function bind() {
   $('#btn-copy').onclick = copyText;
   $('#btn-claude').onclick = sendToClaude;
   $('#btn-translate').onclick = translateDoc;
+  bindSpeakers();
   $$('#view-switch [data-view]').forEach((b) => (b.onclick = () => {
     state.view = b.dataset.view;
     store.set('view', state.view);
@@ -2554,7 +2828,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
-  recorder,
+  recorder, identifySpeakers, applySpeakers, spkCache,
   state, exportAs, sendToClaude, translateDoc, shownSegments, autoTranslate, guessLang, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },

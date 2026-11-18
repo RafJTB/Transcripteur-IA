@@ -16,42 +16,50 @@ function fmtSrt(s) {
   return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)},${pad(ms, 3)}`;
 }
 
-/** Texte continu : regroupe les segments en paragraphes (pause > 2 s ou ~600 caractères). */
-export function toParagraphs(segments) {
+/** Nom de l'intervenant d'une phrase (si « Qui parle ? » a été lancé), sinon null. */
+const who = (s, names) => (names && s.spk != null && names[s.spk]) || null;
+
+/**
+ * Texte continu : regroupe les segments en paragraphes (pause > 2 s, ~600 caractères,
+ * ou changement d'intervenant). Avec `names`, chaque paragraphe commence par « Nom : ».
+ */
+export function toParagraphs(segments, names = null) {
   const paras = [];
   let cur = '';
+  let curWho = null;
   let prevEnd = null;
+  const flush = () => { if (cur) paras.push(curWho ? `${curWho} : ${cur}` : cur); cur = ''; };
   for (const s of segments) {
     const t = s.text.trim();
     if (!t) continue;
-    if (cur && ((prevEnd != null && s.start - prevEnd > 2) || cur.length > 600)) {
-      paras.push(cur);
-      cur = '';
-    }
+    const w = who(s, names);
+    if (cur && (w !== curWho || (prevEnd != null && s.start - prevEnd > 2) || cur.length > 600)) flush();
+    curWho = w;
     cur = cur ? `${cur} ${t}` : t;
     prevEnd = s.end;
   }
-  if (cur) paras.push(cur);
+  flush();
   return paras;
 }
 
-export function toTxt(segments, { timestamps }) {
-  if (timestamps) return segments.map((s) => `[${fmtClock(s.start)}] ${s.text.trim()}`).join('\n') + '\n';
-  return toParagraphs(segments).join('\n\n') + '\n';
+export function toTxt(segments, { timestamps, speakers = null }) {
+  if (timestamps) return segments.map((s) => `[${fmtClock(s.start)}] ${who(s, speakers) ? `${who(s, speakers)} : ` : ''}${s.text.trim()}`).join('\n') + '\n';
+  return toParagraphs(segments, speakers).join('\n\n') + '\n';
 }
 
-export function toMarkdown(segments, { timestamps, title, meta }) {
+export function toMarkdown(segments, { timestamps, title, meta, speakers = null }) {
   const head = [`# ${title}`, '', meta ? `> ${meta}` : '', ''].filter((l, i) => l || i !== 2);
+  const bold = (p) => p.replace(/^([^:\n]{1,40}) : /, '**$1 :** ');
   const body = timestamps
-    ? segments.map((s) => `**${fmtClock(s.start)}** — ${s.text.trim()}`).join('\n\n')
-    : toParagraphs(segments).join('\n\n');
+    ? segments.map((s) => `**${fmtClock(s.start)}** — ${who(s, speakers) ? `**${who(s, speakers)} :** ` : ''}${s.text.trim()}`).join('\n\n')
+    : toParagraphs(segments, speakers).map((p) => (speakers ? bold(p) : p)).join('\n\n');
   return `${head.join('\n')}\n${body}\n`;
 }
 
-export function toSrt(segments) {
+export function toSrt(segments, { speakers = null } = {}) {
   return segments
     .filter((s) => s.text.trim())
-    .map((s, i) => `${i + 1}\n${fmtSrt(s.start)} --> ${fmtSrt(Math.max(s.end, s.start + 0.5))}\n${s.text.trim()}\n`)
+    .map((s, i) => `${i + 1}\n${fmtSrt(s.start)} --> ${fmtSrt(Math.max(s.end, s.start + 0.5))}\n${who(s, speakers) ? `${who(s, speakers)} : ` : ''}${s.text.trim()}\n`)
     .join('\n');
 }
 

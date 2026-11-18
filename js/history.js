@@ -1,4 +1,4 @@
-// Stockage local (IndexedDB). Rien n'est envoyé ailleurs.
+// Stockage local (IndexedDB). Copié dans le Google Drive de l'utilisateur seulement s'il se connecte (voir cloud.js).
 //  - transcriptions : textes + état d'avancement (pour la reprise)
 //  - audios         : fichiers audio d'origine (pour reprendre, réécouter, retranscrire)
 //  - recchunks      : morceaux d'un enregistrement micro en cours (sauvés chaque seconde)

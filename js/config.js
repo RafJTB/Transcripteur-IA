@@ -1,6 +1,13 @@
 // Configuration centrale : modèles, langues, paramètres de découpage.
 // Versions vérifiées le 17/11/2026 sur npm et Hugging Face.
 
+/**
+ * Connexion Google (facultative) : identifiant client OAuth « Application Web » créé dans
+ * Google Cloud (pas un secret). Vide = connexion désactivée, sauf si un identifiant est saisi
+ * dans Paramètres (pratique pour tester).
+ */
+export const GOOGLE_CLIENT_ID = '';
+
 export const TRANSFORMERS_VERSION = '4.3.2';
 export const TRANSFORMERS_URL =
   `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_VERSION}/dist/transformers.min.js`;

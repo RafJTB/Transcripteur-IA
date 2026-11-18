@@ -211,6 +211,55 @@ Limites :
 - les très courtes interventions (« oui », « d'accord ») sont rattachées à la phrase autour ;
 - une parole simultanée (deux personnes en même temps) n'est pas séparée.
 
+## Compte Google, dossiers et synchronisation (facultatif)
+
+Sans compte, tout reste dans le navigateur, comme avant. Avec un compte Google :
+
+- **Comptes séparés** : chaque personne voit uniquement ses transcriptions, même si plusieurs comptes
+  utilisent le même PC.
+- **Où sont les données** : transcriptions, audios et dossiers sont copiés dans le **Google Drive de la
+  personne**, dossier « Transcripteur IA ». Elle les retrouve sur tous ses appareils.
+- **Accès limité** : l'appli demande seulement l'accès `drive.file`. Elle ne voit **que les fichiers
+  qu'elle a créés**, jamais le reste du Drive. Aucun serveur intermédiaire : personne d'autre n'a accès
+  aux données.
+- **Dossiers** : dans « Mes projets », crée, renomme ou supprime des dossiers. Le menu de chaque carte
+  (ou celui du document ouvert) range une transcription dans un dossier.
+- **Synchronisation** :
+  - quelques secondes après chaque modification, toutes les 3 minutes, et au retour sur l'onglet ;
+  - en cas de modification des deux côtés, la plus récente gagne ;
+  - une suppression est appliquée partout.
+- **Audio** : il est envoyé une fois. Sur un autre appareil, il n'est téléchargé que si tu ouvres la
+  transcription.
+- **Première connexion** : propose d'ajouter au compte les transcriptions faites sans compte.
+- **Déconnexion** : les transcriptions du compte sont masquées. Une case permet de les effacer du
+  navigateur (conseillé sur un PC partagé).
+- **Transcription** : elle reste entièrement faite sur le PC.
+
+La connexion se fait **par redirection** (OAuth 2.0 pour application web côté client) et non par une
+fenêtre surgissante, incompatible avec l'isolation COOP/COEP qui permet le calcul multithread.
+
+### Mise en place (une fois, par l'administrateur, ≈ 15 min)
+
+1. [console.cloud.google.com](https://console.cloud.google.com) : créer un projet « Transcripteur IA ».
+2. **API et services → Bibliothèque** : activer **Google Drive API**.
+3. **Écran de consentement OAuth** (Google Auth Platform) :
+   - type **Externe**, nom « Transcripteur IA », e-mail d'assistance ;
+   - accès aux données : ajouter les champs d'application `openid`, `email`, `profile` et
+     `…/auth/drive.file` ;
+   - public cible : en mode **Test**, ajouter l'adresse Gmail de chaque ami (100 au maximum).
+4. **Clients → Créer un client** de type **Application Web** :
+   - origine JavaScript autorisée : `https://rafjtb.github.io` ;
+   - URI de redirection autorisé : l'adresse exacte du site, affichée dans l'appli
+     (**Paramètres → Compte Google → Configuration**), par exemple `https://rafjtb.github.io/Transcripteur-IA/`.
+     Le `/` final compte.
+5. Copier l'**ID client** (`…apps.googleusercontent.com`). Ce n'est pas un secret. Ensuite :
+   - pour tester tout de suite : le coller dans **Paramètres → Compte Google → Configuration** ;
+   - pour tout le monde : le mettre dans `GOOGLE_CLIENT_ID` (`js/config.js`).
+
+En mode Test, seuls les comptes ajoutés à l'étape 3 peuvent se connecter. Google peut aussi demander
+de se reconnecter plus souvent : l'appli le fait automatiquement au démarrage quand c'est possible,
+sinon elle affiche « Reconnexion nécessaire ».
+
 ## Résumer avec Claude
 
 Le bouton **Résumer avec Claude** (barre du résultat) ouvre claude.ai avec la transcription et une consigne prête :

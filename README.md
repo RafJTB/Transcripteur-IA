@@ -60,7 +60,7 @@ Les modèles sont téléchargés une seule fois puis gardés dans le cache du na
 
 ## Transcription en direct
 
-Interrupteur « Transcrire en direct » sous le micro. Toutes les ~3 s, la partie non validée est retranscrite ;
+Toujours active quand on enregistre au micro (plus d'interrupteur). Toutes les ~3 s, la partie non validée est retranscrite ;
 les phrases terminées sont validées, la dernière reste provisoire (en italique). À l'arrêt, la fin est
 retranscrite normalement pour une qualité maximale. Décalage typique : 3 à 6 s avec le modèle Rapide.
 

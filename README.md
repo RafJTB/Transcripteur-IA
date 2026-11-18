@@ -169,6 +169,32 @@ et l'option **« Traduire en français automatiquement »** est activée :
 - Limites : au changement de langue, une phrase à cheval sur deux blocs peut être mal transcrite ; les petits modèles
   traduisent mal le jargon technique (« clashes » → « affrontements »).
 
+## Qui parle ? (intervenants)
+
+Après chaque transcription (option « Reconnaître qui parle », ou bouton **Qui parle ?**) :
+
+1. **pyannote-segmentation-3.0** repère, par tranches de 10 s, quand chaque voix parle ;
+2. **WeSpeaker ResNet34** calcule l'empreinte de chaque voix (≈ 33 Mo pour les deux modèles, téléchargés une fois) ;
+3. les empreintes semblables sont regroupées : une couleur et un nom par personne ;
+4. chaque phrase est attribuée à la personne qui parle le plus pendant cette phrase. Une phrase
+   partagée par deux personnes est coupée à la ponctuation la plus proche du changement de voix.
+
+Ensuite :
+
+- **renommer** : clique sur un nom dans la barre des intervenants ;
+- **corriger** : clique sur l'étiquette d'une prise de parole pour l'attribuer à quelqu'un d'autre ;
+- **forcer le nombre de personnes** (« Personnes : 2, 3… ») si l'analyse s'est trompée :
+  le recalcul est instantané.
+
+Les noms sont repris dans les exports (« Nom : texte ») et dans « Résumer avec Claude ».
+Tout reste local. Durée de l'analyse : de l'ordre de 1 min pour 10 min d'audio sur le processeur.
+
+Limites :
+
+- deux voix proches (même timbre) peuvent être confondues ;
+- les très courtes interventions (« oui », « d'accord ») sont rattachées à la phrase autour ;
+- une parole simultanée (deux personnes en même temps) n'est pas séparée.
+
 ## Résumer avec Claude
 
 Le bouton **Résumer avec Claude** (barre du résultat) ouvre claude.ai avec la transcription et une consigne prête :

@@ -42,7 +42,7 @@ export const SUMMARY_TYPES = [
  * Consigne complète à donner à Claude.
  * @param {{type: string, extra?: string, title?: string, meta?: string, transcript: string}} o
  */
-export function buildPrompt({ type, extra = '', title = '', meta = '', transcript, language = 'français', translatedFrom = null, both = false }) {
+export function buildPrompt({ type, extra = '', title = '', meta = '', transcript, language = 'français', translatedFrom = null, both = false, speakers = null }) {
   const t = SUMMARY_TYPES.find((x) => x.key === type) || SUMMARY_TYPES[0];
   const intro = translatedFrom
     ? both
@@ -55,6 +55,8 @@ export function buildPrompt({ type, extra = '', title = '', meta = '', transcrip
     '',
     t.ask,
   ];
+  if (speakers?.length > 1)
+    lines.splice(2, 0, `Les intervenants (${speakers.join(', ')}) ont été reconnus automatiquement à leur voix : l’attribution d’une phrase peut parfois être fausse. Utilise leurs noms dans ta réponse (qui a dit, proposé ou pris en charge quoi).`);
   if (extra.trim()) lines.push('', `Consignes supplémentaires : ${extra.trim()}`);
   lines.push('', 'Réponds en français, avec des titres et une mise en forme claire.', '');
   const head = [title && `Titre : ${title}`, meta && `Infos : ${meta}`].filter(Boolean).join('\n');

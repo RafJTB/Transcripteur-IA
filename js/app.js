@@ -2443,6 +2443,12 @@ function setView(name) {
     renderHistory();
   }
   if (page === 'doc') requestAnimationFrame(() => player?.draw());
+  else {
+    // Hors du document : lecture en pause et panneau d'analyse vierge (sauf micro en cours d'utilisation)
+    if (player?.loaded && !player.audio.paused) player.audio.pause();
+    if (monitor && recorder.state === 'idle') { monitor.clearPlayback(); monitor.reset(); }
+  }
+  renderInsights();
 }
 
 function setDocTab(tab) {
@@ -2458,8 +2464,10 @@ const ICON_WARN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path
 
 /** Panneau de droite : répartition des intervenants et qualité de la transcription. */
 function renderInsights() {
-  const d = state.doc;
-  const segs = state.segments;
+  // Le panneau ne montre que la transcription affichée : vierge sur l'accueil, les projets et les paramètres
+  const onDoc = state.page === 'doc';
+  const d = onDoc ? state.doc : null;
+  const segs = onDoc ? state.segments : [];
   // Donut des intervenants
   const sp = d?.speakers;
   const donut = $('#spk-donut');

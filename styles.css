@@ -867,7 +867,7 @@ kbd { font: 600 10.5px var(--mono); color: var(--text-2); border: 1px solid var(
 .home-head { padding: 6px 4px 16px; }
 .home-head h2 { margin: 0; font: 700 24px/1.2 var(--font-display); letter-spacing: -0.015em; }
 .home-head p { margin: 4px 0 0; color: var(--text-3); font-size: 14px; }
-.home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; align-items: start; }
+.home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; align-items: stretch; }
 .set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .set-card { display: flex; flex-direction: column; gap: 10px; }
 .set-card h3 { margin: 0; font: 600 15px var(--font-display); }

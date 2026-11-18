@@ -42,11 +42,16 @@ export const SUMMARY_TYPES = [
  * Consigne complète à donner à Claude.
  * @param {{type: string, extra?: string, title?: string, meta?: string, transcript: string}} o
  */
-export function buildPrompt({ type, extra = '', title = '', meta = '', transcript }) {
+export function buildPrompt({ type, extra = '', title = '', meta = '', transcript, language = 'français', translatedFrom = null, both = false }) {
   const t = SUMMARY_TYPES.find((x) => x.key === type) || SUMMARY_TYPES[0];
+  const intro = translatedFrom
+    ? both
+      ? `Voici la transcription automatique d’un enregistrement audio en ${translatedFrom}, chaque phrase étant suivie de sa traduction automatique en français.`
+      : `Voici la transcription automatique d’un enregistrement audio en ${translatedFrom}, traduite automatiquement en français.`
+    : `Voici la transcription automatique d’un enregistrement audio (en ${language}).`;
   const lines = [
-    'Voici la transcription automatique d’un enregistrement audio (en français).',
-    'Elle peut contenir des erreurs de reconnaissance (mots mal compris, ponctuation approximative) : corrige-les mentalement d’après le contexte, sans inventer d’informations. Si un passage est incompréhensible ou ambigu, signale-le plutôt que de deviner.',
+    intro,
+    `Elle peut contenir des erreurs de reconnaissance${translatedFrom ? ' et de traduction' : ''} (mots mal compris, ponctuation approximative) : corrige-les mentalement d’après le contexte, sans inventer d’informations. Si un passage est incompréhensible ou ambigu, signale-le plutôt que de deviner.`,
     '',
     t.ask,
   ];

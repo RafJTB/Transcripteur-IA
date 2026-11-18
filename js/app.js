@@ -9,6 +9,7 @@ import { LiveSession, VoxtralLive } from './live.js';
 import { Monitor, CONF } from './monitor.js';
 import { SUMMARY_TYPES, buildPrompt, claudeUrl, CLAUDE_NEW } from './claude-export.js';
 import { Player, segmentAt } from './player.js';
+import { describeEngine, createTranslator, localCached, localPlan } from './translate.js';
 import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -25,6 +26,7 @@ const state = {
   cache: {},
   modelId: MODELS.some((m) => m.id === store.get('model')) ? store.get('model') : DEFAULT_MODEL,
   language: store.get('lang', 'fr'),
+  view: store.get('view', 'tr'), // texte affiché quand une traduction existe : orig | tr | both
   audio: null, // { pcm, blob, name, durationS, url, audioId, docId }
   phase: 'idle', // idle | loading | transcribing | live
   segments: [],
@@ -1464,7 +1466,7 @@ function renderSegments(segs, { editable = true } = {}) {
     if (!row) {
       row = document.createElement('div');
       row.className = 'segment';
-      row.innerHTML = '<button class="ts" type="button"></button><div class="txt" spellcheck="true"></div>';
+      row.innerHTML = '<button class="ts" type="button"></button><div class="txt" spellcheck="true"></div><div class="tr" spellcheck="true" lang="fr"></div>';
       t.insertBefore(row, typing || null);
     }
     row.classList.toggle('partial', !editable);
@@ -1482,7 +1484,14 @@ function renderSegments(segs, { editable = true } = {}) {
     if (editable) txt.setAttribute('contenteditable', 'plaintext-only');
     else txt.removeAttribute('contenteditable');
     if (document.activeElement !== txt && txt.textContent !== s.text) txt.textContent = s.text;
+    const tr = $('.tr', row);
+    tr.dataset.i = i;
+    if (editable && s.tr != null) tr.setAttribute('contenteditable', 'plaintext-only');
+    else tr.removeAttribute('contenteditable');
+    const trText = s.tr ?? '';
+    if (document.activeElement !== tr && tr.textContent !== trText) tr.textContent = trText;
   });
+  renderView();
   updateButtons();
   playingRow = -1;
   find.refresh();
@@ -1525,7 +1534,7 @@ const find = {
     const q = [...$('#find').value.trim()].map(fold).join('');
     this.hits = [];
     if (q) {
-      for (const txt of $$('#transcript .segment .txt')) {
+      for (const txt of $$('#transcript .segment .txt, #transcript .segment .tr').filter((el) => el.getClientRects().length)) {
         const walker = document.createTreeWalker(txt, NodeFilter.SHOW_TEXT);
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
           const hay = [...node.data].map(fold).join('');
@@ -1596,7 +1605,7 @@ async function writeClipboard(text) {
 }
 
 async function copyText() {
-  await writeClipboard(toTxt(state.segments, { timestamps: tsOn() }));
+  await writeClipboard(toTxt(shownSegments(), { timestamps: tsOn() }));
   toast('Texte copié dans le presse-papiers.', 'ok', 2500);
 }
 
@@ -1637,7 +1646,10 @@ async function sendToClaude() {
     type, extra,
     title: $('#result-title').value.trim() || state.doc?.title || '',
     meta: docMeta(),
-    transcript: toTxt(state.segments, { timestamps: withTs }),
+    transcript: toTxt(shownSegments(), { timestamps: withTs }),
+    language: langName(state.doc?.language || 'fr').toLowerCase(),
+    translatedFrom: currentView() !== 'orig' ? langName(state.doc?.translation?.from).toLowerCase() : null,
+    both: currentView() === 'both',
   });
   const url = claudeUrl(prompt);
   // Ouverture tout de suite (le navigateur bloque les fenêtres ouvertes trop tard après le clic)
@@ -1650,13 +1662,120 @@ async function sendToClaude() {
   else toast('Transcription longue : elle est copiée. Dans Claude, colle-la avec Ctrl + V puis envoie.', 'ok', 10000);
 }
 
+// ======================================================================
+// Traduction (locale) vers le français
+// ======================================================================
+const langName = (code) => LANGUAGES.find((l) => l[0] === code)?.[1] ?? code ?? '';
+/** « de l’anglais », « du russe »… */
+function langFrom(code) {
+  const n = langName(code).toLowerCase();
+  if (!n) return '';
+  if (/^[aeiouéèh]/.test(n)) return `de l’${n}`;
+  return { russe: 'du russe', turc: 'du turc', chinois: 'du chinois', japonais: 'du japonais', portugais: 'du portugais', polonais: 'du polonais', roumain: 'du roumain', néerlandais: 'du néerlandais' }[n] || `de ${n}`;
+}
+const hasTranslation = () => state.segments.some((s) => s.tr != null);
+const currentView = () => (hasTranslation() ? state.view : 'orig');
+
+function renderView() {
+  const has = hasTranslation();
+  const view = currentView();
+  $('#view-switch').hidden = !has;
+  $('#transcript').dataset.view = view;
+  $$('#view-switch [data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === view)));
+  if (has) $('#view-switch [data-view=orig]').textContent = langName(state.doc?.translation?.from) || 'Original';
+}
+
+/** Phrases telles qu'affichées (original, traduction, ou les deux) pour copier / exporter / Claude. */
+function shownSegments() {
+  const view = currentView();
+  if (view === 'orig') return state.segments;
+  return state.segments.map((s) => ({ ...s, text: view === 'tr' ? (s.tr || s.text) : s.tr ? `${s.text}\n→ ${s.tr}` : s.text }));
+}
+
+const TR_WORKER = new URL('./translate-worker.js', import.meta.url);
+
+async function translateDoc() {
+  if (!state.segments.length || state.phase !== 'idle' || micBusy()) return;
+  const doc = state.doc;
+  const choices = LANGUAGES.filter(([c]) => c !== 'fr');
+  const guess = doc?.translation?.from || (doc?.language && doc.language !== 'fr' ? doc.language : lsGet('tr.from', 'en'));
+  const voxtral = isStreaming(modelById(doc?.modelId));
+  tool.open('Traduire en français');
+  const shown = tool.show({
+    step: 'Traduction locale',
+    html: `<p>Chaque phrase est traduite en français en gardant ses horodatages : la réécoute au clic marche aussi sur la traduction.</p>
+      <label class="cl-field"><span>Langue parlée dans l’enregistrement</span>
+        <select id="tr-from" class="select">${choices.map(([c, n]) => `<option value="${c}"${c === guess ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+      ${voxtral ? '<p class="cl-note">Transcrit avec Voxtral, qui détecte la langue tout seul : vérifie la langue ci-dessus.</p>' : ''}
+      ${doc?.language === 'fr' && !doc?.translation ? '<p class="cl-note warn">Cette transcription a été faite avec la langue « Français ». Si l’enregistrement est dans une autre langue, retranscris-le d’abord avec la bonne langue (choix sous le modèle) : le résultat sera bien meilleur.</p>' : ''}
+      <div class="tr-engine" id="tr-engine"><span class="dot"></span><span>Recherche du meilleur traducteur…</span></div>
+      <p class="cl-note">Tout se passe sur ton PC : aucun texte n’est envoyé sur Internet.${hasTranslation() ? ' La traduction actuelle sera remplacée.' : ''}</p>`,
+    actions: [{ label: 'Annuler', value: null }, { label: 'Traduire', value: true, primary: true }],
+  });
+  const showEngine = async () => {
+    const from = $('#tr-from').value;
+    const cached = await localCached(from, 'fr', TR_WORKER).catch(() => false);
+    const d = await describeEngine(from, 'fr', { cached });
+    if (tool.cancelled || $('#tr-from')?.value !== from) return;
+    $('#tr-engine').dataset.ok = d.engine ? '1' : '0';
+    $('#tr-engine span:last-child').textContent = d.text;
+  };
+  $('#tr-from').onchange = showEngine;
+  showEngine();
+  if (!(await shown)) return;
+  const from = $('#tr-from').value;
+  lsSet('tr.from', from);
+  const total = state.segments.length;
+  const bar = (label, v) => {
+    tool.wait('Traduction locale', `<p class="tool-big">${esc(label)}</p><div class="bar"><div class="bar-fill" id="tr-bar" style="width:${Math.round((v || 0) * 100)}%"></div></div>`);
+  };
+  bar('Préparation du traducteur…', 0);
+  let tr;
+  try {
+    tr = await createTranslator(from, 'fr', {
+      workerUrl: TR_WORKER,
+      onProgress: (p) => { if (!tool.cancelled) { const el = $('#tr-bar'); if (el) el.style.width = `${Math.round(p.value * 100)}%`; $('.tool-big', $('#tool-body')).textContent = `Téléchargement du traducteur… ${Math.round(p.value * 100)} %`; } },
+    });
+  } catch (e) {
+    tool.close();
+    return toast(`Traduction impossible : ${e.message}`, 'err', 8000);
+  }
+  const target = state.doc;
+  const out = state.segments.map((s) => ({ ...s, tr: undefined }));
+  const t0 = performance.now();
+  let failed = null;
+  try {
+    for (let i = 0; i < total && !tool.cancelled; i += 6) {
+      bar(`Traduction… ${i} / ${total} phrases (${tr.label})`, i / total);
+      const texts = await tr.translate(state.segments.slice(i, i + 6).map((s) => s.text));
+      texts.forEach((t, k) => { out[i + k].tr = t; });
+    }
+  } catch (e) {
+    failed = e;
+  } finally {
+    tr.destroy();
+  }
+  const cancelled = tool.cancelled;
+  tool.close();
+  if (state.doc !== target) return; // l'utilisateur a ouvert autre chose entre-temps
+  if (failed && !out.some((s) => s.tr != null)) return toast(`Traduction impossible : ${failed.message}`, 'err', 8000);
+  state.segments = out.map((s) => (s.tr == null ? (({ tr: _, ...rest }) => rest)(s) : s));
+  target.translation = { from, to: 'fr', engine: tr.label, at: Date.now() };
+  if (state.view === 'orig') state.view = 'tr';
+  renderSegments(state.segments, {});
+  saveDoc();
+  const done = out.filter((s) => s.tr != null).length;
+  if (cancelled || failed) toast(`Traduction partielle : ${done} / ${total} phrases.`, 'warn', 6000);
+  else toast(`Traduit ${langFrom(from)} en ${fmtDuration((performance.now() - t0) / 1000)} (${tr.label}).`, 'ok', 5000);
+}
+
 function exportAs(fmt) {
-  const segs = state.segments;
+  const segs = shownSegments();
   if (!segs.length) return;
   const d = state.doc;
   if (fmt === 'txt') download(exportName('txt'), toTxt(segs, { timestamps: tsOn() }), 'text/plain');
   if (fmt === 'md') {
-    const meta = [d?.source, d?.durationS ? `durée ${fmtClock(d.durationS)}` : null, d?.model, new Date(d?.createdAt || Date.now()).toLocaleString('fr-FR')]
+    const meta = [d?.source, d?.durationS ? `durée ${fmtClock(d.durationS)}` : null, d?.model, currentView() !== 'orig' ? `traduit ${langFrom(d?.translation?.from)} (${d?.translation?.engine})` : null, new Date(d?.createdAt || Date.now()).toLocaleString('fr-FR')]
       .filter(Boolean).join(' · ');
     download(exportName('md'), toMarkdown(segs, { timestamps: tsOn(), title: d?.title || 'Transcription', meta }), 'text/markdown');
   }
@@ -1674,7 +1793,7 @@ function updateButtons() {
     loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
   }[state.phase] || 'Transcrire';
   $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
-  $$('[data-export], #btn-copy, #btn-relex, #btn-claude').forEach((b) => (b.disabled = !has));
+  $$('[data-export], #btn-copy, #btn-relex, #btn-claude, #btn-translate').forEach((b) => (b.disabled = !has));
   $('#export-menu').classList.toggle('disabled', !has);
   if (!has) $('#export-menu').open = false;
   $('#find').disabled = !state.segments.length;
@@ -1949,6 +2068,10 @@ function bind() {
   $('#transcript').addEventListener('input', (e) => {
     const i = e.target.dataset?.i;
     if (i == null || !state.segments[i]) return;
+    if (e.target.classList.contains('tr')) {
+      state.segments[i] = { ...state.segments[i], tr: e.target.textContent };
+      return saveDoc(600);
+    }
     // Corrigé à la main : le passage n'est plus « à vérifier »
     state.segments[i] = { ...state.segments[i], text: e.target.textContent, conf: undefined, edited: true };
     e.target.closest('.segment')?.classList.remove('low-conf');
@@ -1964,6 +2087,13 @@ function bind() {
 
   $('#btn-copy').onclick = copyText;
   $('#btn-claude').onclick = sendToClaude;
+  $('#btn-translate').onclick = translateDoc;
+  $$('#view-switch [data-view]').forEach((b) => (b.onclick = () => {
+    state.view = b.dataset.view;
+    store.set('view', state.view);
+    renderView();
+    find.refresh();
+  }));
   $$('[data-export]').forEach((b) => (b.onclick = () => exportAs(b.dataset.export)));
   $('#btn-relex').onclick = () => {
     state.segments = applyLexiconTo(state.segments);
@@ -2086,7 +2216,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
-  state, exportAs, sendToClaude, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
+  state, exportAs, sendToClaude, translateDoc, shownSegments, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },
 };

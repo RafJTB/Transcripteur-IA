@@ -6,15 +6,15 @@
   <title>Transcripteur local</title>
   <meta name="description" content="Transcription audio → texte 100 % locale dans le navigateur (Whisper, WebGPU/WASM). Aucun audio n'est envoyé." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111316'/%3E%3Cg fill='%237c9cff'%3E%3Crect x='7' y='13' width='3' height='6' rx='1.5'/%3E%3Crect x='12' y='9' width='3' height='14' rx='1.5'/%3E%3Crect x='17' y='6' width='3' height='20' rx='1.5'/%3E%3Crect x='22' y='11' width='3' height='10' rx='1.5'/%3E%3C/g%3E%3C/svg%3E" />
-  <meta name="app-version" content="2026-11-18-1" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-18-1" />
+  <meta name="app-version" content="2026-11-18-2" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-18-2" />
   <script>
     // Filet de sécurité des mises à jour : si l'application ne démarre pas (souvent un mélange
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-18-1', 'sw.js', 'js/app.js?v=2026-11-18-1', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
-        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-18-2', 'sw.js', 'js/app.js?v=2026-11-18-2', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
         return Promise.all(FILES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); }));
@@ -186,6 +186,7 @@
           <button class="icon-btn xs" id="find-next" type="button" aria-label="Résultat suivant" hidden><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
         </label>
         <button class="icon-btn" id="btn-relex" type="button" title="Réappliquer le lexique sur le texte actuel" aria-label="Réappliquer le lexique" disabled><svg viewBox="0 0 24 24"><path d="M4 5h11M4 12h16M4 19h9"/><path d="m17 17 2 2 3-4"/></svg></button>
+        <button class="btn sm" id="btn-translate" type="button" title="Traduire la transcription en français (local)" disabled><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Traduire</button>
         <button class="icon-btn" id="btn-copy" type="button" title="Copier le texte" aria-label="Copier le texte" disabled><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg></button>
         <details class="menu" id="export-menu">
           <summary class="btn sm" id="export-btn"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>Exporter<svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
@@ -201,6 +202,11 @@
       <input class="title-input" id="result-title" placeholder="Titre de la transcription" aria-label="Titre de la transcription" disabled />
       <div class="r-sub">
         <div class="result-meta" id="result-meta"></div>
+        <div class="seg view-switch" id="view-switch" role="tablist" aria-label="Texte affiché" hidden>
+          <button type="button" role="tab" data-view="orig" aria-selected="false">Original</button>
+          <button type="button" role="tab" data-view="tr" aria-selected="true">Français</button>
+          <button type="button" role="tab" data-view="both" aria-selected="false">Les deux</button>
+        </div>
         <label class="switch"><input type="checkbox" id="toggle-ts" checked /><span class="track"></span>Horodatages</label>
       </div>
 
@@ -364,6 +370,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-18-1"></script>
+  <script type="module" src="js/app.js?v=2026-11-18-2"></script>
 </body>
 </html>

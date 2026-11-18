@@ -654,7 +654,9 @@ kbd { font: 600 10.5px var(--mono); color: var(--text-2); border: 1px solid var(
 .transcript[data-view='tr'] .segment .txt { display: none; }
 .transcript[data-view='tr'] .segment .tr { display: block; font-size: 15.5px; line-height: 1.7; color: var(--text); grid-row: 1; }
 .transcript[data-view='both'] .segment .tr { display: block; font-size: 14.5px; line-height: 1.6; color: #b9c6ff; margin: -2px 0 2px; padding-left: 10px; border-left: 2px solid rgba(124, 156, 255, 0.35); }
-.transcript[data-view='tr'] .segment .tr:empty::before, .transcript[data-view='both'] .segment .tr:empty::before { content: '(non traduit)'; color: var(--text-3); font-style: italic; }
+.transcript[data-view='tr'] .segment .tr:empty::before, .transcript[data-view='both'] .segment .tr:empty::before { content: 'traduction en cours…'; color: var(--text-3); font-style: italic; font-size: 13px; }
+.transcript[data-view='tr'] .segment.native .txt { display: block; }
+.transcript[data-view='tr'] .segment.native .tr, .transcript[data-view='both'] .segment.native .tr { display: none; }
 .view-switch { flex: none; padding: 2px; }
 .view-switch button { padding: 3px 9px; font-size: 12px; }
 .r-sub { align-items: center; flex-wrap: wrap; }
@@ -663,3 +665,12 @@ kbd { font: 600 10.5px var(--mono); color: var(--text-2); border: 1px solid var(
 .tr-engine[data-ok='1'] .dot { background: var(--ok); box-shadow: 0 0 8px rgba(79, 209, 165, 0.5); }
 .tr-engine[data-ok='0'] .dot { background: var(--err); }
 .cl-note.warn { color: var(--warn); }
+
+/* Traduction automatique */
+.switch.autotr { margin-top: 10px; font-size: 12.5px; }
+.segment .ts[data-lang]::before { content: attr(data-lang); display: block; width: fit-content; font: 600 9.5px/1.5 var(--mono); letter-spacing: 0.05em; color: var(--warn); background: rgba(245, 180, 84, 0.12); border-radius: 4px; padding: 0 4px; margin-top: 3px; }
+.tr-status { display: flex; align-items: center; gap: 8px; margin: -4px 0 10px; font-size: 12.5px; color: var(--accent); }
+.tr-status .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(124, 156, 255, 0.25); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tr-status.done { color: var(--ok); }
+.tr-status.done .spin { display: none; }

@@ -127,18 +127,22 @@ Trois colonnes qui tiennent dans l'écran (une seule colonne sur petit écran) :
 Raccourcis : `Espace` pause de l'enregistrement ou lecture/pause ; `Ctrl + Espace` lecture/pause même pendant
 la correction du texte ; `Ctrl + Entrée` transcrire ; `Ctrl + F` rechercher ; `Échap` fermer ou effacer la recherche.
 
-## Traduire en français
+## Langue détectée et traduction automatique en français
 
-Pour comprendre un enregistrement dans une autre langue : choisis la **langue parlée** sous le modèle
-(ex. Anglais), transcris, puis clique **Traduire**. Chaque phrase est traduite en gardant ses horodatages.
+Par défaut, la langue est **détectée automatiquement** (choix « Détection automatique de la langue » sous le modèle)
+et l'option **« Traduire en français automatiquement »** est activée :
 
-- Moteur : le **traducteur intégré de Chrome** s'il est disponible (local, petit pack de langue téléchargé une fois),
-  sinon un **modèle local** : Opus-MT (≈ 107 Mo) pour anglais, espagnol, allemand, italien, néerlandais, roumain, russe ;
-  NLLB-200 (≈ 900 Mo) pour les autres langues. Rien n'est envoyé sur Internet.
-- Affichage : **langue d'origine / Français / Les deux** (traduction sous chaque phrase). La traduction est modifiable,
-  enregistrée dans l'historique, et c'est le texte affiché qui est copié, exporté et envoyé à Claude.
-- Limite : les petits modèles traduisent mal le vocabulaire technique (ex. « load bearing walls » → « parois de roulement »).
-  Pour un texte important, relis la vue « Les deux » ou demande à Claude de traduire.
+- Whisper détecte la langue de chaque bloc de 30 s (limitée aux 14 langues de l'application ; le français l'emporte
+  en cas de doute). Une réunion qui mélange français et anglais est gérée ; chaque phrase garde sa langue (étiquette « EN »…).
+  Avec Voxtral, la langue est devinée à partir du texte.
+- Les phrases dans une autre langue sont **traduites toutes seules** : à la fin d'une transcription, et **en direct**
+  pendant l'enregistrement. Les phrases en français ne sont pas touchées ; une transcription 100 % française reste identique.
+- Affichage : **langue d'origine / Français / Les deux**. Copier, exporter et Résumer avec Claude utilisent le texte affiché.
+- Moteur : traducteur intégré de Chrome s'il répond, sinon modèle local (Opus-MT ≈ 107 Mo pour en/es/de/it/nl/ro/ru ;
+  NLLB-200 ≈ 900 Mo pour les autres langues, téléchargé seulement après accord). Rien n'est envoyé sur Internet.
+- Le bouton **Traduire** reste disponible pour traduire à la main (ex. si l'option automatique est coupée).
+- Limites : au changement de langue, une phrase à cheval sur deux blocs peut être mal transcrite ; les petits modèles
+  traduisent mal le jargon technique (« clashes » → « affrontements »).
 
 ## Résumer avec Claude
 

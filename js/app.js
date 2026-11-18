@@ -9,7 +9,8 @@ import { LiveSession, VoxtralLive } from './live.js';
 import { Monitor, CONF } from './monitor.js';
 import { SUMMARY_TYPES, buildPrompt, claudeUrl, CLAUDE_NEW } from './claude-export.js';
 import { Player, segmentAt } from './player.js';
-import { describeEngine, createTranslator, localCached, localPlan } from './translate.js';
+import { describeEngine, createTranslator, localCached, localPlan, chromeAvailability } from './translate.js';
+import { guessLang } from './langid.js';
 import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -25,7 +26,8 @@ const state = {
   forceWasm: false,
   cache: {},
   modelId: MODELS.some((m) => m.id === store.get('model')) ? store.get('model') : DEFAULT_MODEL,
-  language: store.get('lang', 'fr'),
+  language: store.get('lang', 'auto'),
+  autoTr: store.get('autotr', '1') === '1', // traduire automatiquement en français
   view: store.get('view', 'tr'), // texte affiché quand une traduction existe : orig | tr | both
   audio: null, // { pcm, blob, name, durationS, url, audioId, docId }
   phase: 'idle', // idle | loading | transcribing | live
@@ -550,6 +552,7 @@ function renderLive() {
   renderSegments(applyLexiconTo(segs), { editable: false });
   if (nearBottom) t.scrollTop = t.scrollHeight;
   renderRecState();
+  liveTranslate(s);
 }
 
 async function recStop() {
@@ -585,6 +588,7 @@ async function recStop() {
     progress.hide();
     const pcm = s.pcm;
     if (finalSegs) {
+      carryTranslations(finalSegs, s.committed);
       await setAudioFromBlob(r.blob, name, { audioId, pcm, docId: doc.id });
       Object.assign(doc, { audioId, source: name, durationS: pcm.length / SR });
       doc.job = { modelId: doc.modelId, language: state.language, fromS: 0, baseSegments: finalSegs, seqs: [], total: null };
@@ -804,7 +808,7 @@ async function runJob(doc) {
         value: doc.job.total ? (done / doc.job.total) * 100 : 0,
         sub: done ? 'Les blocs déjà transcrits ne sont pas refaits' : 'Analyse du premier bloc',
       });
-      status(`${model.name} · ${v.device === 'webgpu' ? 'WebGPU' : 'WASM'} · ${LANGUAGES.find((l) => l[0] === doc.job.language)?.[1] ?? doc.job.language}`);
+      status(`${model.name} · ${v.device === 'webgpu' ? 'WebGPU' : 'WASM'} · ${doc.job.language === 'auto' ? 'langue détectée automatiquement' : langName(doc.job.language)}`);
       const pcm = state.audio.pcm.slice(Math.round(doc.job.fromS * SR));
       const jobId = ++state.jobId;
       state.run = { doc, jobId, lastAt: performance.now(), maxBlockMs: 0, heavy: !!model.heavy && v.device === 'wasm' };
@@ -902,6 +906,7 @@ function finalizeDoc(doc, newSegments) {
   showDoc(doc);
   if (matchMedia('(max-width: 980px)').matches) $('#step-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (!doc.segments.length) status('Aucune parole détectée dans cet audio.', 'warn');
+  autoTranslate(doc);
 }
 
 /** Décide du repli : WebGPU → WASM, ou gros modèle → modèle plus léger. */
@@ -978,7 +983,7 @@ async function resumeDoc(doc, { auto = false } = {}) {
 // Résultat
 // ======================================================================
 const lexRules = () => compileLexicon(state.lexicon);
-const applyLexiconTo = (segs) => { const r = lexRules(); return segs.map((s) => ({ ...s, text: applyLexicon(s.text, r) })); };
+const applyLexiconTo = (segs) => { const r = lexRules(); return segs.map((s) => (s.lang && s.lang !== 'fr' ? s : { ...s, text: applyLexicon(s.text, r) })); };
 
 function showDoc(doc, { editable = true } = {}) {
   state.doc = doc;
@@ -1008,10 +1013,19 @@ function renderMeta() {
     `${words} mots`,
     d.model + (d.device ? ` (${d.device === 'webgpu' ? 'WebGPU' : 'WASM'})` : ''),
     d.processingS ? `traité en ${fmtDuration(d.processingS)}` : null,
+    langSummary(state.segments),
     confSummary(state.segments),
     d.status === 'live' ? 'en direct' : d.status === 'interrupted' ? 'interrompue' : d.partial ? 'partiel' : null,
   ];
   $('#result-meta').textContent = parts.filter(Boolean).join(' · ');
+}
+
+function langSummary(segs) {
+  const n = {};
+  for (const s of segs) if (s.lang) n[s.lang] = (n[s.lang] || 0) + 1;
+  const langs = Object.keys(n).sort((a, b) => n[b] - n[a]);
+  if (!langs.length || (langs.length === 1 && langs[0] === 'fr')) return null;
+  return langs.map((l) => langName(l).toLowerCase()).join(' + ');
 }
 
 function confSummary(segs) {
@@ -1476,6 +1490,8 @@ function renderSegments(segs, { editable = true } = {}) {
     row.classList.toggle('low-conf', low);
     const ts = $('.ts', row);
     ts.textContent = fmtClock(s.start);
+    if (s.lang && s.lang !== 'fr') ts.dataset.lang = s.lang.toUpperCase();
+    else delete ts.dataset.lang;
     ts.dataset.start = s.start;
     ts.title = `${fmtClock(s.start)} → ${fmtClock(s.end)}`;
     const txt = $('.txt', row);
@@ -1488,6 +1504,7 @@ function renderSegments(segs, { editable = true } = {}) {
     tr.dataset.i = i;
     if (editable && s.tr != null) tr.setAttribute('contenteditable', 'plaintext-only');
     else tr.removeAttribute('contenteditable');
+    row.classList.toggle('native', s.tr == null && (!s.lang || s.lang === 'fr'));
     const trText = s.tr ?? '';
     if (document.activeElement !== tr && tr.textContent !== trText) tr.textContent = trText;
   });
@@ -1648,7 +1665,7 @@ async function sendToClaude() {
     meta: docMeta(),
     transcript: toTxt(shownSegments(), { timestamps: withTs }),
     language: langName(state.doc?.language || 'fr').toLowerCase(),
-    translatedFrom: currentView() !== 'orig' ? langName(state.doc?.translation?.from).toLowerCase() : null,
+    translatedFrom: currentView() !== 'orig' ? (langSummary(state.segments) || langName(state.doc?.translation?.from).toLowerCase()) : null,
     both: currentView() === 'both',
   });
   const url = claudeUrl(prompt);
@@ -1682,7 +1699,11 @@ function renderView() {
   $('#view-switch').hidden = !has;
   $('#transcript').dataset.view = view;
   $$('#view-switch [data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === view)));
-  if (has) $('#view-switch [data-view=orig]').textContent = langName(state.doc?.translation?.from) || 'Original';
+  if (has) {
+    const langs = new Set(state.segments.map((s) => s.lang).filter((l) => l && l !== 'fr'));
+    const only = langs.size === 1 ? [...langs][0] : null;
+    $('#view-switch [data-view=orig]').textContent = langs.size > 1 ? 'Original' : langName(only || state.doc?.translation?.from) || 'Original';
+  }
 }
 
 /** Phrases telles qu'affichées (original, traduction, ou les deux) pour copier / exporter / Claude. */
@@ -1693,6 +1714,139 @@ function shownSegments() {
 }
 
 const TR_WORKER = new URL('./translate-worker.js', import.meta.url);
+
+// ---------- Traduction automatique ----------
+/** Traducteurs réutilisés : un par langue d'origine (Chrome ou modèle local). */
+const translators = new Map();
+function getTranslator(lang) {
+  if (!translators.has(lang)) {
+    const p = createTranslator(lang, 'fr', {
+      workerUrl: TR_WORKER,
+      onProgress: (x) => trStatus(`Téléchargement du traducteur… ${Math.round(x.value * 100)} %`),
+    });
+    p.catch(() => translators.delete(lang));
+    translators.set(lang, p);
+  }
+  return translators.get(lang);
+}
+
+let trStatusTimer = 0;
+function trStatus(text) {
+  clearTimeout(trStatusTimer);
+  $('#tr-status').hidden = !text;
+  $('#tr-status-text').textContent = text || '';
+  $('#tr-status').classList.toggle('done', /^Traduit/.test(text || ''));
+}
+
+/** Langue d'une phrase : celle donnée par Whisper, sinon devinée à partir du texte. */
+function segLang(s) {
+  return s.lang || guessLang(s.text);
+}
+
+/** Le modèle lourd (NLLB, ~900 Mo) n'est téléchargé qu'avec accord, une fois. */
+async function heavyOk(lang, { canAsk }) {
+  if (localPlan(lang)?.kind !== 'nllb') return true;
+  const a = await chromeAvailability(lang, 'fr');
+  if (a && a !== 'unavailable') return true;
+  if (store.get('tr.nllb', '') === '1') return true;
+  if (!canAsk) return false;
+  const ok = await ask('Traduire depuis cette langue ?',
+    `Pour traduire ${langFrom(lang)}, il faut un modèle de traduction de ~900 Mo (téléchargé une seule fois, puis tout reste sur ton PC).`, 'Télécharger');
+  if (ok) store.set('tr.nllb', '1');
+  return !!ok;
+}
+
+let autoRun = null;
+/** Traduit en français les phrases d'une autre langue (après une transcription ou à la demande). */
+async function autoTranslate(doc) {
+  if (!state.autoTr || !doc?.segments?.length) return;
+  if (autoRun?.doc === doc) return autoRun.promise;
+  const run = { doc };
+  run.promise = (async () => {
+    // Langue de chaque phrase (Voxtral : devinée à partir du texte, puis la langue majoritaire pour les phrases courtes)
+    const segs = doc.segments.map((s) => (s.lang ? s : { ...s, lang: guessLang(s.text) || undefined }));
+    const counts = {};
+    for (const s of segs) if (s.lang) counts[s.lang] = (counts[s.lang] || 0) + 1;
+    const main = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    for (const s of segs) if (!s.lang && main) s.lang = main;
+    doc.segments = segs;
+    const todo = segs.map((s, i) => i).filter((i) => segs[i].lang && segs[i].lang !== 'fr' && segs[i].tr == null && segs[i].text.trim());
+    if (state.doc === doc) { state.segments = doc.segments; renderSegments(state.segments, {}); }
+    if (!todo.length) return;
+    const byLang = {};
+    for (const i of todo) (byLang[segs[i].lang] ||= []).push(i);
+    let done = 0;
+    const engines = new Set();
+    for (const [lang, idx] of Object.entries(byLang)) {
+      if (!(await heavyOk(lang, { canAsk: true }))) continue;
+      trStatus(`Traduction ${langFrom(lang)} en français…`);
+      let tr;
+      try {
+        tr = await getTranslator(lang);
+      } catch (e) {
+        toast(`Traduction automatique impossible ${langFrom(lang)} : ${e.message}`, 'warn', 7000);
+        continue;
+      }
+      engines.add(tr.label);
+      for (let k = 0; k < idx.length; k += 6) {
+        if (doc.status === 'running' || doc.status === 'live') return; // retranscription en cours
+        const batch = idx.slice(k, k + 6);
+        let out;
+        try { out = await tr.translate(batch.map((i) => doc.segments[i].text)); } catch (e) { console.warn(e); break; }
+        batch.forEach((i, j) => { doc.segments[i] = { ...doc.segments[i], tr: out[j] }; });
+        done += batch.length;
+        trStatus(`Traduction en français… ${done} / ${todo.length} phrases`);
+        if (state.doc === doc) { state.segments = doc.segments; renderSegments(state.segments, {}); }
+      }
+    }
+    if (!done) return;
+    const foreign = Object.keys(counts).filter((l) => l !== 'fr').sort((x, y) => counts[y] - counts[x])[0] || main;
+    doc.translation = { auto: true, from: foreign, to: 'fr', engine: [...engines].join(' + '), at: Date.now() };
+    await persist(doc);
+    if (state.doc === doc) renderView();
+    trStatus(`Traduit en français (${[...engines].join(' + ')}) · ${done} phrase${done > 1 ? 's' : ''}`);
+    trStatusTimer = setTimeout(() => trStatus(''), 5000);
+  })().finally(() => {
+    if (autoRun === run) autoRun = null;
+    if (!/^Traduit/.test($('#tr-status-text').textContent)) trStatus('');
+  });
+  autoRun = run;
+  return run.promise;
+}
+
+/** Direct : chaque phrase validée dans une autre langue est traduite dès qu'elle arrive. */
+const liveQueued = new WeakSet();
+let liveQueue = Promise.resolve();
+function liveTranslate(session) {
+  if (!state.autoTr) return;
+  for (const seg of session.committed) {
+    if (liveQueued.has(seg) || seg.tr != null) continue;
+    const lang = segLang(seg);
+    if (!lang) continue;
+    seg.lang = lang;
+    liveQueued.add(seg);
+    if (lang === 'fr') continue;
+    liveQueue = liveQueue.then(async () => {
+      if (state.live !== session || !(await heavyOk(lang, { canAsk: false }))) return;
+      try {
+        const tr = await getTranslator(lang);
+        if (/^Téléchargement/.test($('#tr-status-text').textContent)) trStatus('');
+        const [t] = await tr.translate([seg.text]);
+        seg.tr = t;
+        if (state.live === session) renderLive();
+      } catch (e) { console.warn('Traduction en direct', e); }
+    });
+  }
+}
+
+/** Reprend les traductions faites en direct quand le moteur renvoie le texte final. */
+function carryTranslations(finalSegs, oldSegs) {
+  const byText = new Map(oldSegs.filter((s) => s.tr != null).map((s) => [s.text.trim(), s]));
+  for (const s of finalSegs) {
+    const o = byText.get(s.text.trim());
+    if (o) Object.assign(s, { tr: o.tr, lang: o.lang });
+  }
+}
 
 async function translateDoc() {
   if (!state.segments.length || state.phase !== 'idle' || micBusy()) return;
@@ -1747,8 +1901,9 @@ async function translateDoc() {
   try {
     for (let i = 0; i < total && !tool.cancelled; i += 6) {
       bar(`Traduction… ${i} / ${total} phrases (${tr.label})`, i / total);
-      const texts = await tr.translate(state.segments.slice(i, i + 6).map((s) => s.text));
-      texts.forEach((t, k) => { out[i + k].tr = t; });
+      const slice = state.segments.slice(i, i + 6);
+      const texts = await tr.translate(slice.map((s) => (s.lang === 'fr' ? '' : s.text)));
+      texts.forEach((t, k) => { if (slice[k].lang !== 'fr') out[i + k].tr = t; });
     }
   } catch (e) {
     failed = e;
@@ -2053,7 +2208,13 @@ function bind() {
   });
 
   const lang = $('#lang');
-  lang.innerHTML = LANGUAGES.map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
+  lang.innerHTML = [['auto', 'Détection automatique de la langue'], ...LANGUAGES].map(([c, n]) => `<option value="${c}">${n}</option>`).join('');
+  $('#toggle-autotr').checked = state.autoTr;
+  $('#toggle-autotr').onchange = (e) => {
+    state.autoTr = e.target.checked;
+    store.set('autotr', state.autoTr ? '1' : '0');
+    if (state.autoTr && state.doc && state.phase === 'idle' && !micBusy()) autoTranslate(state.doc);
+  };
   lang.value = state.language;
   lang.onchange = () => { state.language = lang.value; store.set('lang', lang.value); };
 
@@ -2172,6 +2333,11 @@ function bind() {
 // Démarrage
 // ======================================================================
 async function init() {
+  // Détection automatique de la langue par défaut (une seule fois, l'utilisateur peut revenir au français)
+  if (store.get('lang.auto', '') !== '1') {
+    store.set('lang.auto', '1');
+    if (state.language === 'fr') { state.language = 'auto'; store.set('lang', 'auto'); }
+  }
   $('#foot-version').textContent = TRANSFORMERS_VERSION;
   monitor = new Monitor($('#monitor-canvas'), { onState: renderMonitorState });
   player = new Player({
@@ -2216,7 +2382,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
-  state, exportAs, sendToClaude, translateDoc, shownSegments, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
+  state, exportAs, sendToClaude, translateDoc, shownSegments, autoTranslate, guessLang, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },
 };

@@ -23,7 +23,7 @@ import { TRANSFORMERS_URL } from './config.js';
 import { VoxtralSession, planSessions, SESSION_SOFT_S, SESSION_HARD_S } from './voxtral-engine.js';
 import { boostForAsr } from './audio.js';
 
-const { pipeline, env, ModelRegistry, VoxtralRealtimeForConditionalGeneration, VoxtralRealtimeProcessor, LogitsProcessor } = await import(TRANSFORMERS_URL);
+const { pipeline, env, ModelRegistry, VoxtralRealtimeForConditionalGeneration, VoxtralRealtimeProcessor, LogitsProcessor, Tensor } = await import(TRANSFORMERS_URL);
 
 /**
  * Capteur de confiance : à chaque mot (token) généré, mesure la probabilité que le modèle
@@ -269,12 +269,16 @@ function withConf(segs, seqs) {
     const mid = (s.start + s.end) / 2;
     let best = null;
     let bestD = Infinity;
+    let lang = null;
+    let langD = Infinity;
     for (const q of seqs) {
-      if (q.conf == null || !q.span) continue;
+      if (!q.span || mid < q.span[0] || mid > q.span[1]) continue;
       const d = Math.abs((q.span[0] + q.span[1]) / 2 - mid);
-      if (mid >= q.span[0] && mid <= q.span[1] && d < bestD) { bestD = d; best = q.conf; }
+      if (q.conf != null && d < bestD) { bestD = d; best = q.conf; }
+      if (q.lang && d < langD) { langD = d; lang = q.lang; }
     }
     if (best != null) s.conf = Math.round(best * 100) / 100;
+    if (lang) s.lang = lang;
   }
   return segs;
 }
@@ -407,10 +411,44 @@ function streamAbort() {
 }
 
 /** Transcrit une fenêtre (≤ 30 s) : décodage glouton, puis nouvel essai si boucle de répétition. */
+// ---------- Détection de la langue (language = 'auto') ----------
+/** Langues proposées dans l'application : la détection se limite à elles. */
+const LANG_CODES = ['fr', 'en', 'es', 'de', 'it', 'pt', 'nl', 'ar', 'zh', 'ja', 'ru', 'pl', 'tr', 'ro'];
+
+/**
+ * Whisper commence toujours par prédire la langue : on lit cette prédiction (un seul pas de décodage)
+ * au lieu de la forcer. En cas de doute, le français l'emporte (usage principal, voix lointaines).
+ */
+async function detectLang(input_features) {
+  const { model } = asr;
+  const gc = model.generation_config;
+  const ids = LANG_CODES.map((c) => gc.lang_to_id?.[`<|${c}|>`]);
+  if (ids.some((x) => x == null)) return { lang: 'fr', prob: null };
+  const dec = new Tensor('int64', BigInt64Array.from([BigInt(gc.decoder_start_token_id)]), [1, 1]);
+  const out = await model({ input_features, decoder_input_ids: dec });
+  const V = out.logits.dims.at(-1);
+  const data = out.logits.data;
+  const base = data.length - V;
+  const raw = ids.map((id) => Number(data[base + id]));
+  for (const k of Object.keys(out)) out[k]?.dispose?.();
+  const max = Math.max(...raw);
+  const ex = raw.map((v) => Math.exp(v - max));
+  const sum = ex.reduce((a, b) => a + b, 0);
+  const probs = ex.map((v) => v / sum);
+  let top = 0;
+  for (let i = 1; i < probs.length; i++) if (probs[i] > probs[top]) top = i;
+  const fr = probs[0];
+  if (top !== 0 && fr >= 0.2 && probs[top] < 0.6) top = 0;
+  return { lang: LANG_CODES[top], prob: Math.round(probs[top] * 100) / 100 };
+}
+
 async function generateWindow(sub, language) {
   const { processor, model, tokenizer } = asr;
   const hop = processor.feature_extractor.config.hop_length;
   const { input_features } = await processor(sub);
+  let lang = language;
+  if (language === 'auto') lang = (await detectLang(input_features)).lang;
+  language = lang;
   // Plafond de tokens proportionnel à la durée : coupe court aux boucles de répétition.
   const maxTokens = Math.min(440, Math.ceil((sub.length / SR) * 10) + 24);
   const special = new Set(tokenizer.all_special_ids.map(Number));
@@ -437,7 +475,7 @@ async function generateWindow(sub, language) {
   }
   probe.onToken = null;
   input_features.dispose?.();
-  return { tokens, conf };
+  return { tokens, conf, lang };
 }
 
 function similar(a, b) {
@@ -483,9 +521,10 @@ async function fillGaps(audio, segs, { offsetS = 0, language, maxPasses = 8 }) {
       const sub = audio.subarray(Math.round(a * SR), Math.round(b * SR));
       if (!hasSpeech(sub)) continue;
       passes++;
-      const { tokens, conf } = await generateWindow(sub, language);
+      const { tokens, conf, lang } = await generateWindow(sub, language);
       if (conf != null && conf < 0.25) continue;
       for (const x of decodeSingle(tokens, conf, sub.length, offsetS + a)) {
+        if (lang) x.lang = lang;
         if (x.start - offsetS >= b) continue;
         // Anti-doublon : même phrase que celle juste avant, collée à elle → déjà transcrite
         const before = [...sorted, ...added].filter((y) => y.end <= x.start + 0.5).sort((p, q) => q.end - p.end)[0];
@@ -535,9 +574,9 @@ async function transcribeWhisper({ jobId, audio, language, chunkLengthS = 30, st
     }
     const w = windows[i];
     const sub = audio.subarray(w.off, w.end);
-    const { tokens, conf } = hasSpeech(sub) ? await generateWindow(sub, language) : { tokens: [], conf: null };
+    const { tokens, conf, lang } = hasSpeech(sub) ? await generateWindow(sub, language) : { tokens: [], conf: null, lang: null };
     const strideS = windows.length > 1 ? strideLengthS : 0;
-    seqs.push({ tokens, conf, span: [offsetS + w.off / sr, offsetS + w.end / sr], stride: [sub.length / sr, w.first ? 0 : strideS, w.last ? 0 : strideS] });
+    seqs.push({ tokens, conf, lang, span: [offsetS + w.off / sr, offsetS + w.end / sr], stride: [sub.length / sr, w.first ? 0 : strideS, w.last ? 0 : strideS] });
     if (quiet) continue;
 
     // Aperçu : le dernier bloc est traité comme final (sa zone de chevauchement droite est incluse)

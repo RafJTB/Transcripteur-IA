@@ -6,7 +6,7 @@
  * Google Cloud (pas un secret). Vide = connexion désactivée, sauf si un identifiant est saisi
  * dans Paramètres (pratique pour tester).
  */
-export const GOOGLE_CLIENT_ID = '';
+export const GOOGLE_CLIENT_ID = '770910751766-si7jchglbtg2sndoo9gjtrc6kpd9m4in.apps.googleusercontent.com';
 
 export const TRANSFORMERS_VERSION = '4.3.2';
 export const TRANSFORMERS_URL =

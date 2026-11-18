@@ -117,6 +117,9 @@ export function boostForAsr(audio, { target = -20, maxGain = 30 } = {}) {
 /** Réglages du son par défaut (identiques au comportement d'origine). */
 export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
   deviceId: '',
+  deviceLabel: '',  // nom du micro : retrouve le micro si Windows change son identifiant
+  outputId: '',     // sortie audio de la relecture ('' = sortie par défaut)
+  outputLabel: '',
   gainDb: 0,
   autoGainControl: true,
   noiseSuppression: true,
@@ -133,6 +136,23 @@ export async function listMicrophones() {
     return [];
   }
 }
+
+/** Sorties audio (casque, haut-parleurs). Vide si le navigateur ne permet pas de choisir la sortie. */
+export async function listSpeakers() {
+  if (!canPickOutput()) return [];
+  try {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    return all.filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'communications');
+  } catch {
+    return [];
+  }
+}
+
+/** Choix de la sortie audio possible (Chrome, Edge ; pas Safari). */
+export const canPickOutput = () => typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
+
+/** Casque ou micro Bluetooth (AirPods, mains libres…), d'après son nom. */
+export const isBluetooth = (label) => /airpods|bluetooth|hands-?free|mains libres|headset|\bbt\b|buds|wh-1000|bose|jabra|beats/i.test(label || '');
 
 export class AudioError extends Error {
   constructor(code, message) {
@@ -211,8 +231,9 @@ class StreamResampler {
  * Le résultat final est un Blob (webm/opus).
  */
 export class Recorder {
-  constructor({ onLevel, onTick, onChunk, onPcm } = {}) {
+  constructor({ onLevel, onTick, onChunk, onPcm, onDeviceLost } = {}) {
     this.onLevel = onLevel;
+    this.onDeviceLost = onDeviceLost;
     this.onTick = onTick;
     this.onChunk = onChunk;
     this.onPcm = onPcm;
@@ -235,7 +256,7 @@ export class Recorder {
    * Chaîne audio : micro → filtre des basses (option) → gain → [enregistrement, transcription, mesure]
    * Le gain est donc appliqué à tout : ce que tu vois sur le graphique est ce que le modèle entend.
    */
-  async start({ pcm = false, preview = false, settings = DEFAULT_AUDIO_SETTINGS } = {}) {
+  async start({ pcm = false, preview = false, settings = DEFAULT_AUDIO_SETTINGS, _fellBack = false } = {}) {
     if (!(await Recorder.isAvailable())) throw new AudioError('mic-unsupported', 'Ce navigateur ne permet pas l’enregistrement audio.');
     const audio = {
       channelCount: 1,
@@ -249,7 +270,7 @@ export class Recorder {
     } catch (e) {
       if (e.name === 'OverconstrainedError' && settings.deviceId) {
         // Micro choisi débranché : on reprend le micro par défaut
-        return this.start({ pcm, preview, settings: { ...settings, deviceId: '' } });
+        return this.start({ pcm, preview, settings: { ...settings, deviceId: '' }, _fellBack: true });
       }
       if (e.name === 'NotAllowedError' || e.name === 'SecurityError')
         throw new AudioError('mic-denied', 'Accès au micro refusé. Autorise le micro dans la barre d’adresse (icône cadenas) puis réessaie.');
@@ -259,7 +280,13 @@ export class Recorder {
         throw new AudioError('mic-busy', 'Le micro est déjà utilisé par une autre application (Teams, Zoom…).');
       throw new AudioError('mic-error', `Erreur micro : ${e.message || e.name}`);
     }
-    this.deviceLabel = this.stream.getAudioTracks()[0]?.label || '';
+    const track = this.stream.getAudioTracks()[0];
+    this.deviceLabel = track?.label || '';
+    /** Vrai si le micro choisi était absent et que le micro par défaut a pris le relais. */
+    this.fellBack = _fellBack;
+    // Micro débranché en cours de route (casque Bluetooth éteint, hors de portée…)
+    const stream = this.stream;
+    track?.addEventListener('ended', () => { if (this.stream === stream) this.onDeviceLost?.(this.deviceLabel); });
 
     this.ctx = new AudioContext();
     if (this.ctx.state === 'suspended') await this.ctx.resume().catch(() => {});

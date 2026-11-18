@@ -173,7 +173,6 @@ function onWorkerMessage(m) {
       const cached = state.cache[model.id];
       dl = { t0: performance.now(), cached };
       progress.show(cached ? `Chargement de ${model.name} depuis le cache…` : `Téléchargement de ${model.name} (${fmtMB(v.sizeMB)})`, { value: 0 });
-      if (state.phase !== 'live') status(cached ? 'Modèle déjà en cache : aucun téléchargement.' : 'Premier téléchargement : le modèle sera ensuite gardé en cache dans le navigateur.');
       break;
     }
     case 'load-progress': {
@@ -307,16 +306,9 @@ function renderLangHint() {
 function renderLiveHint() {
   const el = $('#live-hint');
   const m = modelById(state.modelId);
-  if (isStreaming(m)) {
-    el.className = 'live-hint';
-    el.textContent = 'Vrai temps réel avec Voxtral : le texte suit ta voix avec environ une demi-seconde de décalage (si ta carte graphique suit le rythme).';
-  } else if (state.caps && !caps().webgpu && m.id !== 'base') {
-    el.className = 'live-hint warn';
-    el.textContent = `Sans carte graphique, ${m.name} risque de prendre du retard en direct : le modèle « Rapide » est conseillé. Le texte sera de toute façon complété à l’arrêt.`;
-  } else {
-    el.className = 'live-hint';
-    el.textContent = `Le texte s’affiche pendant que tu parles, avec quelques secondes de décalage (modèle : ${m.name}).`;
-  }
+  // Sans carte graphique, l'avertissement général (sous « Transcrire ») suffit
+  el.className = 'live-hint warn';
+  el.textContent = isStreaming(m) && state.caps && !caps().webgpu ? 'Voxtral a besoin d’une carte graphique pour suivre en direct.' : '';
 }
 
 async function refreshCache() {
@@ -355,7 +347,7 @@ async function setAudioFromBlob(blob, name, { audioId = null, pcm = null, docId 
     $('#audio-name').textContent = name;
     $('#audio-info').textContent = `${fmtClock(durationS)} · ${fmtBytes(blob.size)}${audioId ? ' · sauvegardé' : ''}`;
     player.load(state.audio.url, pcm, durationS);
-    status(durationS > 7200 ? 'Audio très long : la transcription peut prendre beaucoup de temps et de mémoire.' : 'Audio prêt. Choisis un modèle puis lance la transcription.', durationS > 7200 ? 'warn' : '');
+    status(durationS > 7200 ? 'Audio très long : la transcription peut prendre beaucoup de temps et de mémoire.' : '', durationS > 7200 ? 'warn' : '');
     if (durationS < 0.5) status('Audio très court (moins d’une demi-seconde).', 'warn');
   } catch (e) {
     status(e.message, 'err');
@@ -552,7 +544,6 @@ function startLive(rec) {
       if (session.kind === 'voxtral') session.start(++state.jobId);
       else session.ready = true;
       progress.hide();
-      status(`En direct · ${model.name} · ${v.device === 'webgpu' ? 'WebGPU' : 'WASM'}`);
       renderRecState();
     })
     .catch((e) => {
@@ -680,8 +671,8 @@ function renderRecState() {
 // ======================================================================
 const CAPTURE_HINTS = {
   mic: '',
-  mix: 'Au démarrage, choisis l’onglet de la visio (Meet, Teams ou Zoom dans le navigateur) et coche « Partager l’audio ». Appli Teams ou Zoom : choisis « Écran entier » et coche « Partager l’audio du système ». Avec un casque, pas d’écho.',
-  system: 'Seul le son partagé est enregistré (visio où tu ne parles pas, webinaire, vidéo…), pas ton micro. Au démarrage, coche « Partager l’audio ».',
+  mix: 'Au démarrage : choisis l’onglet de la visio (ou « Écran entier » pour l’appli Teams / Zoom) et coche « Partager l’audio ».',
+  system: 'Sans ton micro. Au démarrage, coche « Partager l’audio ».',
 };
 const captureMode = () => (canCaptureSystem() ? state.capture : 'mic');
 
@@ -853,7 +844,6 @@ async function runJob(doc) {
         value: doc.job.total ? (done / doc.job.total) * 100 : 0,
         sub: done ? 'Les blocs déjà transcrits ne sont pas refaits' : 'Analyse du premier bloc',
       });
-      status(`${model.name} · ${v.device === 'webgpu' ? 'WebGPU' : 'WASM'} · ${doc.job.language === 'auto' ? 'langue détectée automatiquement' : langName(doc.job.language)}`);
       const pcm = state.audio.pcm.slice(Math.round(doc.job.fromS * SR));
       const jobId = ++state.jobId;
       state.run = { doc, jobId, lastAt: performance.now(), maxBlockMs: 0, heavy: !!model.heavy && v.device === 'wasm' };
@@ -1114,13 +1104,13 @@ function renderSound() {
   const hint = $('#sc-hint');
   if (busy) {
     hint.className = 'sc-hint';
-    hint.textContent = 'Pendant l’enregistrement, seuls le gain et le filtre des basses sont modifiables. Les autres réglages s’appliqueront au prochain.';
+    hint.textContent = 'Pendant l’enregistrement, seuls le gain et le filtre des basses sont modifiables.';
   } else if (sound.autoGainControl && sound.gainDb !== 0) {
     hint.className = 'sc-hint warn';
-    hint.textContent = 'Le gain automatique du navigateur compense en partie ton réglage : coupe-le pour un contrôle total du gain.';
+    hint.textContent = 'Le gain automatique compense en partie ton réglage : coupe-le pour un contrôle total.';
   } else {
     hint.className = 'sc-hint';
-    hint.textContent = testing ? 'Test en cours : parle normalement et règle le gain pour que la courbe reste dans la zone verte.' : 'Astuce : « Tester le micro » montre le niveau sans rien enregistrer.';
+    hint.textContent = testing ? 'Règle le gain pour que la courbe reste dans la zone verte.' : '';
   }
 }
 
@@ -1602,22 +1592,15 @@ function renderMonitorState({ volume, conf }) {
     set('#conf-state', conf, '—');
     const el = $('#monitor-hint');
     el.className = 'monitor-hint';
-    el.textContent = 'Relecture : le graphique suit la lecture. Les points de compréhension sont ceux de la transcription, phrase par phrase.';
+    el.textContent = '';
     return;
   }
   set('#vol-state', volume, recorder.state === 'idle' ? '—' : 'Mesure…');
   set('#conf-state', conf, recorder.state === 'idle' ? '—' : testing ? 'Test du micro (pas de transcription)' : state.live ? 'En attente du modèle…' : 'Mode direct désactivé');
   const hint = (volume?.level === 'err' && volume.hint) || (conf?.level === 'err' && conf.hint) || volume?.hint || conf?.hint;
   const el = $('#monitor-hint');
-  if (recorder.state === 'idle' && !hint) {
-    el.className = 'monitor-hint';
-    el.textContent = 'Lance un enregistrement : le graphique montre si ta voix est au bon niveau et, en mode direct, si le modèle te comprend bien.';
-  } else {
-    el.className = 'monitor-hint' + (hint ? ' warn' : '');
-    el.textContent = hint || (recorder.state === 'idle' ? ''
-      : testing ? (volume?.level === 'ok' ? 'Bon niveau : tu peux lancer l’enregistrement.' : 'Parle normalement pour vérifier le niveau.')
-      : 'Tout va bien : continue à parler normalement.');
-  }
+  el.className = 'monitor-hint' + (hint ? ' warn' : '');
+  el.textContent = hint || (testing ? (volume?.level === 'ok' ? 'Bon niveau : tu peux lancer l’enregistrement.' : 'Parle normalement pour vérifier le niveau.') : '');
 }
 
 function showWaiting(on) {
@@ -2016,7 +1999,7 @@ function identifySpeakers(doc, { k = doc?.speakerCount ?? null, manual = false }
     }
     applySpeakers(doc, items, k);
     const n = doc.speakers.length;
-    spkStatus(n > 1 ? `${n} personnes reconnues · clique sur un nom pour le renommer` : 'Une seule voix reconnue', true);
+    spkStatus(n > 1 ? `${n} personnes reconnues` : 'Une seule voix reconnue', true);
   })()
     .catch((e) => { spkStatus(''); toast(`Qui parle ? ${e.message}`, 'err', 8000); })
     .finally(() => { spkRun = null; });
@@ -2408,7 +2391,6 @@ function updateButtons() {
   $('#export-menu').classList.toggle('disabled', !has);
   if (!has) $('#export-menu').open = false;
   $('#find').disabled = !state.segments.length;
-  $('#player-note').hidden = !(recording && !state.audio);
   $('#result-title').disabled = !state.doc;
   $$('#models input').forEach((i) => (i.disabled = busy || recording));
   $('#lang').disabled = busy || recording;
@@ -2848,7 +2830,7 @@ async function init() {
   renderModels();
   updateButtons();
   await refreshCache();
-  if (!state.caps.webgpu) status((state.caps.softwareGpu ? 'Pas de carte graphique exploitable (GPU logiciel détecté)' : 'WebGPU non disponible') + ' : la transcription utilisera le processeur (plus lent). Le modèle « Rapide » ou « Équilibré » est conseillé.', 'warn');
+  if (!state.caps.webgpu) status((state.caps.softwareGpu ? 'Pas de carte graphique exploitable (GPU logiciel détecté)' : 'WebGPU non disponible') + ' : transcription sur le processeur, plus lente. Préfère « Rapide » ou « Équilibré ».', 'warn');
   try {
     if (await recover()) return;
     const [last] = await History.list();

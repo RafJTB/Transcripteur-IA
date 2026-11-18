@@ -7,8 +7,8 @@
   <meta name="description" content="Transcription audio → texte 100 % locale dans le navigateur (Whisper, WebGPU/WASM). Aucun audio n'est envoyé." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='#3f86ff'/%3E%3Cstop offset='1' stop-color='#1747b8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect class='tile' x='.5' y='.5' width='39' height='39' rx='10.5' fill='#fff' stroke='#d9e0ea'/%3E%3Cpath fill='url(#g)' d='M11.2 9.5h20.6l-1.1 5.4h-7.5l-3.1 14.6c-.3 1.6-1.8 2.6-3.4 2.3-1.6-.3-2.6-1.8-2.3-3.4l2.9-13.5h-7.2z'/%3E%3C/svg%3E" />
   <meta name="theme-color" content="#0a0e14" />
-  <meta name="app-version" content="2026-11-19-7" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-19-7" />
+  <meta name="app-version" content="2026-11-19-8" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-19-8" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -23,7 +23,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-19-7', 'sw.js', 'js/app.js?v=2026-11-19-7', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-19-8', 'sw.js', 'js/app.js?v=2026-11-19-8', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/langid.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -70,7 +70,6 @@
       <svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3f86ff"/><stop offset="1" stop-color="#1747b8"/></linearGradient></defs><rect class="tile" x=".5" y=".5" width="39" height="39" rx="10.5" fill="#fff" stroke="#d9e0ea"/><path fill="url(#logo-grad)" d="M11.2 9.5h20.6l-1.1 5.4h-7.5l-3.1 14.6c-.3 1.6-1.8 2.6-3.4 2.3-1.6-.3-2.6-1.8-2.3-3.4l2.9-13.5h-7.2z"/></svg>
       <div>
         <div class="brand-name"><h1>Transcripteur <span class="ia">IA</span></h1><span class="by">by RJB</span></div>
-        <p class="tagline">Transcription 100 % locale · l’audio ne quitte jamais ton PC</p>
       </div>
     </div>
     <div class="top-status">
@@ -116,7 +115,7 @@
           <button class="btn" id="rec-stop" type="button" disabled><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Arrêter</button>
           <button class="btn danger" id="rec-discard" type="button" disabled title="Supprimer cet enregistrement sans le garder"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Supprimer</button>
         </div>
-        <p class="live-hint" id="live-hint">Le texte s’affiche pendant que tu parles, avec quelques secondes de décalage.</p>
+        <p class="live-hint" id="live-hint"></p>
       </div>
 
       <div class="tab-panel" data-panel="file" hidden>
@@ -156,7 +155,7 @@
 
       <div class="row">
         <select id="lang" class="select" aria-label="Langue parlée"></select>
-        <p class="field-hint" id="lang-hint" hidden>Voxtral détecte la langue tout seul : ce choix ne concerne que les modèles Whisper.</p>
+        <p class="field-hint" id="lang-hint" hidden>Voxtral détecte la langue tout seul.</p>
         <label class="switch autotr" title="Si une autre langue que le français est parlée, chaque phrase est traduite en français automatiquement (traduction locale)."><input type="checkbox" id="toggle-autotr" /><span class="track"></span>Traduire en français automatiquement</label>
         <label class="switch autotr" title="Après chaque transcription, les voix sont comparées pour indiquer qui parle (analyse locale, module de 33 Mo téléchargé une fois)."><input type="checkbox" id="toggle-autospk" /><span class="track"></span>Reconnaître qui parle</label>
       </div>
@@ -189,7 +188,6 @@
         <input type="search" id="hist-search" placeholder="Rechercher dans l’historique…" aria-label="Rechercher dans l’historique" />
       </label>
       <div class="hist-list" id="hist-list"></div>
-      <p class="hist-note">Stocké uniquement dans ce navigateur, avec l’audio d’origine.</p>
     </section>
     </div>
 
@@ -258,8 +256,7 @@
       <div class="transcript" id="transcript" data-ts="on">
         <div class="empty" id="empty-state">
           <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h7"/></svg>
-          <p>Le texte apparaîtra ici, phrase par phrase, pendant la transcription.</p>
-          <p class="hint">Ensuite : clique sur une phrase pour la corriger, sur son horodatage pour la réécouter.</p>
+          <p>Le texte apparaîtra ici.</p>
         </div>
       </div>
 
@@ -274,7 +271,6 @@
         <button class="pl-speed" id="pl-speed" type="button" title="Vitesse de lecture">1×</button>
         <audio id="audio-player" preload="metadata"></audio>
       </div>
-      <div class="player-note" id="player-note" hidden>Le lecteur et la réécoute au clic seront disponibles à l’arrêt de l’enregistrement.</div>
     </section>
 
     <!-- ================= COLONNE DROITE ================= -->
@@ -290,7 +286,7 @@
           <div class="mstate" id="vol-state"><span class="dot"></span><div><strong>Volume</strong><span class="val">—</span></div></div>
           <div class="mstate" id="conf-state"><span class="dot"></span><div><strong>Compréhension</strong><span class="val">—</span></div></div>
         </div>
-        <p class="monitor-hint" id="monitor-hint">Lance un enregistrement : le graphique montre si ta voix est au bon niveau et, en mode direct, si le modèle te comprend bien.</p>
+        <p class="monitor-hint" id="monitor-hint"></p>
       </div>
     </section>
 
@@ -306,7 +302,7 @@
 
           <label class="label" for="mic-device">Micro</label>
           <select id="mic-device" class="select"><option value="">Micro par défaut</option></select>
-          <p class="bt-hint" id="bt-hint" hidden><b>Micro Bluetooth :</b> le casque passe en mode « mains libres » (son plus étouffé, transcription un peu moins précise). L’idéal : AirPods pour écouter, micro du PC pour parler.</p>
+          <p class="bt-hint" id="bt-hint" hidden><b>Micro Bluetooth :</b> son dégradé (mode mains libres). Mieux : AirPods pour écouter, micro du PC pour parler.</p>
 
           <div id="out-row" hidden>
             <label class="label" for="out-device">Sortie (écoute de l’enregistrement)</label>
@@ -415,6 +411,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-19-7"></script>
+  <script type="module" src="js/app.js?v=2026-11-19-8"></script>
 </body>
 </html>

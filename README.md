@@ -38,6 +38,7 @@ js/pcm-worklet.js   Capture de l'audio brut du micro (AudioWorklet) pour le dire
 js/audio.js         Décodage (mp3, wav, m4a, webm, mp4…) en mono 16 kHz, enregistreur micro
 js/lexicon.js       Lexique de corrections (localStorage)
 js/exporters.js     .txt, .md, .srt
+js/claude-export.js consigne de résumé et lien vers Claude
 js/history.js       Stockage local (IndexedDB) : transcriptions, audios, morceaux d'enregistrement
 ```
 
@@ -108,6 +109,17 @@ Dans les réglages du son :
 Limites : l'écho est une estimation indicative ; deux lectures ne sont jamais identiques, seuls des écarts
 nets entre réglages sont significatifs.
 
+## Résumer avec Claude
+
+Le bouton **Résumer avec Claude** (barre du résultat) ouvre claude.ai avec la transcription et une consigne prête :
+compte rendu de réunion (décisions, actions avec responsable et échéance, points en suspens), résumé court,
+points clés ou résumé détaillé, plus des consignes libres. Il n'y a plus qu'à envoyer.
+
+- Transcription courte : le message est pré-rempli dans Claude.
+- Transcription longue (lien trop long) : Claude s'ouvre et la consigne est copiée, il suffit de coller (Ctrl + V).
+- Dans tous les cas la consigne est aussi copiée dans le presse-papiers.
+- Confidentialité : c'est le seul moment où du texte quitte le PC (vers ton compte claude.ai). L'audio reste local.
+
 ## Reprise automatique
 
 - Chaque bloc de 30 s transcrit est sauvegardé immédiatement, avec l'audio d'origine.
@@ -131,6 +143,10 @@ nets entre réglages sont significatifs.
 - **Stockage** : l'audio d'origine est conservé avec chaque transcription (nécessaire pour reprendre et réécouter). Un enregistrement micro pèse environ 0,5 Mo/min ; un fichier importé garde sa taille. Supprime ce dont tu n'as plus besoin.
 - **Direct** : sans carte graphique, seul le modèle Rapide suit le rythme de la parole ; les autres prennent du retard (le texte est complété à l'arrêt).
 - **Langue** : Transformers.js ne détecte pas la langue automatiquement ; elle doit être choisie.
+- **Voix lointaines** : la détection de voix s'adapte au bruit de fond de la pièce (6 dB au-dessus), les
+  passages oubliés par Whisper (il s'arrête parfois après la 1re phrase d'un bloc bruité) sont retranscrits,
+  et pour Voxtral les voix faibles sont amplifiées (sans saturation). La qualité baisse quand même avec la
+  distance : rapproche le PC des personnes qui parlent.
 - **Hallucinations** : sur les silences, Whisper peut inventer des phrases (« Sous-titres réalisés par… ») ou boucler (« j’aime, j’aime, j’aime… »). Parades en place : blocs silencieux ignorés, formules connues filtrées, plafond de tokens, nouvel essai par échantillonnage si boucle détectée, fusion des répétitions. Une relecture reste nécessaire.
 - **GPU logiciel** : si Chrome n’expose qu’un GPU émulé (SwiftShader, WARP — fréquent en bureau à distance/VM), il est ignoré car plus lent que le processeur.
 

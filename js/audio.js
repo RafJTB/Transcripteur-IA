@@ -4,6 +4,116 @@ import { SAMPLE_RATE } from './config.js';
 export const ACCEPTED_EXT = ['mp3', 'wav', 'm4a', 'mp4', 'webm', 'ogg', 'oga', 'opus', 'flac', 'aac', 'mov', 'mkv', 'weba'];
 export const MAX_FILE_MB = 1500;
 
+// ---------------------------------------------------------------------
+// Détection de voix adaptative et amplification pour la transcription
+// ---------------------------------------------------------------------
+const FRAME = SAMPLE_RATE / 10; // 100 ms
+
+/**
+ * Seuil « il y a de la voix » adapté à la pièce : 6 dB au-dessus du bruit de fond
+ * (15e centile des trames de 100 ms), borné entre −68 dBFS et −44 dBFS.
+ * Un seuil fixe ignorait les voix lointaines captées par un micro de PC.
+ */
+export function speechThreshold(buf, from = 0, to = buf.length) {
+  const n = Math.floor((to - from) / FRAME);
+  if (n <= 0) return 0.006;
+  const step = Math.max(1, Math.floor(n / 600));
+  const fr = [];
+  for (let k = 0; k < n; k += step) {
+    let e = 0;
+    const a = from + k * FRAME;
+    for (let i = a; i < a + FRAME; i++) e += buf[i] * buf[i];
+    fr.push(Math.sqrt(e / FRAME));
+  }
+  fr.sort((x, y) => x - y);
+  const floor = fr[Math.floor(fr.length * 0.15)];
+  return Math.min(0.006, Math.max(0.0004, floor * 2));
+}
+
+/** Début de la parole à partir de `from` (avec 250 ms de marge), selon le seuil adaptatif. */
+export function speechStart(buf, from, to, thr) {
+  thr ??= speechThreshold(buf, Math.max(0, to - SAMPLE_RATE * 30), to);
+  let i = from;
+  while (i + FRAME <= to) {
+    let e = 0;
+    for (let k = i; k < i + FRAME; k++) e += buf[k] * buf[k];
+    if (Math.sqrt(e / FRAME) > thr) break;
+    i += FRAME;
+  }
+  return Math.max(from, i - SAMPLE_RATE / 4);
+}
+
+const softClip = (x) => (x > 0.9 ? 0.9 + 0.1 * Math.tanh((x - 0.9) / 0.1) : x < -0.9 ? -0.9 - 0.1 * Math.tanh((-x - 0.9) / 0.1) : x);
+
+/**
+ * Amplificateur automatique pour la transcription (n'affecte pas l'enregistrement) :
+ * remonte les voix faibles vers −20 dBFS, jusqu'à +30 dB, sans jamais baisser le son.
+ * Le gain ne suit que les passages de voix (pas les silences, pour ne pas gonfler le bruit),
+ * et il est plafonné pour que les pointes restent sous −3 dBFS : sans ce plafond, il faisait
+ * saturer le son déjà monté par le gain automatique du navigateur.
+ */
+export class LevelBooster {
+  constructor({ target = -20, maxGain = 30 } = {}) {
+    this.target = target;
+    this.maxGain = maxGain;
+    this.gainDb = 0;
+    this.levels = []; // RMS des derniers blocs (~10 s)
+    this.peaks = []; // crêtes des derniers blocs
+  }
+
+  process(pcm) {
+    let e = 0;
+    for (let i = 0; i < pcm.length; i++) e += pcm[i] * pcm[i];
+    let pk = 0;
+    for (let i = 0; i < pcm.length; i++) if (Math.abs(pcm[i]) > pk) pk = Math.abs(pcm[i]);
+    this.levels.push(Math.sqrt(e / Math.max(1, pcm.length)));
+    this.peaks.push(pk);
+    if (this.levels.length > 120) { this.levels.shift(); this.peaks.shift(); }
+    if (this.levels.length >= 12) {
+      const sorted = [...this.levels].sort((a, b) => a - b);
+      const thr = Math.max(0.0003, sorted[Math.floor(sorted.length * 0.15)] * 2);
+      const speech = sorted.filter((x) => x > thr);
+      if (speech.length >= 5) {
+        const lvl = 20 * Math.log10(speech[Math.floor(speech.length * 0.75)]);
+        const peaks = [...this.peaks].sort((a, b) => a - b);
+        const headroom = -3 - 20 * Math.log10(Math.max(1e-6, peaks[Math.floor(peaks.length * 0.98)]));
+        const want = Math.max(0, Math.min(this.maxGain, this.target - lvl, headroom));
+        this.gainDb += (want - this.gainDb) * 0.15; // variation douce
+      }
+    }
+    if (this.gainDb < 0.5) return pcm;
+    const g = Math.pow(10, this.gainDb / 20);
+    const out = new Float32Array(pcm.length);
+    for (let i = 0; i < pcm.length; i++) out[i] = softClip(pcm[i] * g);
+    return out;
+  }
+}
+
+/** Version « fichier » : même principe, gain unique calculé sur tout l'audio. */
+export function boostForAsr(audio, { target = -20, maxGain = 30 } = {}) {
+  const n = Math.floor(audio.length / FRAME);
+  if (n < 10) return audio;
+  const fr = [];
+  for (let k = 0; k < n; k++) {
+    let e = 0;
+    for (let i = k * FRAME; i < (k + 1) * FRAME; i++) e += audio[i] * audio[i];
+    fr.push(Math.sqrt(e / FRAME));
+  }
+  fr.sort((a, b) => a - b);
+  const thr = Math.max(0.0003, fr[Math.floor(fr.length * 0.15)] * 2);
+  const speech = fr.filter((x) => x > thr);
+  if (speech.length < 10) return audio;
+  let peak = 0;
+  for (let i = 0; i < audio.length; i += 4) if (Math.abs(audio[i]) > peak) peak = Math.abs(audio[i]);
+  const headroom = -3 - 20 * Math.log10(Math.max(1e-6, peak)); // jamais de saturation
+  const gainDb = Math.max(0, Math.min(maxGain, headroom, target - 20 * Math.log10(speech[Math.floor(speech.length * 0.75)])));
+  if (gainDb < 1) return audio;
+  const g = Math.pow(10, gainDb / 20);
+  const out = new Float32Array(audio.length);
+  for (let i = 0; i < audio.length; i++) out[i] = softClip(audio[i] * g);
+  return out;
+}
+
 /** Réglages du son par défaut (identiques au comportement d'origine). */
 export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
   deviceId: '',

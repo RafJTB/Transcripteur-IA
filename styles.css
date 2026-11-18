@@ -468,3 +468,19 @@ audio { width: 100%; height: 36px; color-scheme: dark; }
 .tool-advice p { margin: 0 0 6px; color: var(--text); font-weight: 600; }
 .tool-advice ul { margin: 0; }
 .tool-verdict { font-weight: 600; color: var(--text); }
+
+/* Résumer avec Claude */
+.btn.claude { border-color: rgba(217, 119, 87, 0.45); color: #f0b9a3; }
+.btn.claude:not(:disabled):hover { background: rgba(217, 119, 87, 0.12); }
+.cl-types { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 4px 0 14px; }
+.cl-type { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); cursor: pointer; }
+.cl-type:has(input:checked) { border-color: rgba(124, 156, 255, 0.55); background: var(--accent-soft); }
+.cl-type input { margin-top: 3px; accent-color: var(--accent); }
+.cl-type strong { display: block; color: var(--text); font-size: 14px; }
+.cl-type small { color: var(--text-3); font-size: 12.5px; }
+.cl-field { display: grid; gap: 6px; margin-bottom: 10px; }
+.cl-field span { color: var(--text); font-size: 13px; font-weight: 600; }
+.cl-field em { color: var(--text-3); font-weight: 400; }
+.cl-field textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--text); font: inherit; font-size: 13.5px; }
+.cl-note { margin-top: 12px !important; font-size: 12.5px; color: var(--text-3); }
+@media (max-width: 560px) { .cl-types { grid-template-columns: 1fr; } }

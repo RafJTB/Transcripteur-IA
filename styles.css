@@ -1114,3 +1114,5 @@ img.avatar { object-fit: cover; }
 .view.hist-card .hist-item .icon-btn { grid-column: 2; grid-row: 1; }
 .view.hist-card .hist-move { grid-row: 4; grid-column: 1 / -1; justify-self: start; margin-top: 8px; }
 .view.hist-card .hist-empty { grid-column: 1 / -1; }
+.install-btn { height: 40px; border-radius: 12px; gap: 8px; }
+.set-card a, .acc-note a { color: var(--accent); }

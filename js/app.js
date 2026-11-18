@@ -3007,6 +3007,22 @@ function askText(title, label, value = '', okLabel = 'Valider') {
   });
 }
 
+// ---------- Installation comme une application (PWA) ----------
+let installPrompt = null;
+function bindInstall() {
+  const btns = [$('#btn-install'), $('#btn-install-2')];
+  const show = (on) => btns.forEach((b) => (b.hidden = !on));
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; show(true); });
+  addEventListener('appinstalled', () => { installPrompt = null; show(false); toast('Transcripteur IA est installé : tu le trouves dans ton menu Démarrer et sur ton bureau.', 'ok', 6000); });
+  btns.forEach((b) => (b.onclick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const r = await installPrompt.userChoice.catch(() => null);
+    if (r?.outcome === 'accepted') show(false);
+    installPrompt = null;
+  }));
+}
+
 function bindAccount(authResult) {
   state.folder = 'all';
   Sync.on(() => renderAccount());
@@ -3366,6 +3382,7 @@ async function init() {
   renderHistory();
   bind();
   bindAccount(authResult);
+  bindInstall();
   bindSound();
   renderRec();
   // Interface prête : désarme le filet de sécurité des mises à jour (voir index.html)

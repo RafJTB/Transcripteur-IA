@@ -1,4 +1,8 @@
-# Transcripteur local
+<img src="logo.svg" width="72" alt="" align="left" />
+
+# Transcripteur IA by RJB
+
+<br clear="left" />
 
 Transcription audio → texte **100 % dans le navigateur** avec Whisper (Transformers.js 4.3.2).
 Aucun serveur, aucune clé API, aucune installation : l’audio ne quitte jamais le PC.
@@ -113,6 +117,8 @@ Limites : l'écho est une estimation indicative ; deux lectures ne sont jamais i
 nets entre réglages sont significatifs.
 
 ## Interface
+
+Deux apparences : **claire** et **sombre** (bouton soleil/lune en haut ; par défaut, celle de Windows). Bleu « ingénierie » comme couleur de marque.
 
 Trois colonnes qui tiennent dans l'écran (une seule colonne sur petit écran) :
 

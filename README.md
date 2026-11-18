@@ -124,6 +124,26 @@ Au démarrage, Chrome ouvre la fenêtre de partage :
 L'image n'est pas gardée, seul le son l'est. Avec un casque, pas d'écho ; avec des haut-parleurs,
 le micro capte aussi la visio (voix en double). Chrome et Edge sur ordinateur uniquement.
 
+## Réglage automatique (activé par défaut)
+
+Quand tu lances un enregistrement :
+
+1. **Modèle choisi selon le PC** (instantané) : « Équilibré » si la carte graphique est exploitable
+   (WebGPU) et qu'il y a au moins 4 Go de mémoire, sinon « Rapide ». Si tu choisis un modèle à la main,
+   ton choix est respecté.
+2. **Diagnostic du son (3 s de silence)** avec le micro brut :
+   - mesure du bruit de fond, type de micro (PC portable, Bluetooth, externe) et sortie (casque ou
+     haut-parleurs) ;
+   - réglage de l'anti-bruit, de l'anti-écho (inutile avec un casque) et du filtre des basses (micro du
+     PC, pièce bruyante) ; le gain automatique reste activé ;
+   - le résultat est **gardé 1 h pour le même micro** : les enregistrements suivants démarrent tout de
+     suite. « Refaire le diagnostic » relance la mesure.
+3. **Pendant l'enregistrement**, toutes les 5 s, le gain est corrigé si la voix est trop faible ou
+   sature (±6 dB maximum par correction).
+
+Modifier un réglage du son à la main désactive le réglage automatique pour garder ton choix. Pendant
+un enregistrement, ça arrête seulement la correction du gain.
+
 ## Optimiser la qualité (micro du PC portable)
 
 Dans les réglages du son :

@@ -1,0 +1,37 @@
+{
+  "name": "Transcripteur IA by RJB",
+  "short_name": "Transcripteur IA",
+  "description": "Transcription audio → texte 100 % locale, intervenants, traduction et résumé avec Claude.",
+  "lang": "fr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#11153a",
+  "theme_color": "#11153a",
+  "categories": [
+    "productivity",
+    "business",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

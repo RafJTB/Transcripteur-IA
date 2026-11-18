@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Confidentialité · Transcripteur IA</title>
+  <meta name="description" content="Politique de confidentialité de Transcripteur IA by RJB : transcription locale, données dans le Google Drive de l'utilisateur, aucun serveur." />
+  <link rel="icon" type="image/png" href="icons/favicon-32.png" />
+  <style>
+    :root { --bg: #eef0f8; --card: #fff; --text: #13152e; --text-2: #4b5070; --line: rgb(30 34 72 / 0.1); --accent: #4f46e5; color-scheme: light; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0b0d1c; --card: #151935; --text: #e8e9f6; --text-2: #a9aec9; --line: rgb(255 255 255 / 0.1); --accent: #818cf8; color-scheme: dark; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 'Segoe UI', Inter, system-ui, -apple-system, Roboto, sans-serif; }
+    main { max-width: 820px; margin: 0 auto; padding: 28px 16px 60px; }
+    header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+    header img { width: 48px; height: 48px; }
+    header a { color: inherit; text-decoration: none; }
+    header b { display: block; font-size: 19px; }
+    header span { color: var(--text-2); font-size: 14px; }
+    article { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: clamp(20px, 4vw, 40px); }
+    h1 { margin: 0 0 4px; font-size: clamp(24px, 4vw, 30px); line-height: 1.2; }
+    .date { color: var(--text-2); margin: 0 0 24px; font-size: 14px; }
+    h2 { font-size: 19px; margin: 30px 0 8px; }
+    p, li { color: var(--text); }
+    ul { padding-left: 22px; }
+    li { margin: 4px 0; }
+    a { color: var(--accent); }
+    .summary { padding: 16px 18px; border-radius: 12px; background: rgb(99 102 241 / 0.08); border: 1px solid rgb(99 102 241 / 0.22); }
+    .summary ul { margin: 6px 0 0; }
+    code { font: 14px 'Cascadia Mono', Consolas, ui-monospace, monospace; padding: 1px 5px; border-radius: 5px; background: rgb(99 102 241 / 0.1); overflow-wrap: anywhere; }
+    footer { margin-top: 22px; color: var(--text-2); font-size: 14px; text-align: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <a href="./"><img src="icons/icon-192.png" alt="" /></a>
+      <a href="./"><b>Transcripteur IA</b><span>by RJB · retour à l’application</span></a>
+    </header>
+    <article>
+      <h1>Politique de confidentialité</h1>
+      <p class="date">Dernière mise à jour : 18 novembre 2026</p>
+
+      <div class="summary">
+        <b>En bref</b>
+        <ul>
+          <li>La transcription se fait <b>entièrement sur ton appareil</b>, dans ton navigateur : l’audio n’est jamais envoyé à un serveur de l’éditeur.</li>
+          <li>L’éditeur <b>n’a pas de serveur</b> et <b>n’a accès à aucune</b> de tes données.</li>
+          <li>Si tu te connectes avec Google, tes transcriptions sont copiées dans <b>ton propre Google Drive</b>. L’application ne peut voir que les fichiers qu’elle a elle-même créés.</li>
+          <li>Ni publicité, ni outil de mesure d’audience, ni revente de données.</li>
+        </ul>
+      </div>
+
+      <h2>1. Qui édite l’application</h2>
+      <p>Transcripteur IA (« l’application ») est une application web gratuite éditée par RJB, accessible à l’adresse <a href="https://rafjtb.github.io/Transcripteur-IA/">https://rafjtb.github.io/Transcripteur-IA/</a>. Son code source est public : <a href="https://github.com/RafJTB/Transcripteur-IA">github.com/RafJTB/Transcripteur-IA</a>.</p>
+
+      <h2>2. Données traitées sur ton appareil</h2>
+      <p>Les enregistrements, les fichiers audio importés, les transcriptions, les traductions, les intervenants reconnus, les résumés que tu colles, les dossiers et tes réglages sont traités et enregistrés <b>localement</b>, dans le stockage de ton navigateur (IndexedDB et stockage local). Ils y restent jusqu’à ce que tu les supprimes, depuis l’application ou en effaçant les données du site dans ton navigateur.</p>
+      <p>La reconnaissance vocale, la reconnaissance des intervenants et la traduction utilisent des modèles d’intelligence artificielle qui s’exécutent sur ton appareil. Au premier usage, ces modèles sont téléchargés depuis des services publics (Hugging Face, jsDelivr) : ces services reçoivent alors une demande de téléchargement, avec l’adresse IP de ton appareil, comme pour n’importe quelle page web, mais <b>aucun audio ni aucun texte</b>. La traduction peut aussi utiliser le traducteur intégré au navigateur Chrome, qui fonctionne lui aussi sur ton appareil.</p>
+
+      <h2>3. Connexion avec Google (facultative)</h2>
+      <p>L’application fonctionne sans compte. Si tu choisis « Se connecter avec Google », l’application demande uniquement :</p>
+      <ul>
+        <li><code>openid</code>, <code>email</code>, <code>profile</code> : ton nom, ton adresse e-mail et ta photo de profil. Ils servent seulement à afficher ton compte dans l’application et à séparer tes transcriptions de celles d’autres personnes qui utiliseraient le même navigateur. Ils sont gardés dans ton navigateur.</li>
+        <li><code>https://www.googleapis.com/auth/drive.file</code> : créer, lire, modifier et supprimer <b>uniquement les fichiers créés par l’application</b>, rangés dans un dossier « Transcripteur IA » de ton Google Drive (transcriptions, audios d’origine et liste de tes dossiers). L’application <b>ne peut pas voir</b> les autres fichiers de ton Drive.</li>
+      </ul>
+      <p>Ces échanges se font <b>directement entre ton navigateur et Google</b>, sans aucun serveur intermédiaire. L’éditeur n’a jamais accès à ton compte, à ton jeton de connexion ni à tes fichiers. Le jeton d’accès est gardé pour la durée de l’onglet (environ une heure) et n’est transmis qu’à Google.</p>
+      <p>L’utilisation et le transfert, par l’application, des informations reçues des API Google respectent les <a href="https://developers.google.com/terms/api-services-user-data-policy">Règles relatives aux données utilisateur des services d’API Google</a>, y compris les exigences d’utilisation limitée (« Limited Use »). Ces données ne servent qu’à fournir les fonctions visibles de l’application. Elles ne sont ni vendues, ni utilisées pour de la publicité, ni lues par une personne, ni utilisées pour entraîner des modèles d’intelligence artificielle.</p>
+
+      <h2>4. Résumé avec Claude (à ta demande)</h2>
+      <p>Le bouton « Résumer avec Claude » ouvre le site claude.ai (Anthropic) avec la consigne et le texte de la transcription, et le copie dans ton presse-papiers. Ce transfert n’a lieu que si tu cliques sur ce bouton. Le traitement par Claude relève alors de la politique de confidentialité d’Anthropic.</p>
+
+      <h2>5. Hébergement</h2>
+      <p>Le site est hébergé par GitHub Pages (GitHub, Inc.), qui peut enregistrer des données techniques de connexion (adresse IP, navigateur) pour la sécurité et le fonctionnement du service, selon sa propre politique de confidentialité. L’application n’utilise <b>aucun cookie</b> publicitaire ou de suivi ni aucun outil de mesure d’audience.</p>
+
+      <h2>6. Tes droits et la suppression de tes données</h2>
+      <ul>
+        <li><b>Dans l’application</b> : supprime une transcription (corbeille sur sa carte) ou tout ton espace (« Tout supprimer » dans Mes projets). Connecté, la suppression s’applique aussi à ton Google Drive.</li>
+        <li><b>Dans Google Drive</b> : tu peux supprimer à tout moment le dossier « Transcripteur IA ».</li>
+        <li><b>Retirer l’accès de l’application à ton compte Google</b> : <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>, ou « Se déconnecter » dans l’application.</li>
+        <li><b>Sur ce navigateur</b> : en te déconnectant, tu peux effacer tes transcriptions de l’appareil. Effacer les données du site dans les réglages du navigateur supprime tout ce qui y est stocké.</li>
+      </ul>
+      <p>Comme l’éditeur ne détient aucune de tes données, il ne peut ni les consulter, ni les corriger, ni les supprimer à ta place : tu en gardes le contrôle total.</p>
+
+      <h2>7. Enfants</h2>
+      <p>L’application ne s’adresse pas spécifiquement aux enfants et ne collecte sciemment aucune donnée les concernant.</p>
+
+      <h2>8. Modifications</h2>
+      <p>Cette politique peut évoluer avec l’application. La date de mise à jour figure en haut de la page. L’historique des modifications est visible dans le dépôt public du code source.</p>
+
+      <h2>9. Contact</h2>
+      <p>Pour toute question sur cette politique ou sur tes données : <a href="https://github.com/RafJTB/Transcripteur-IA/issues">ouvrir une demande sur GitHub</a>.</p>
+    </article>
+    <footer>Transcripteur IA by RJB · <a href="./">Ouvrir l’application</a></footer>
+  </main>
+</body>
+</html>

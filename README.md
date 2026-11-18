@@ -189,6 +189,15 @@ Deux apparences : **claire** et **sombre** (bouton soleil/lune en haut ; par dé
   - **qualité de la transcription** : jauge de confiance du modèle et passages à vérifier ;
   - réglages du son, optimisation, raccourcis.
 
+**Sur téléphone** (écran de moins de 760 px) :
+
+- navigation en bas (Accueil, Mes projets, Historique, **Analyse**, Paramètres) et une seule barre en haut ;
+- l'onglet **Analyse** ouvre en plein écran le moniteur, les intervenants, la qualité et les réglages du son ;
+- dans une transcription : intervenants en bandeau horizontal, texte en pleine largeur, onglets qui
+  défilent, lecteur collé en bas de l'écran ;
+- les zones réservées de l'iPhone (encoche, barre du bas) sont respectées ;
+- sur téléphone, la transcription est nettement plus lente : le réglage automatique y choisit « Rapide ».
+
 Raccourcis : `Espace` pause de l'enregistrement ou lecture/pause ; `Ctrl + Espace` lecture/pause même pendant
 la correction du texte ; `Ctrl + Entrée` transcrire ; `Ctrl + F` rechercher ; `Échap` fermer ou effacer la recherche.
 

@@ -2430,7 +2430,18 @@ function closeSpeakerMenu() { $('#spk-pop').hidden = true; }
 const PAGE_OF = { home: 'home', doc: 'doc', projects: 'history', history: 'history', settings: 'settings' };
 
 /** Affiche une vue (accueil, document, projets / historique, paramètres). */
+/** Téléphone : le panneau « Analyse audio » s'ouvre en plein écran (onglet Analyse). */
+function toggleSheet(open = !document.body.classList.contains('sheet-open')) {
+  document.body.classList.toggle('sheet-open', open);
+  $('#nav [data-nav="panel"]').classList.toggle('active', open);
+  if (open) {
+    $$('#nav [data-nav]').forEach((b) => b.dataset.nav !== 'panel' && b.classList.remove('active'));
+    requestAnimationFrame(() => monitor?.draw());
+  } else setView(state.page === 'history' ? ($('#step-history').dataset.mode === 'projects' ? 'projects' : 'history') : state.page);
+}
+
 function setView(name) {
+  if (document.body.classList.contains('sheet-open')) { document.body.classList.remove('sheet-open'); $('#nav [data-nav="panel"]')?.classList.remove('active'); }
   const page = PAGE_OF[name] || 'home';
   state.page = page;
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.page === page));
@@ -2567,7 +2578,8 @@ async function toggleFullscreen() {
 }
 
 function bindV3() {
-  $$('[data-nav]').forEach((b) => (b.onclick = () => setView(b.dataset.nav)));
+  $$('[data-nav]').forEach((b) => (b.onclick = () => (b.dataset.nav === 'panel' ? toggleSheet() : setView(b.dataset.nav))));
+  $('#panel-close').onclick = () => toggleSheet(false);
   $$('[data-dtab]').forEach((b) => (b.onclick = () => setDocTab(b.dataset.dtab)));
   // Recherche du haut : transcriptions enregistrées
   const hs = $('#hist-search');

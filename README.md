@@ -167,8 +167,12 @@ Deux apparences : **claire** et **sombre** (bouton soleil/lune en haut ; par dé
   - **Accueil** : enregistrer, importer et choisir le modèle ;
   - **Mes projets** et **Historique** : les transcriptions enregistrées ;
   - **Paramètres** : moteur, lexique, stockage.
-  - En dessous, des éléments décoratifs (offre Pro, profil) qui n'ont pas d'effet.
-- **En haut** : recherche dans les transcriptions, thème, menu **Exporter** (.txt, .md, .srt, copier, Résumer avec Claude).
+  - En bas, le **compte Google** (connexion, état de la synchronisation).
+- **En haut** : recherche dans les transcriptions, thème, **notifications** et menu **Exporter** (.txt, .md, .srt, copier, Résumer avec Claude).
+- **Notifications (cloche)** :
+  - événements signalés : transcription terminée, voix reconnues, traduction terminée, enregistrement récupéré, transcription interrompue, synchronisation en erreur, reconnexion Google, synchronisation rétablie ;
+  - un clic ouvre la transcription concernée ;
+  - option : notification Windows quand l'appli est en arrière-plan.
 - **Vue transcription** (ouverte automatiquement pendant un enregistrement ou une transcription) :
   - titre modifiable et pastilles d'infos ;
   - barre d'enregistrement (pause, arrêt) quand le micro tourne ;

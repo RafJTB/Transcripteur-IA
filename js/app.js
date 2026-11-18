@@ -32,6 +32,7 @@ const state = {
   autoTr: store.get('autotr', '1') === '1', // traduire automatiquement en français
   autoSpk: store.get('autospk', '1') === '1', // identifier qui parle après chaque transcription
   editMode: store.get('edit', '1') === '1', // texte modifiable directement
+  autoTune: store.get('auto', '1') === '1', // réglage automatique (son + modèle) avant chaque enregistrement
   page: 'home', // vue affichée (accueil, document, projets, paramètres)
   dtab: 'tr', // onglet du document
   capture: ['mic', 'mix', 'system'].includes(store.get('capture', 'mic')) ? store.get('capture', 'mic') : 'mic', // ce qu'on enregistre
@@ -475,6 +476,7 @@ async function recToggle() {
 
 async function recStart() {
   if (state.phase !== 'idle') return toast('Attends la fin de la transcription en cours.', 'warn');
+  if (state.autoTune && !(await autoSetup())) return;
   const live = !!state.caps; // la transcription en direct est toujours active
   if (live && !(await confirmBigDownload(modelById(state.modelId)))) return;
   stopMicTest();
@@ -486,6 +488,7 @@ async function recStart() {
     return;
   }
   warnFallback();
+  startAutoGain();
   const rec = { id: newId(), live, mime: recorder.mimeType, startedAt: Date.now(), pending: Promise.resolve() };
   state.rec = rec;
   monitor?.start();
@@ -1326,6 +1329,15 @@ function autoGain() {
 }
 
 function bindSound() {
+  // Modification à la main : pendant un enregistrement, le gain auto s'arrête ;
+  // sinon, le réglage automatique du son se désactive pour garder ton choix.
+  const manual = (e) => {
+    if (!e.isTrusted || !state.autoTune) return;
+    if (micBusy()) { liveGain.locked = true; return; }
+    if (recorder.state === 'preview') return;
+    setAutoTune(false, 'Réglage automatique désactivé : tes réglages manuels sont gardés.');
+  };
+  ['#gain', '#opt-agc', '#opt-ns', '#opt-ec', '#opt-hp'].forEach((id) => $(id).addEventListener(id === '#gain' ? 'input' : 'change', manual));
   $('#gain').addEventListener('input', (e) => applySound('gainDb', Number(e.target.value)));
   $('#opt-agc').onchange = (e) => applySound('autoGainControl', e.target.checked);
   $('#opt-ns').onchange = (e) => applySound('noiseSuppression', e.target.checked);
@@ -1361,6 +1373,149 @@ function bindSound() {
   };
   navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices(true));
   refreshDevices();
+}
+
+// ======================================================================
+// Réglage automatique : diagnostic du PC et du son avant l'enregistrement
+// ======================================================================
+const AUTO_TTL = 60 * 60 * 1000; // un diagnostic du son reste valable 1 h pour le même micro
+const LAPTOP_MIC = /array|réseau de micro|intégr|internal|built-?in|realtek|conexant|smart sound|intel/i;
+const HEADPHONES = /casque|headphone|headset|écouteur|earbud|airpods|buds|bluetooth|hands-?free|mains libres/i;
+
+/** Modèle conseillé pour transcrire en direct sur ce PC. */
+function autoModelFor(c = caps()) {
+  const mem = c.memoryGB ?? 8;
+  if (c.webgpu && mem >= 4) return { id: 'small', why: 'carte graphique disponible' };
+  return { id: 'base', why: c.webgpu ? 'mémoire limitée' : 'pas de carte graphique' };
+}
+
+/** Réglages du son selon la pièce et le matériel. */
+function autoSoundFrom({ noise, label, outLabel }) {
+  const bt = isBluetooth(label);
+  const laptop = !bt && LAPTOP_MIC.test(label || '');
+  const headphones = HEADPHONES.test(outLabel || '') || bt;
+  const noisy = noise > -58;
+  const quiet = noise < -72;
+  const settings = {
+    autoGainControl: true,
+    noiseSuppression: noisy || laptop || bt || !quiet,
+    echoCancellation: !headphones,
+    highpass: laptop || noisy,
+    gainDb: 0,
+  };
+  const micKind = bt ? 'micro Bluetooth' : laptop ? 'micro du PC' : label ? 'micro externe' : 'micro';
+  const room = quiet ? 'pièce calme' : noisy ? 'pièce bruyante' : 'bruit léger';
+  return { settings, micKind, room, headphones };
+}
+
+function renderAutoInfo() {
+  const el = $('#auto-info');
+  $('#toggle-auto').checked = state.autoTune;
+  $('#auto-redo').hidden = !state.autoTune;
+  if (!state.autoTune) { el.textContent = 'Réglages manuels (son et modèle).'; return; }
+  let last = null;
+  try { last = JSON.parse(store.get('auto.last', 'null')); } catch { /* ignore */ }
+  const m = modelById(state.modelId);
+  const model = store.get('model.manual') === '1' ? `modèle ${m.label} (ton choix)` : `modèle ${m.label} (auto)`;
+  if (!last) { el.textContent = `Avant le premier enregistrement : 3 s de diagnostic pour régler le son · ${model}.`; return; }
+  const on = [last.res.settings.noiseSuppression && 'anti-bruit', last.res.settings.echoCancellation && 'anti-écho', last.res.settings.highpass && 'filtre basses'].filter(Boolean);
+  el.textContent = `${last.res.micKind[0].toUpperCase()}${last.res.micKind.slice(1)} · ${last.res.room} (${String(Math.round(last.noise)).replace('-', '−')} dB) · ${on.join(', ') || 'son brut'} · ${model}`;
+}
+
+function setAutoTune(on, msg = '') {
+  state.autoTune = on;
+  store.set('auto', on ? '1' : '0');
+  if (on) store.del('model.manual');
+  renderAutoInfo();
+  if (msg) toast(msg, 'ok', 5000);
+}
+
+/**
+ * Avant l'enregistrement : choisit le modèle, puis mesure le bruit de fond (3 s) pour régler le son.
+ * Renvoie false si l'utilisateur annule.
+ */
+async function autoSetup({ force = false } = {}) {
+  // 1. Modèle (instantané)
+  if (state.caps && store.get('model.manual') !== '1') {
+    const pick = autoModelFor();
+    if (pick.id !== state.modelId && pickVariant(modelById(pick.id), caps())) {
+      state.modelId = pick.id;
+      store.set('model', pick.id);
+      renderModelPick();
+      renderLiveHint();
+      renderLangHint();
+    }
+  }
+  // 2. Son : diagnostic récent pour ce micro → réutilisé, l'enregistrement démarre tout de suite
+  const key = sound.deviceId || 'default';
+  let last = null;
+  try { last = JSON.parse(store.get('auto.last', 'null')); } catch { /* ignore */ }
+  if (!force && last && last.key === key && Date.now() - last.at < AUTO_TTL) {
+    applyAutoSound(last.res.settings);
+    renderAutoInfo();
+    return true;
+  }
+  stopMicTest();
+  tool.open('Réglage automatique');
+  try {
+    await recorder.start({ preview: true, settings: { ...sound, noiseSuppression: false, autoGainControl: false, echoCancellation: false, highpass: false, gainDb: 0 } });
+    monitor.start();
+    const t0 = monitor.now;
+    const r = await tool.show({
+      step: 'Diagnostic du son',
+      meter: true,
+      timeout: 3,
+      html: `<p class="tool-big">Silence 3 secondes…</p><p>On mesure le bruit de ta pièce et ton micro pour tout régler automatiquement. Ne parle pas, ne touche pas au clavier.</p>`,
+      actions: [{ label: 'Annuler', value: null }, { label: 'Démarrer sans attendre', value: 'go', primary: true }],
+    });
+    const levels = monitor.levels.filter((l) => l.t >= t0 + 0.3).map((l) => l.db).sort((a, b) => a - b);
+    const label = recorder.deviceLabel || '';
+    toolCleanup();
+    tool.close();
+    if (r === null) return false; // annulé
+    const outLabel = $('#out-device').selectedOptions[0]?.textContent || '';
+    if (levels.length >= 15) {
+      const noise = levels[Math.floor(levels.length * 0.2)];
+      const res = autoSoundFrom({ noise, label, outLabel });
+      store.set('auto.last', JSON.stringify({ key, at: Date.now(), noise, res }));
+      applyAutoSound(res.settings);
+      const on = [res.settings.noiseSuppression && 'anti-bruit', res.settings.echoCancellation && 'anti-écho', res.settings.highpass && 'filtre des basses'].filter(Boolean);
+      toast(`Réglé : ${res.micKind}, ${res.room}${on.length ? ` · ${on.join(', ')}` : ''} · modèle ${modelById(state.modelId).label}.`, 'ok', 5000);
+    } else if (last?.res) {
+      applyAutoSound(last.res.settings); // mesure trop courte : on garde le dernier réglage
+    }
+    renderAutoInfo();
+    return true;
+  } catch (e) {
+    toolCleanup();
+    tool.close();
+    toast(e.message, 'err', 7000);
+    return false;
+  }
+}
+
+function applyAutoSound(settings) {
+  Object.assign(sound, settings);
+  saveSound();
+  renderSound();
+}
+
+/** Pendant l'enregistrement : corrige le gain si la voix est trop faible ou sature. */
+const liveGain = { timer: 0, locked: false, told: false };
+function startAutoGain() {
+  clearInterval(liveGain.timer);
+  liveGain.locked = false;
+  if (!state.autoTune) return;
+  liveGain.timer = setInterval(() => {
+    if (!micBusy()) return clearInterval(liveGain.timer);
+    if (liveGain.locked || recorder.state !== 'recording') return;
+    const d = monitor.gainAdvice();
+    if (d == null || (d < 5 && d > -4)) return;
+    const next = Math.max(-12, Math.min(18, Math.round(sound.gainDb + Math.max(-6, Math.min(6, d)))));
+    if (next === sound.gainDb) return;
+    applySound('gainDb', next);
+    if (!liveGain.told) { liveGain.told = true; toast(`Gain ajusté automatiquement (${fmtGain(next)}).`, 'ok', 3000); }
+  }, 5000);
 }
 
 // ======================================================================
@@ -3187,6 +3342,7 @@ function bind() {
     if (e.target.name !== 'model') return;
     state.modelId = e.target.value;
     store.set('model', state.modelId);
+    if (e.isTrusted && state.autoTune) { store.set('model.manual', '1'); renderAutoInfo(); }
     renderModelPick();
     $('#model-pick').open = false;
     renderLiveHint();
@@ -3383,6 +3539,12 @@ async function init() {
   bind();
   bindAccount(authResult);
   bindInstall();
+  $('#toggle-auto').onchange = (e) => setAutoTune(e.target.checked, e.target.checked ? 'Réglage automatique activé : le son et le modèle seront réglés avant chaque enregistrement.' : '');
+  $('#auto-redo').onclick = async () => {
+    if (micBusy() || state.phase !== 'idle') return toast('Attends la fin de l’enregistrement en cours.', 'warn');
+    if (await autoSetup({ force: true })) renderAutoInfo();
+  };
+  renderAutoInfo();
   bindSound();
   renderRec();
   // Interface prête : désarme le filet de sécurité des mises à jour (voir index.html)

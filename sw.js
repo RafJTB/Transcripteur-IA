@@ -3,7 +3,7 @@
 // Les requêtes vers d'autres domaines (CDN, Hugging Face) ne sont pas touchées.
 // Les fichiers du site sont toujours revérifiés auprès du serveur (cache: 'no-cache') :
 // après une mise à jour, le navigateur ne peut plus mélanger ancienne et nouvelle version.
-// Version : 2026-11-17-6
+// Version : 2026-11-18-1
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 

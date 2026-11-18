@@ -796,3 +796,24 @@ kbd { font: 600 10.5px var(--mono); color: var(--text-2); border: 1px solid var(
 
 /* Textes d'aide vides : aucune place réservée */
 .status-line:empty, .live-hint:empty, .monitor-hint:empty, .sc-hint:empty, .capture-hint:empty { display: none; }
+
+/* Infos de la transcription : pastilles */
+.result-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mchip {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 500; color: var(--text-2); white-space: nowrap;
+  background: rgb(var(--ov) / 0.045); border: 1px solid var(--line);
+}
+.mchip svg { width: 13px; height: 13px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; opacity: 0.75; }
+.mchip.conf { position: relative; overflow: hidden; padding-bottom: 1px; font-weight: 600; }
+.mchip.conf .meter { position: absolute; left: 0; bottom: 0; height: 2px; width: var(--p); background: currentColor; opacity: 0.55; }
+.mchip.conf-ok { color: var(--ok); background: rgb(var(--ok-rgb) / 0.1); border-color: rgb(var(--ok-rgb) / 0.28); }
+.mchip.conf-warn { color: var(--warn); background: rgb(var(--warn-rgb) / 0.1); border-color: rgb(var(--warn-rgb) / 0.3); }
+.mchip.conf-err { color: var(--err); background: rgb(var(--err-rgb) / 0.1); border-color: rgb(var(--err-rgb) / 0.3); }
+.mchip.tocheck { color: var(--warn); border-style: dashed; border-color: rgb(var(--warn-rgb) / 0.45); background: transparent; }
+.mchip.badge-live { color: var(--rec); background: rgb(var(--rec-rgb) / 0.1); border-color: rgb(var(--rec-rgb) / 0.3); font-weight: 600; }
+.mchip.badge-warn { color: var(--warn); background: rgb(var(--warn-rgb) / 0.1); border-color: rgb(var(--warn-rgb) / 0.3); font-weight: 600; }
+.mchip.tocheck { cursor: pointer; }
+.mchip.tocheck:hover { background: rgb(var(--warn-rgb) / 0.08); }
+.segment.flash { animation: flash 1.2s var(--ease); }
+@keyframes flash { 0%, 40% { background: rgb(var(--warn-rgb) / 0.16); } 100% { background: transparent; } }

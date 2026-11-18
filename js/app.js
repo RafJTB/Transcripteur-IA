@@ -1042,21 +1042,54 @@ function clearResult() {
   hideResume();
 }
 
+/** Icônes des pastilles d'infos (traits, 24×24). */
+const META_ICONS = {
+  date: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  audio: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
+  words: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+  model: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+  time: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2h4"/>',
+  lang: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  conf: '<path d="M20 6 9 17l-5-5"/>',
+  check: '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+};
+
+function metaChip(icon, text, { title = '', cls = '' } = {}) {
+  return `<span class="mchip${cls ? ` ${cls}` : ''}"${title ? ` title="${esc(title)}"` : ''}><svg viewBox="0 0 24 24">${META_ICONS[icon]}</svg>${esc(text)}</span>`;
+}
+
 function renderMeta() {
   const d = state.doc;
-  if (!d) return ($('#result-meta').textContent = '');
+  const el = $('#result-meta');
+  if (!d) return (el.innerHTML = '');
   const words = state.segments.reduce((n, s) => n + (s.text.match(/\S+/g)?.length || 0), 0);
-  const parts = [
-    new Date(d.createdAt).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }),
-    d.durationS ? `audio ${fmtClock(d.durationS)}` : null,
-    `${words} mots`,
-    d.model + (d.device ? ` (${d.device === 'webgpu' ? 'WebGPU' : 'WASM'})` : ''),
-    d.processingS ? `traité en ${fmtDuration(d.processingS)}` : null,
-    langSummary(state.segments),
-    confSummary(state.segments),
-    d.status === 'live' ? 'en direct' : d.status === 'interrupted' ? 'interrompue' : d.partial ? 'partiel' : null,
-  ];
-  $('#result-meta').textContent = parts.filter(Boolean).join(' · ');
+  const created = new Date(d.createdAt);
+  const chips = [];
+  const st = d.status === 'live' ? ['live', 'En direct'] : d.status === 'interrupted' ? ['warn', 'Interrompue'] : d.partial ? ['warn', 'Partielle'] : null;
+  if (st) chips.push(`<span class="mchip badge-${st[0]}">${st[1]}</span>`);
+  const day = created.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  const hour = created.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  chips.push(metaChip('date', `${day} · ${hour}`,
+    { title: created.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' }) }));
+  if (d.durationS) chips.push(metaChip('audio', fmtClock(d.durationS), { title: 'Durée de l’audio' }));
+  chips.push(metaChip('words', `${words} mot${words > 1 ? 's' : ''}`));
+  const langs = langSummary(state.segments);
+  if (langs) chips.push(metaChip('lang', langs.replace(/^./, (c) => c.toUpperCase()), { title: 'Langues détectées' }));
+  if (d.model) {
+    const dev = d.device === 'webgpu' ? 'GPU' : d.device ? 'CPU' : '';
+    chips.push(metaChip('model', `${d.model.replace(/^Whisper /, '')}${dev ? ` · ${dev}` : ''}`,
+      { title: `${d.model}${d.device ? ` (${d.device === 'webgpu' ? 'carte graphique, WebGPU' : 'processeur, WASM'})` : ''}` }));
+  }
+  if (d.processingS) chips.push(metaChip('time', fmtDuration(d.processingS), { title: 'Temps de transcription' }));
+  const withC = state.segments.filter((x) => x.conf != null);
+  if (withC.length) {
+    const avg = withC.reduce((a, x) => a + x.conf, 0) / withC.length;
+    const level = avg >= CONF.good ? 'ok' : avg >= CONF.fair ? 'warn' : 'err';
+    chips.push(`<span class="mchip conf conf-${level}" title="Confiance moyenne du modèle dans ce qu’il a écrit" style="--p:${Math.round(avg * 100)}%"><svg viewBox="0 0 24 24">${META_ICONS.conf}</svg>Confiance ${Math.round(avg * 100)} %<i class="meter"></i></span>`);
+    const low = withC.filter((x) => x.conf < CONF.fair).length;
+    if (low) chips.push(metaChip('check', `${low} à vérifier`, { cls: 'tocheck', title: 'Aller au passage suivant à vérifier (souligné dans le texte)' }));
+  }
+  el.innerHTML = chips.join('');
 }
 
 function langSummary(segs) {
@@ -1065,14 +1098,6 @@ function langSummary(segs) {
   const langs = Object.keys(n).sort((a, b) => n[b] - n[a]);
   if (!langs.length || (langs.length === 1 && langs[0] === 'fr')) return null;
   return langs.map((l) => langName(l).toLowerCase()).join(' + ');
-}
-
-function confSummary(segs) {
-  const withC = segs.filter((x) => x.conf != null);
-  if (!withC.length) return null;
-  const avg = withC.reduce((a, x) => a + x.conf, 0) / withC.length;
-  const low = withC.filter((x) => x.conf < CONF.fair).length;
-  return `confiance ${Math.round(avg * 100)} %` + (low ? ` · ${low} passage${low > 1 ? 's' : ''} à vérifier (soulignés)` : '');
 }
 
 // ======================================================================
@@ -2694,6 +2719,19 @@ function bind() {
   $('#btn-copy').onclick = copyText;
   $('#btn-claude').onclick = sendToClaude;
   $('#btn-translate').onclick = translateDoc;
+  // Pastille « à vérifier » : passage suivant où le modèle a hésité
+  let checkAt = -1;
+  $('#result-meta').addEventListener('click', (e) => {
+    if (!e.target.closest('.tocheck')) return;
+    const rows = $$('#transcript .segment.low-conf');
+    if (!rows.length) return;
+    checkAt = (checkAt + 1) % rows.length;
+    const row = rows[checkAt];
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.toggle('flash', false);
+    void row.offsetWidth; // relance l'animation
+    row.classList.toggle('flash', true);
+  });
   bindSpeakers();
   $$('#view-switch [data-view]').forEach((b) => (b.onclick = () => {
     state.view = b.dataset.view;
@@ -2842,7 +2880,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
-  recorder, monitor: () => monitor, identifySpeakers, applySpeakers, spkCache,
+  recorder, monitor: () => monitor, renderMeta, identifySpeakers, applySpeakers, spkCache,
   state, exportAs, sendToClaude, translateDoc, shownSegments, autoTranslate, guessLang, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },

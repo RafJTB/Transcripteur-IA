@@ -6,15 +6,15 @@
   <title>Transcripteur local</title>
   <meta name="description" content="Transcription audio → texte 100 % locale dans le navigateur (Whisper, WebGPU/WASM). Aucun audio n'est envoyé." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111316'/%3E%3Cg fill='%237c9cff'%3E%3Crect x='7' y='13' width='3' height='6' rx='1.5'/%3E%3Crect x='12' y='9' width='3' height='14' rx='1.5'/%3E%3Crect x='17' y='6' width='3' height='20' rx='1.5'/%3E%3Crect x='22' y='11' width='3' height='10' rx='1.5'/%3E%3C/g%3E%3C/svg%3E" />
-  <meta name="app-version" content="2026-11-18-2" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-18-2" />
+  <meta name="app-version" content="2026-11-18-3" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-18-3" />
   <script>
     // Filet de sécurité des mises à jour : si l'application ne démarre pas (souvent un mélange
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-18-2', 'sw.js', 'js/app.js?v=2026-11-18-2', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
-        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-18-3', 'sw.js', 'js/app.js?v=2026-11-18-3', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/langid.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
         return Promise.all(FILES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); }));
@@ -141,6 +141,7 @@
       <div class="row">
         <select id="lang" class="select" aria-label="Langue parlée"></select>
         <p class="field-hint" id="lang-hint" hidden>Voxtral détecte la langue tout seul : ce choix ne concerne que les modèles Whisper.</p>
+        <label class="switch autotr" title="Si une autre langue que le français est parlée, chaque phrase est traduite en français automatiquement (traduction locale)."><input type="checkbox" id="toggle-autotr" /><span class="track"></span>Traduire en français automatiquement</label>
       </div>
 
       <div class="actions">
@@ -209,6 +210,8 @@
         </div>
         <label class="switch"><input type="checkbox" id="toggle-ts" checked /><span class="track"></span>Horodatages</label>
       </div>
+
+      <div class="tr-status" id="tr-status" hidden><span class="spin"></span><span id="tr-status-text"></span></div>
 
       <div class="resume" id="resume-block" hidden>
         <div class="resume-text">
@@ -370,6 +373,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-18-2"></script>
+  <script type="module" src="js/app.js?v=2026-11-18-3"></script>
 </body>
 </html>

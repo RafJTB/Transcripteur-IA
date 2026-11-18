@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Transcripteur IA by RJB</title>
   <meta name="description" content="Transcription audio → texte 100 % locale dans le navigateur (Whisper, WebGPU/WASM). Aucun audio n'est envoyé." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='#3f86ff'/%3E%3Cstop offset='1' stop-color='#1747b8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect class='tile' x='.5' y='.5' width='39' height='39' rx='10.5' fill='#fff' stroke='#d9e0ea'/%3E%3Cpath fill='url(#g)' d='M11.2 9.5h20.6l-1.1 5.4h-7.5l-3.1 14.6c-.3 1.6-1.8 2.6-3.4 2.3-1.6-.3-2.6-1.8-2.3-3.4l2.9-13.5h-7.2z'/%3E%3C/svg%3E" />
-  <meta name="theme-color" content="#0a0e14" />
-  <meta name="app-version" content="2026-11-19-11" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-19-11" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='#6366f1'/%3E%3Cstop offset='1' stop-color='#7c3aed'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect class='tile' x='.5' y='.5' width='39' height='39' rx='10.5' fill='#fff' stroke='#d9e0ea'/%3E%3Cpath fill='url(#g)' d='M11.2 9.5h20.6l-1.1 5.4h-7.5l-3.1 14.6c-.3 1.6-1.8 2.6-3.4 2.3-1.6-.3-2.6-1.8-2.3-3.4l2.9-13.5h-7.2z'/%3E%3C/svg%3E" />
+  <meta name="theme-color" content="#11153a" />
+  <meta name="app-version" content="2026-11-20-1" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-20-1" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -23,7 +23,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-19-11', 'sw.js', 'js/app.js?v=2026-11-19-11', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-20-1', 'sw.js', 'js/app.js?v=2026-11-20-1', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/langid.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -63,309 +63,441 @@
   </script>
 </head>
 <body>
-  <div class="bg-glow" aria-hidden="true"></div>
-
-  <header class="topbar">
-    <div class="brand">
-      <svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3f86ff"/><stop offset="1" stop-color="#1747b8"/></linearGradient></defs><rect class="tile" x=".5" y=".5" width="39" height="39" rx="10.5" fill="#fff" stroke="#d9e0ea"/><path fill="url(#logo-grad)" d="M11.2 9.5h20.6l-1.1 5.4h-7.5l-3.1 14.6c-.3 1.6-1.8 2.6-3.4 2.3-1.6-.3-2.6-1.8-2.3-3.4l2.9-13.5h-7.2z"/></svg>
-      <div>
-        <div class="brand-name"><h1>Transcripteur <span class="ia">IA</span></h1><span class="by">by RJB</span></div>
+  <div class="app">
+    <!-- ================= BARRE LATÉRALE ================= -->
+    <aside class="sidebar" aria-label="Navigation">
+      <div class="side-brand">
+        <svg class="side-logo" viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c8bff"/><stop offset=".55" stop-color="#5b5bf0"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><path fill="url(#logo-grad)" d="M5.5 6h30.5l-1.6 7.6H23.3l-4.6 21.3c-.5 2.3-2.7 3.8-5 3.3-2.3-.5-3.8-2.7-3.3-5l4.2-19.6H3.9z"/></svg>
+        <div class="side-name"><h1>Transcripteur IA</h1><span>Audio → Texte intelligent</span></div>
       </div>
-    </div>
-    <div class="top-status">
-      <span class="pill" id="pill-engine" title="Moteur de calcul"><i class="dot"></i><span>Détection du matériel…</span></span>
-      <button class="icon-btn theme-btn" id="btn-theme" type="button" title="Mode clair / sombre" aria-label="Basculer entre mode clair et mode sombre"><svg class="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
-      <button class="btn ghost" id="btn-lexicon" type="button"><svg viewBox="0 0 24 24"><path d="M4 5h11M4 12h16M4 19h9"/><path d="m17 17 2 2 3-4"/></svg>Lexique</button>
-    </div>
-  </header>
-
-  <main class="layout">
-    <!-- ================= COLONNE GAUCHE ================= -->
-    <div class="col col-left">
-    <!-- 1. SOURCE -->
-    <section class="card" id="step-source" aria-labelledby="h-source">
-      <header class="card-head">
-        <h2 id="h-source"><span class="num">1</span>Source audio</h2>
-        <div class="seg" role="tablist" aria-label="Type de source">
-          <button role="tab" aria-selected="true" data-tab="mic" type="button">Micro</button>
-          <button role="tab" aria-selected="false" data-tab="file" type="button">Fichier</button>
-        </div>
-      </header>
-
-      <div class="tab-panel" data-panel="mic">
-        <div class="capture-row" id="capture-row" hidden>
-          <div class="seg capture-seg" id="capture-seg" role="radiogroup" aria-label="Ce qui est enregistré">
-            <button type="button" data-capture="mic" title="Ton micro : réunion en salle, dictée">Ma voix</button>
-            <button type="button" data-capture="mix" title="Ton micro et le son de la visio : tous les participants">Voix + visio</button>
-            <button type="button" data-capture="system" title="Uniquement le son partagé : webinaire, vidéo, visio où tu ne parles pas">Visio seule</button>
-          </div>
-          <p class="capture-hint" id="capture-hint" hidden></p>
-        </div>
-        <div class="recorder">
-          <button class="rec-btn" id="rec-main" type="button" aria-label="Démarrer l’enregistrement">
-            <span class="rec-core"></span>
-          </button>
-          <div class="rec-info">
-            <div class="rec-time" id="rec-time">00:00</div>
-            <div class="rec-state" id="rec-state">Prêt à enregistrer</div>
-          </div>
-        </div>
-        <div class="rec-actions">
-          <button class="btn" id="rec-pause" type="button" disabled><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
-          <button class="btn" id="rec-stop" type="button" disabled><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Arrêter</button>
-          <button class="btn danger" id="rec-discard" type="button" disabled title="Supprimer cet enregistrement sans le garder"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Supprimer</button>
-        </div>
-        <p class="live-hint" id="live-hint"></p>
+      <nav class="nav" id="nav">
+        <button type="button" data-nav="home" class="active"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg><span>Accueil</span></button>
+        <button type="button" data-nav="projects"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Mes projets</span></button>
+        <button type="button" data-nav="history"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Historique</span></button>
+        <button type="button" data-nav="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Paramètres</span></button>
+      </nav>
+      <div class="side-wave" aria-hidden="true">
+        <svg viewBox="0 0 280 200" preserveAspectRatio="none"><path d="M0 120C60 60 110 170 170 110S260 70 280 90V200H0z" fill="url(#sw1)"/><path d="M0 150C70 100 120 190 190 140S260 120 280 130V200H0z" fill="url(#sw2)"/><defs><linearGradient id="sw1" x1="0" x2="1"><stop offset="0" stop-color="#4f46e5" stop-opacity=".35"/><stop offset="1" stop-color="#7c3aed" stop-opacity=".05"/></linearGradient><linearGradient id="sw2" x1="0" x2="1"><stop offset="0" stop-color="#6366f1" stop-opacity=".25"/><stop offset="1" stop-color="#312e81" stop-opacity="0"/></linearGradient></defs></svg>
       </div>
-
-      <div class="tab-panel" data-panel="file" hidden>
-        <label class="dropzone" id="dropzone">
-          <input type="file" id="file-input" accept="audio/*,video/*,.mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac,.aac,.mov,.mkv" hidden />
-          <svg viewBox="0 0 24 24"><path d="M12 15V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
-          <strong>Glisse un fichier ici</strong>
-          <span>ou clique pour parcourir · mp3, wav, m4a, webm, mp4…</span>
-        </label>
+      <div class="promo">
+        <svg class="bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+        <b>Boostez votre productivité</b>
+        <span>Transcription ultra-rapide et analyse avancée.</span>
+        <button type="button" class="promo-btn" id="btn-pro">Passer à Pro <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       </div>
-
-      <div class="audio-card" id="audio-card" hidden>
-        <div class="audio-meta">
-          <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-          <div><strong id="audio-name">—</strong><span id="audio-info">—</span></div>
-          <button class="icon-btn danger" id="audio-delete" type="button" title="Supprimer l’enregistrement" aria-label="Supprimer l’enregistrement"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
-          <button class="icon-btn" id="audio-clear" type="button" title="Fermer (l’audio reste dans l’historique)" aria-label="Fermer cet audio"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-        </div>
+      <div class="user">
+        <span class="avatar">RJ</span>
+        <div><b>Rafaël Jeantin</b><small><i></i>En ligne</small></div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
       </div>
-    </section>
-    <!-- 2. TRANSCRIPTION -->
-    <section class="card" id="step-transcribe" aria-labelledby="h-trans">
-      <header class="card-head">
-        <h2 id="h-trans"><span class="num">2</span>Transcription</h2>
-      </header>
+    </aside>
 
-      <span class="label">Modèle et langue</span>
-      <details class="picker-box" id="model-pick">
-        <summary class="picker" title="Changer de modèle">
-          <span class="pk-main"><span class="pk-title"><b id="pk-label">—</b><em id="pk-name"></em></span><small id="pk-sub"></small></span>
-          <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
-        </summary>
-        <fieldset class="models" id="models">
-          <legend class="sr-only">Modèle</legend>
-        </fieldset>
-      </details>
-
-      <div class="row">
-        <select id="lang" class="select" aria-label="Langue parlée"></select>
-        <p class="field-hint" id="lang-hint" hidden>Voxtral détecte la langue tout seul.</p>
-        <label class="switch autotr" title="Si une autre langue que le français est parlée, chaque phrase est traduite en français automatiquement (traduction locale)."><input type="checkbox" id="toggle-autotr" /><span class="track"></span>Traduire en français automatiquement</label>
-        <label class="switch autotr" title="Après chaque transcription, les voix sont comparées pour indiquer qui parle (analyse locale, module de 33 Mo téléchargé une fois)."><input type="checkbox" id="toggle-autospk" /><span class="track"></span>Reconnaître qui parle</label>
-      </div>
-
-      <div class="actions">
-        <button class="btn primary" id="btn-transcribe" type="button" disabled title="Ctrl + Entrée">
-          <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span>Transcrire</span>
-        </button>
-        <button class="btn" id="btn-cancel" type="button" hidden>Arrêter</button>
-      </div>
-
-      <div class="progress-block" id="progress-block" hidden>
-        <div class="progress-head"><span id="progress-label">—</span><span id="progress-value"></span></div>
-        <div class="bar"><div class="bar-fill" id="progress-fill"></div></div>
-        <div class="progress-sub" id="progress-sub"></div>
-      </div>
-
-      <p class="status-line" id="status-line" role="status" aria-live="polite"></p>
-    </section>
-
-    <!-- HISTORIQUE -->
-    <section class="card hist-card" id="step-history" aria-labelledby="h-hist">
-      <header class="card-head">
-        <h2 id="h-hist">Historique</h2>
-        <span class="hist-count" id="hist-count"></span>
-        <button class="icon-btn danger" id="hist-clear" type="button" title="Tout supprimer (transcriptions et audios)" aria-label="Tout supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
-      </header>
-      <label class="search">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="search" id="hist-search" placeholder="Rechercher dans l’historique…" aria-label="Rechercher dans l’historique" />
-      </label>
-      <div class="hist-list" id="hist-list"></div>
-    </section>
-    </div>
-
-    <!-- ================= CENTRE : RÉSULTAT ================= -->
-    <section class="card result" id="step-result" aria-label="Résultat">
-      <div class="r-tools">
-        <label class="search find" id="find-box">
+    <!-- ================= ZONE PRINCIPALE ================= -->
+    <div class="main">
+      <header class="topbar">
+        <label class="search top-search">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input type="search" id="find" placeholder="Rechercher…" aria-label="Rechercher dans le texte (Ctrl + F)" title="Ctrl + F · Entrée : suivant · Maj + Entrée : précédent" disabled />
-          <span class="find-count" id="find-count"></span>
-          <button class="icon-btn xs" id="find-prev" type="button" aria-label="Résultat précédent" hidden><svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg></button>
-          <button class="icon-btn xs" id="find-next" type="button" aria-label="Résultat suivant" hidden><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+          <input type="search" id="hist-search" placeholder="Rechercher un projet, une transcription…" aria-label="Rechercher dans les transcriptions" />
         </label>
-        <button class="icon-btn" id="btn-relex" type="button" title="Réappliquer le lexique sur le texte actuel" aria-label="Réappliquer le lexique" disabled><svg viewBox="0 0 24 24"><path d="M4 5h11M4 12h16M4 19h9"/><path d="m17 17 2 2 3-4"/></svg></button>
-        <button class="btn sm" id="btn-translate" type="button" title="Traduire la transcription en français (local)" disabled><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span class="lbl">Traduire</span></button>
-        <button class="btn sm" id="btn-speakers" type="button" title="Reconnaître les intervenants à leur voix (local)" disabled><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 18.5"/></svg><span class="lbl">Qui parle ?</span></button>
-        <button class="icon-btn" id="btn-copy" type="button" title="Copier le texte" aria-label="Copier le texte" disabled><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg></button>
-        <details class="menu" id="export-menu">
-          <summary class="btn sm" id="export-btn"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg><span class="lbl">Exporter</span><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
-          <div class="menu-list" role="menu">
-            <button type="button" role="menuitem" data-export="txt"><b>Texte</b><small>.txt · à coller n’importe où</small></button>
-            <button type="button" role="menuitem" data-export="md"><b>Markdown</b><small>.md · titre, infos et texte</small></button>
-            <button type="button" role="menuitem" data-export="srt"><b>Sous-titres</b><small>.srt · pour une vidéo</small></button>
-          </div>
-        </details>
-        <button class="btn sm claude" id="btn-claude" type="button" title="Ouvrir la transcription dans Claude pour en faire un résumé" disabled><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>Résumer avec Claude</button>
-      </div>
-
-      <input class="title-input" id="result-title" placeholder="Titre de la transcription" aria-label="Titre de la transcription" disabled />
-      <div class="r-sub">
-        <div class="result-meta" id="result-meta"></div>
-        <div class="seg view-switch" id="view-switch" role="tablist" aria-label="Texte affiché" hidden>
-          <button type="button" role="tab" data-view="orig" aria-selected="false">Original</button>
-          <button type="button" role="tab" data-view="tr" aria-selected="true">Français</button>
-          <button type="button" role="tab" data-view="both" aria-selected="false">Les deux</button>
-        </div>
-        <label class="switch ts-switch" title="Horodatages"><input type="checkbox" id="toggle-ts" checked /><span class="track"></span><svg class="ts-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span class="sw-lbl">Horodatages</span></label>
-      </div>
-
-      <div class="tr-status" id="tr-status" hidden><span class="spin"></span><span id="tr-status-text"></span></div>
-      <div class="tr-status" id="spk-status" hidden><span class="spin"></span><span id="spk-status-text"></span></div>
-
-      <div class="spk-panel" id="spk-panel" hidden>
-        <div class="spk-list" id="spk-list"></div>
-        <div class="spk-tools">
-          <label class="spk-count" title="Si l’analyse s’est trompée de nombre de personnes, impose-le ici">Personnes
-            <select id="spk-count" class="select">
-              <option value="">Auto</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
-              <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
-            </select>
-          </label>
-          <button class="icon-btn xs" id="spk-clear" type="button" title="Retirer les intervenants" aria-label="Retirer les intervenants"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-        </div>
-      </div>
-      <div class="spk-pop" id="spk-pop" role="menu" hidden></div>
-
-      <div class="resume" id="resume-block" hidden>
-        <div class="resume-text">
-          <strong id="resume-title">Transcription interrompue</strong>
-          <span id="resume-sub"></span>
-        </div>
-        <button class="btn primary sm" id="btn-resume" type="button"><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></svg>Reprendre</button>
-        <button class="icon-btn" id="btn-resume-dismiss" type="button" title="Ne pas reprendre" aria-label="Ne pas reprendre"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-      </div>
-
-      <div class="transcript" id="transcript" data-ts="on">
-        <div class="empty" id="empty-state">
-          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h7"/></svg>
-          <p>Le texte apparaîtra ici.</p>
-        </div>
-      </div>
-
-      <div class="player" id="player" hidden>
-        <button class="pl-play" id="pl-play" type="button" aria-label="Lecture" title="Lecture / pause (Espace, ou Ctrl + Espace pendant la saisie)">
-          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg class="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>
-        </button>
-        <span class="pl-time" id="pl-time">00:00</span>
-        <canvas class="pl-wave" id="pl-wave" role="slider" aria-label="Position de lecture" tabindex="0"></canvas>
-        <span class="pl-time" id="pl-dur">00:00</span>
-        <button class="pl-speed" id="pl-speed" type="button" title="Vitesse de lecture">1×</button>
-        <audio id="audio-player" preload="metadata"></audio>
-      </div>
-    </section>
-
-    <!-- ================= COLONNE DROITE ================= -->
-    <div class="col col-right">
-    <!-- MONITEUR -->
-    <section class="card" id="step-monitor" aria-labelledby="h-monitor">
-      <header class="card-head">
-        <h2 id="h-monitor"><span class="num"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>Moniteur</h2>
-      </header>
-      <div class="monitor" id="monitor">
-        <div class="mon-wrap"><canvas id="monitor-canvas" role="img" aria-label="Graphique du volume du micro et de la compréhension du modèle"></canvas></div>
-        <div class="monitor-states">
-          <div class="mstate" id="vol-state"><span class="dot"></span><div><strong>Volume</strong><span class="val">—</span></div></div>
-          <div class="mstate" id="conf-state"><span class="dot"></span><div><strong>Compréhension</strong><span class="val">—</span></div></div>
-        </div>
-        <p class="monitor-hint" id="monitor-hint"></p>
-      </div>
-    </section>
-
-    <!-- RÉGLAGES -->
-    <section class="card settings-card" id="step-settings" aria-label="Réglages">
-      <details class="acc" id="acc-sound">
-        <summary>
-          <span class="acc-main"><b>Réglages du son</b><small id="sound-sum">Micro par défaut · gain 0 dB</small><span class="chips" id="sound-chips"></span></span>
-          <svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
-        </summary>
-        <div class="acc-body sound-ctrl" id="sound-ctrl">
-          <button class="btn sm wide" id="mic-test" type="button" title="Voir le niveau du micro sur le graphique sans rien enregistrer"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>Tester le micro</span></button>
-
-          <label class="label" for="mic-device">Micro</label>
-          <select id="mic-device" class="select"><option value="">Micro par défaut</option></select>
-          <p class="bt-hint" id="bt-hint" hidden><b>Micro Bluetooth :</b> son dégradé (mode mains libres). Mieux : AirPods pour écouter, micro du PC pour parler.</p>
-
-          <div id="out-row" hidden>
-            <label class="label" for="out-device">Sortie (écoute de l’enregistrement)</label>
-            <div class="out-line">
-              <select id="out-device" class="select"><option value="">Sortie par défaut</option></select>
-              <button class="btn sm" id="out-test" type="button" title="Jouer un petit son sur cette sortie">Tester</button>
+        <div class="top-actions">
+          <button class="icon-btn theme-btn" id="btn-theme" type="button" title="Mode clair / sombre" aria-label="Basculer entre mode clair et mode sombre"><svg class="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+          <button class="icon-btn bell" id="btn-bell" type="button" title="Notifications" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><i></i></button>
+          <details class="menu" id="export-menu">
+            <summary class="btn primary sm" id="export-btn"><span class="lbl">Exporter</span><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
+            <div class="menu-list" role="menu">
+              <button type="button" role="menuitem" data-export="txt"><b>Texte</b><small>.txt · à coller n’importe où</small></button>
+              <button type="button" role="menuitem" data-export="md"><b>Markdown</b><small>.md · titre, infos et texte</small></button>
+              <button type="button" role="menuitem" data-export="srt"><b>Sous-titres</b><small>.srt · pour une vidéo</small></button>
+              <button type="button" role="menuitem" id="btn-copy" disabled><b>Copier le texte</b><small>dans le presse-papiers</small></button>
+              <button type="button" role="menuitem" id="btn-claude" disabled><b>Résumer avec Claude</b><small>ouvre claude.ai avec la consigne</small></button>
             </div>
-          </div>
-
-          <div class="gain-row">
-            <label class="label" for="gain">Gain (amplification)</label>
-            <output id="gain-val" for="gain">0 dB</output>
-          </div>
-          <input type="range" id="gain" class="range" min="-12" max="24" step="1" value="0" />
-          <div class="range-scale"><span>−12 dB</span><span>0</span><span>+24 dB</span></div>
-          <div class="sc-actions">
-            <button class="btn sm" id="gain-auto" type="button" disabled title="Parle quelques secondes (test ou enregistrement), puis clique : le gain est réglé pour que ta voix soit dans la zone verte">Ajuster automatiquement</button>
-            <button class="btn sm ghost" id="sound-reset" type="button">Réglages par défaut</button>
-          </div>
-
-          <div class="sc-toggles">
-            <label class="switch" title="Le navigateur ajuste lui-même le volume en continu. À couper pour régler le gain à la main."><input type="checkbox" id="opt-agc" /><span class="track"></span>Gain automatique</label>
-            <label class="switch" title="Atténue les bruits de fond constants (ventilation, clavier, circulation)."><input type="checkbox" id="opt-ns" /><span class="track"></span>Réduction du bruit</label>
-            <label class="switch" title="Supprime l’écho des haut-parleurs (utile sans casque, en visio)."><input type="checkbox" id="opt-ec" /><span class="track"></span>Annulation d’écho</label>
-            <label class="switch" title="Coupe les grondements graves sous 90 Hz (chocs sur la table, souffle, moteur)."><input type="checkbox" id="opt-hp" /><span class="track"></span>Filtre des basses</label>
-          </div>
-          <p class="sc-hint" id="sc-hint"></p>
+          </details>
         </div>
-      </details>
+      </header>
 
-      <details class="acc" id="acc-quality">
-        <summary>
-          <span class="acc-main"><b>Optimiser la qualité</b><small>Préréglage PC · diagnostic · calibration</small></span>
-          <svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
-        </summary>
-        <div class="acc-body sc-tools">
-          <button class="btn sm" id="preset-laptop" type="button" title="Applique en un clic les réglages conseillés pour le micro intégré d’un PC portable"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>Optimiser pour le micro du PC</button>
-          <button class="btn sm" id="tool-diag" type="button" title="Mesure le bruit de fond, l’écart entre ta voix et le bruit, et l’écho de la pièce (≈ 15 s)"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/></svg>Diagnostic de la pièce</button>
-          <button class="btn sm" id="tool-calib" type="button" title="Tu lis 3 phrases ; chaque lecture teste un réglage et l’app mesure le pourcentage de mots justes (≈ 1 min)"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m15 17 2 2 4-4"/></svg>Calibrer par dictée</button>
+      <div class="content">
+        <div class="views">
+          <!-- ===== ACCUEIL : enregistrer, importer, choisir le modèle ===== -->
+          <section class="view view-home" data-page="home">
+            <div class="home-head">
+              <h2>Nouvelle transcription</h2>
+              <p>Enregistre ou importe un audio : tout est traité sur ton PC.</p>
+            </div>
+            <div class="home-grid">
+              <!-- 1. SOURCE -->
+              <section class="card" id="step-source" aria-labelledby="h-source">
+                <header class="card-head">
+                  <h2 id="h-source"><span class="num">1</span>Source audio</h2>
+                  <div class="seg" role="tablist" aria-label="Type de source">
+                    <button role="tab" aria-selected="true" data-tab="mic" type="button">Micro</button>
+                    <button role="tab" aria-selected="false" data-tab="file" type="button">Fichier</button>
+                  </div>
+                </header>
+
+                <div class="tab-panel" data-panel="mic">
+                  <div class="capture-row" id="capture-row" hidden>
+                    <div class="seg capture-seg" id="capture-seg" role="radiogroup" aria-label="Ce qui est enregistré">
+                      <button type="button" data-capture="mic" title="Ton micro : réunion en salle, dictée">Ma voix</button>
+                      <button type="button" data-capture="mix" title="Ton micro et le son de la visio : tous les participants">Voix + visio</button>
+                      <button type="button" data-capture="system" title="Uniquement le son partagé : webinaire, vidéo, visio où tu ne parles pas">Visio seule</button>
+                    </div>
+                    <p class="capture-hint" id="capture-hint" hidden></p>
+                  </div>
+                  <div class="recorder">
+                    <button class="rec-btn" id="rec-main" type="button" aria-label="Démarrer l’enregistrement">
+                      <span class="rec-core"></span>
+                    </button>
+                    <div class="rec-info">
+                      <div class="rec-time" id="rec-time">00:00</div>
+                      <div class="rec-state" id="rec-state">Prêt à enregistrer</div>
+                    </div>
+                  </div>
+                  <div class="rec-actions">
+                    <button class="btn" id="rec-pause" type="button" disabled><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
+                    <button class="btn" id="rec-stop" type="button" disabled><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Arrêter</button>
+                    <button class="btn danger" id="rec-discard" type="button" disabled title="Supprimer cet enregistrement sans le garder"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Supprimer</button>
+                  </div>
+                  <p class="live-hint" id="live-hint"></p>
+                </div>
+
+                <div class="tab-panel" data-panel="file" hidden>
+                  <label class="dropzone" id="dropzone">
+                    <input type="file" id="file-input" accept="audio/*,video/*,.mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac,.aac,.mov,.mkv" hidden />
+                    <svg viewBox="0 0 24 24"><path d="M12 15V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+                    <strong>Glisse un fichier ici</strong>
+                    <span>ou clique pour parcourir · mp3, wav, m4a, webm, mp4…</span>
+                  </label>
+                </div>
+
+                <div class="audio-card" id="audio-card" hidden>
+                  <div class="audio-meta">
+                    <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    <div><strong id="audio-name">—</strong><span id="audio-info">—</span></div>
+                    <button class="icon-btn danger" id="audio-delete" type="button" title="Supprimer l’enregistrement" aria-label="Supprimer l’enregistrement"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+                    <button class="icon-btn" id="audio-clear" type="button" title="Fermer (l’audio reste dans l’historique)" aria-label="Fermer cet audio"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- 2. TRANSCRIPTION -->
+              <section class="card" id="step-transcribe" aria-labelledby="h-trans">
+                <header class="card-head">
+                  <h2 id="h-trans"><span class="num">2</span>Transcription</h2>
+                </header>
+
+                <span class="label">Modèle et langue</span>
+                <details class="picker-box" id="model-pick">
+                  <summary class="picker" title="Changer de modèle">
+                    <span class="pk-main"><span class="pk-title"><b id="pk-label">—</b><em id="pk-name"></em></span><small id="pk-sub"></small></span>
+                    <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </summary>
+                  <fieldset class="models" id="models">
+                    <legend class="sr-only">Modèle</legend>
+                  </fieldset>
+                </details>
+
+                <div class="row">
+                  <select id="lang" class="select" aria-label="Langue parlée"></select>
+                  <p class="field-hint" id="lang-hint" hidden>Voxtral détecte la langue tout seul.</p>
+                  <label class="switch autotr" title="Si une autre langue que le français est parlée, chaque phrase est traduite en français automatiquement (traduction locale)."><input type="checkbox" id="toggle-autotr" /><span class="track"></span>Traduire en français automatiquement</label>
+                  <label class="switch autotr" title="Après chaque transcription, les voix sont comparées pour indiquer qui parle (analyse locale, module de 33 Mo téléchargé une fois)."><input type="checkbox" id="toggle-autospk" /><span class="track"></span>Reconnaître qui parle</label>
+                </div>
+
+                <div class="actions">
+                  <button class="btn primary" id="btn-transcribe" type="button" disabled title="Ctrl + Entrée">
+                    <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span>Transcrire</span>
+                  </button>
+                  <button class="btn" id="btn-cancel" type="button" hidden>Arrêter</button>
+                </div>
+
+                <p class="status-line" id="status-line" role="status" aria-live="polite"></p>
+              </section>
+            </div>
+          </section>
+
+          <!-- ===== TRANSCRIPTION (document) ===== -->
+          <section class="view view-doc card result" data-page="doc" id="step-result" aria-label="Transcription">
+            <button class="back" type="button" data-nav="projects"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>Retour aux projets</button>
+            <div class="title-row">
+              <input class="title-input" id="result-title" placeholder="Titre de la transcription" aria-label="Titre de la transcription" disabled />
+              <svg class="pencil" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>
+            </div>
+            <div class="result-meta" id="result-meta"></div>
+
+            <!-- Enregistrement en cours : le texte arrive en direct -->
+            <div class="rec-bar" id="rec-bar" hidden>
+              <span class="rb-dot"></span>
+              <b id="rb-state">Enregistrement</b>
+              <span class="rb-time" id="rb-time">00:00</span>
+              <span class="grow"></span>
+              <button class="btn sm" id="rb-pause" type="button"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
+              <button class="btn sm danger-solid" id="rb-stop" type="button"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Arrêter</button>
+            </div>
+
+            <div class="progress-block" id="progress-block" hidden>
+              <div class="progress-head"><span id="progress-label">—</span><span id="progress-value"></span><button class="btn xs" id="pb-cancel" type="button">Arrêter</button></div>
+              <div class="bar"><div class="bar-fill" id="progress-fill"></div></div>
+              <div class="progress-sub" id="progress-sub"></div>
+            </div>
+
+            <div class="doc-tabs">
+              <div class="dtabs" role="tablist" aria-label="Sections">
+                <button type="button" role="tab" data-dtab="tr" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>Transcription</button>
+                <button type="button" role="tab" data-dtab="analysis" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M5 20V10M10 20V4M15 20v-7M20 20v-4"/></svg>Analyse</button>
+                <button type="button" role="tab" data-dtab="summary" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 12h6M9 16h6"/></svg>Résumé IA</button>
+                <button type="button" role="tab" data-dtab="translation" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c0 4 3 7 6 8M11 5c0 4-3 8-7 9"/><path d="m13 21 4-9 4 9M14.5 18h5"/></svg>Traduction</button>
+              </div>
+              <span class="grow"></span>
+              <label class="search find" id="find-box">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" id="find" placeholder="Rechercher…" aria-label="Rechercher dans le texte (Ctrl + F)" title="Ctrl + F · Entrée : suivant · Maj + Entrée : précédent" disabled />
+                <span class="find-count" id="find-count"></span>
+                <button class="icon-btn xs" id="find-prev" type="button" aria-label="Résultat précédent" hidden><svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg></button>
+                <button class="icon-btn xs" id="find-next" type="button" aria-label="Résultat suivant" hidden><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+              </label>
+              <button class="icon-btn" id="btn-relex" type="button" title="Réappliquer le lexique sur le texte actuel" aria-label="Réappliquer le lexique" disabled><svg viewBox="0 0 24 24"><path d="M4 5h11M4 12h16M4 19h9"/><path d="m17 17 2 2 3-4"/></svg></button>
+              <label class="switch ts-switch" title="Horodatages"><input type="checkbox" id="toggle-ts" checked /><span class="track"></span><svg class="ts-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span class="sw-lbl">Horodatages</span></label>
+              <label class="switch edit-switch" title="Corriger le texte directement"><input type="checkbox" id="toggle-edit" checked /><span class="track"></span><span class="sw-lbl">Mode édition</span></label>
+              <button class="icon-btn" id="btn-full" type="button" title="Plein écran" aria-label="Plein écran"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+            </div>
+
+            <div class="tr-status" id="tr-status" hidden><span class="spin"></span><span id="tr-status-text"></span></div>
+            <div class="tr-status" id="spk-status" hidden><span class="spin"></span><span id="spk-status-text"></span></div>
+
+            <div class="resume" id="resume-block" hidden>
+              <div class="resume-text">
+                <strong id="resume-title">Transcription interrompue</strong>
+                <span id="resume-sub"></span>
+              </div>
+              <button class="btn primary sm" id="btn-resume" type="button"><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></svg>Reprendre</button>
+              <button class="icon-btn" id="btn-resume-dismiss" type="button" title="Ne pas reprendre" aria-label="Ne pas reprendre"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            </div>
+
+            <!-- Onglet Transcription -->
+            <div class="dpanel dpanel-tr" data-dpanel="tr">
+              <aside class="spk-side" id="spk-side">
+                <div class="spk-panel" id="spk-panel" hidden>
+                  <div class="spk-list" id="spk-list"></div>
+                  <div class="spk-tools">
+                    <label class="spk-count" title="Si l’analyse s’est trompée de nombre de personnes, impose-le ici">Personnes
+                      <select id="spk-count" class="select">
+                        <option value="">Auto</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                        <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+                      </select>
+                    </label>
+                    <button class="icon-btn xs" id="spk-clear" type="button" title="Retirer les intervenants" aria-label="Retirer les intervenants"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                  </div>
+                </div>
+                <button class="btn sm spk-run" id="btn-speakers" type="button" title="Reconnaître les intervenants à leur voix (local)" disabled><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 18.5"/></svg><span class="lbl">Qui parle ?</span></button>
+              </aside>
+              <div class="transcript" id="transcript" data-ts="on">
+                <div class="empty" id="empty-state">
+                  <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h7"/></svg>
+                  <p>Le texte apparaîtra ici.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Onglet Analyse -->
+            <div class="dpanel dpanel-scroll" data-dpanel="analysis" hidden><div class="analysis" id="analysis"></div></div>
+
+            <!-- Onglet Résumé IA -->
+            <div class="dpanel dpanel-scroll" data-dpanel="summary" hidden>
+              <div class="sum-box">
+                <div class="sum-intro">
+                  <span class="sum-ico"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg></span>
+                  <div><b>Résumé avec Claude</b><p>Choisis le type de résumé : la transcription s’ouvre dans Claude avec la consigne. Colle ensuite la réponse ici pour la garder avec la transcription.</p></div>
+                  <button class="btn sm claude" id="btn-claude-tab" type="button">Résumer avec Claude</button>
+                </div>
+                <label class="label" for="summary-text">Résumé enregistré</label>
+                <textarea id="summary-text" class="summary-text" placeholder="Colle ici le résumé de Claude…" spellcheck="true"></textarea>
+              </div>
+            </div>
+
+            <!-- Onglet Traduction -->
+            <div class="dpanel dpanel-scroll" data-dpanel="translation" hidden>
+              <div class="trans-box">
+                <div class="sum-intro">
+                  <span class="sum-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>
+                  <div><b>Traduction en français</b><p id="trans-info">Traduction locale, sur ton PC. Les phrases déjà en français restent telles quelles.</p></div>
+                  <button class="btn sm primary" id="btn-translate" type="button" title="Traduire la transcription en français (local)" disabled><span class="lbl">Traduire</span></button>
+                </div>
+                <span class="label">Texte affiché dans l’onglet Transcription</span>
+                <div class="seg view-switch" id="view-switch" role="tablist" aria-label="Texte affiché" hidden>
+                  <button type="button" role="tab" data-view="orig" aria-selected="false">Original</button>
+                  <button type="button" role="tab" data-view="tr" aria-selected="true">Français</button>
+                  <button type="button" role="tab" data-view="both" aria-selected="false">Les deux</button>
+                </div>
+                <p class="trans-none" id="trans-none">Pas encore de traduction pour cette transcription.</p>
+              </div>
+            </div>
+
+            <div class="spk-pop" id="spk-pop" role="menu" hidden></div>
+
+            <div class="player" id="player" hidden>
+              <button class="pl-play" id="pl-play" type="button" aria-label="Lecture" title="Lecture / pause (Espace, ou Ctrl + Espace pendant la saisie)">
+                <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <svg class="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>
+              </button>
+              <span class="pl-time" id="pl-time">00:00</span>
+              <canvas class="pl-wave" id="pl-wave" role="slider" aria-label="Position de lecture" tabindex="0"></canvas>
+              <span class="pl-time" id="pl-dur">00:00</span>
+              <button class="icon-btn pl-vol" id="pl-vol" type="button" title="Couper / remettre le son" aria-label="Couper le son"><svg class="i-vol" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg><svg class="i-mute" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="m17 10 4 4M21 10l-4 4"/></svg></button>
+              <button class="pl-speed" id="pl-speed" type="button" title="Vitesse de lecture">1×</button>
+              <button class="icon-btn" id="pl-full" type="button" title="Plein écran" aria-label="Plein écran"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+              <audio id="audio-player" preload="metadata"></audio>
+            </div>
+          </section>
+
+          <!-- ===== MES PROJETS / HISTORIQUE ===== -->
+          <section class="view card hist-card" data-page="history" id="step-history" aria-labelledby="h-hist">
+            <header class="card-head">
+              <h2 id="h-hist">Historique</h2>
+              <span class="hist-count" id="hist-count"></span>
+              <button class="icon-btn danger" id="hist-clear" type="button" title="Tout supprimer (transcriptions et audios)" aria-label="Tout supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+            </header>
+            <div class="hist-list" id="hist-list"></div>
+          </section>
+
+          <!-- ===== PARAMÈTRES ===== -->
+          <section class="view view-settings" data-page="settings">
+            <div class="home-head"><h2>Paramètres</h2><p>Moteur, lexique et stockage. Les réglages du micro sont dans le panneau de droite.</p></div>
+            <div class="set-grid">
+              <section class="card set-card">
+                <h3>Moteur de calcul</h3>
+                <span class="pill" id="pill-engine" title="Moteur de calcul"><i class="dot"></i><span>Détection du matériel…</span></span>
+                <p>WebGPU utilise la carte graphique (rapide). Sinon, le processeur (WASM) prend le relais.</p>
+              </section>
+              <section class="card set-card">
+                <h3>Lexique de corrections</h3>
+                <p>Mots que le modèle comprend mal (sigles, noms propres) et leur correction, appliqués après chaque transcription.</p>
+                <button class="btn" id="btn-lexicon" type="button"><svg viewBox="0 0 24 24"><path d="M4 5h11M4 12h16M4 19h9"/><path d="m17 17 2 2 3-4"/></svg>Ouvrir le lexique</button>
+              </section>
+              <section class="card set-card">
+                <h3>Stockage</h3>
+                <p id="foot-storage"></p>
+                <p>Transcriptions et audios restent dans ce navigateur.</p>
+              </section>
+              <section class="card set-card">
+                <h3>À propos</h3>
+                <p>Transcripteur IA by RJB · Transformers.js <span id="foot-version"></span> · Whisper (OpenAI, MIT) · Traitement 100 % local</p>
+              </section>
+            </div>
+          </section>
         </div>
-      </details>
 
-      <details class="acc" id="acc-keys">
-        <summary>
-          <span class="acc-main"><b>Raccourcis clavier</b><small><kbd>Espace</kbd> pause · <kbd>Ctrl</kbd>+<kbd>Entrée</kbd> transcrire</small></span>
-          <svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
-        </summary>
-        <dl class="acc-body keys">
-          <dt><kbd>Espace</kbd></dt><dd>Pause / reprise de l’enregistrement, sinon lecture / pause de l’audio</dd>
-          <dt><kbd>Ctrl</kbd>+<kbd>Espace</kbd></dt><dd>Lecture / pause, même pendant que tu corriges le texte</dd>
-          <dt><kbd>Ctrl</kbd>+<kbd>Entrée</kbd></dt><dd>Lancer la transcription</dd>
-          <dt><kbd>Ctrl</kbd>+<kbd>F</kbd></dt><dd>Rechercher dans le texte (<kbd>Entrée</kbd> : suivant)</dd>
-          <dt><kbd>Échap</kbd></dt><dd>Fermer une fenêtre ou effacer la recherche</dd>
-        </dl>
-      </details>
-    </section>
+        <!-- ================= PANNEAU DROIT : ANALYSE AUDIO ================= -->
+        <aside class="panel" aria-label="Analyse audio">
+          <header class="panel-head">
+            <span class="num"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span>
+            <h2>Analyse audio</h2>
+            <button class="icon-btn xs more" type="button" aria-label="Plus d’options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+          </header>
+
+          <section class="pblock" id="step-monitor" aria-labelledby="h-monitor">
+            <h3 id="h-monitor">Moniteur</h3>
+            <div class="monitor" id="monitor">
+              <div class="mon-wrap"><canvas id="monitor-canvas" role="img" aria-label="Graphique du volume et de la compréhension du modèle"></canvas></div>
+              <div class="monitor-states">
+                <div class="mstate" id="vol-state"><span class="dot"></span><div><strong>Volume</strong><span class="val">—</span></div></div>
+                <div class="mstate" id="conf-state"><span class="dot"></span><div><strong>Compréhension</strong><span class="val">—</span></div></div>
+              </div>
+              <p class="monitor-hint" id="monitor-hint"></p>
+            </div>
+          </section>
+
+          <section class="pblock" id="insight-speakers">
+            <h3>Répartition des intervenants</h3>
+            <div class="donut-row">
+              <svg class="donut" id="spk-donut" viewBox="0 0 42 42" aria-hidden="true"></svg>
+              <ul class="legend" id="spk-legend"></ul>
+            </div>
+          </section>
+
+          <section class="pblock qblock" id="insight-quality">
+            <h3>Qualité de la transcription</h3>
+            <div class="donut-row">
+              <div class="gauge" id="q-gauge"><svg viewBox="0 0 42 42" aria-hidden="true"><circle class="g-track" cx="21" cy="21" r="16"/><circle class="g-fill" id="q-fill" cx="21" cy="21" r="16"/></svg><b id="q-val">—</b></div>
+              <ul class="qlist" id="q-list"></ul>
+            </div>
+          </section>
+
+          <!-- RÉGLAGES -->
+          <section class="settings-card" id="step-settings" aria-label="Réglages">
+            <details class="acc" id="acc-sound">
+              <summary>
+                <span class="acc-ico"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></span>
+                <span class="acc-main"><b>Réglages du son</b><small id="sound-sum">Micro par défaut · gain 0 dB</small><span class="chips" id="sound-chips"></span></span>
+                <svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+              </summary>
+              <div class="acc-body sound-ctrl" id="sound-ctrl">
+                <button class="btn sm wide" id="mic-test" type="button" title="Voir le niveau du micro sur le graphique sans rien enregistrer"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span>Tester le micro</span></button>
+
+                <label class="label" for="mic-device">Micro</label>
+                <select id="mic-device" class="select"><option value="">Micro par défaut</option></select>
+                <p class="bt-hint" id="bt-hint" hidden><b>Micro Bluetooth :</b> son dégradé (mode mains libres). Mieux : AirPods pour écouter, micro du PC pour parler.</p>
+
+                <div id="out-row" hidden>
+                  <label class="label" for="out-device">Sortie (écoute de l’enregistrement)</label>
+                  <div class="out-line">
+                    <select id="out-device" class="select"><option value="">Sortie par défaut</option></select>
+                    <button class="btn sm" id="out-test" type="button" title="Jouer un petit son sur cette sortie">Tester</button>
+                  </div>
+                </div>
+
+                <div class="gain-row">
+                  <label class="label" for="gain">Gain (amplification)</label>
+                  <output id="gain-val" for="gain">0 dB</output>
+                </div>
+                <input type="range" id="gain" class="range" min="-12" max="24" step="1" value="0" />
+                <div class="range-scale"><span>−12 dB</span><span>0</span><span>+24 dB</span></div>
+                <div class="sc-actions">
+                  <button class="btn sm" id="gain-auto" type="button" disabled title="Parle quelques secondes (test ou enregistrement), puis clique : le gain est réglé pour que ta voix soit dans la zone verte">Ajuster automatiquement</button>
+                  <button class="btn sm ghost" id="sound-reset" type="button">Réglages par défaut</button>
+                </div>
+
+                <div class="sc-toggles">
+                  <label class="switch" title="Le navigateur ajuste lui-même le volume en continu. À couper pour régler le gain à la main."><input type="checkbox" id="opt-agc" /><span class="track"></span>Gain automatique</label>
+                  <label class="switch" title="Atténue les bruits de fond constants (ventilation, clavier, circulation)."><input type="checkbox" id="opt-ns" /><span class="track"></span>Réduction du bruit</label>
+                  <label class="switch" title="Supprime l’écho des haut-parleurs (utile sans casque, en visio)."><input type="checkbox" id="opt-ec" /><span class="track"></span>Annulation d’écho</label>
+                  <label class="switch" title="Coupe les grondements graves sous 90 Hz (chocs sur la table, souffle, moteur)."><input type="checkbox" id="opt-hp" /><span class="track"></span>Filtre des basses</label>
+                </div>
+                <p class="sc-hint" id="sc-hint"></p>
+              </div>
+            </details>
+
+            <details class="acc" id="acc-quality">
+              <summary>
+                <span class="acc-ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></span>
+                <span class="acc-main"><b>Optimiser la qualité</b><small>Préréglage PC · diagnostic · calibration</small></span>
+                <svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+              </summary>
+              <div class="acc-body sc-tools">
+                <button class="btn sm" id="preset-laptop" type="button" title="Applique en un clic les réglages conseillés pour le micro intégré d’un PC portable"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>Optimiser pour le micro du PC</button>
+                <button class="btn sm" id="tool-diag" type="button" title="Mesure le bruit de fond, l’écart entre ta voix et le bruit, et l’écho de la pièce (≈ 15 s)"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/></svg>Diagnostic de la pièce</button>
+                <button class="btn sm" id="tool-calib" type="button" title="Tu lis 3 phrases ; chaque lecture teste un réglage et l’app mesure le pourcentage de mots justes (≈ 1 min)"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m15 17 2 2 4-4"/></svg>Calibrer par dictée</button>
+              </div>
+            </details>
+
+            <details class="acc" id="acc-keys">
+              <summary>
+                <span class="acc-ico"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span>
+                <span class="acc-main"><b>Raccourcis clavier</b><small><kbd>Espace</kbd> pause · <kbd>Ctrl</kbd>+<kbd>Entrée</kbd> transcrire</small></span>
+                <svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+              </summary>
+              <dl class="acc-body keys">
+                <dt><kbd>Espace</kbd></dt><dd>Pause / reprise de l’enregistrement, sinon lecture / pause de l’audio</dd>
+                <dt><kbd>Ctrl</kbd>+<kbd>Espace</kbd></dt><dd>Lecture / pause, même pendant que tu corriges le texte</dd>
+                <dt><kbd>Ctrl</kbd>+<kbd>Entrée</kbd></dt><dd>Lancer la transcription</dd>
+                <dt><kbd>Ctrl</kbd>+<kbd>F</kbd></dt><dd>Rechercher dans le texte (<kbd>Entrée</kbd> : suivant)</dd>
+                <dt><kbd>Échap</kbd></dt><dd>Fermer une fenêtre ou effacer la recherche</dd>
+              </dl>
+            </details>
+          </section>
+        </aside>
+      </div>
     </div>
-  </main>
-
-  <footer class="foot">
-    <span id="foot-storage"></span>
-    <span>Transcripteur IA by RJB · Transformers.js <span id="foot-version"></span> · Whisper (OpenAI, MIT) · Traitement 100 % local</span>
-  </footer>
+  </div>
 
   <!-- Tiroir : lexique -->
   <aside class="drawer" id="drawer-lexicon" aria-hidden="true" aria-labelledby="h-lex">
@@ -411,6 +543,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-19-11"></script>
+  <script type="module" src="js/app.js?v=2026-11-20-1"></script>
 </body>
 </html>

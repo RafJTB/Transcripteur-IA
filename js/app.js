@@ -457,7 +457,7 @@ async function recToggle() {
 
 async function recStart() {
   if (state.phase !== 'idle') return toast('Attends la fin de la transcription en cours.', 'warn');
-  const live = $('#toggle-live').checked && !!state.caps;
+  const live = !!state.caps; // la transcription en direct est toujours active
   if (live && !(await confirmBigDownload(modelById(state.modelId)))) return;
   stopMicTest();
   try {
@@ -661,7 +661,6 @@ function renderRec() {
   $('#rec-pause').disabled = s === 'idle';
   $('#rec-stop').disabled = s === 'idle';
   $('#rec-discard').disabled = s === 'idle';
-  $('#toggle-live').disabled = s !== 'idle';
   $('#rec-pause span').textContent = s === 'paused' ? 'Reprendre' : 'Pause';
   if (s === 'idle') $('#rec-time').textContent = '00:00';
   $('#step-source').dataset.rec = s;
@@ -1505,6 +1504,7 @@ function renderSegments(segs, { editable = true } = {}) {
     if (editable && s.tr != null) tr.setAttribute('contenteditable', 'plaintext-only');
     else tr.removeAttribute('contenteditable');
     row.classList.toggle('native', s.tr == null && (!s.lang || s.lang === 'fr'));
+    row.classList.toggle('pending-tr', s.tr == null && !!s.lang && s.lang !== 'fr');
     const trText = s.tr ?? '';
     if (document.activeElement !== tr && tr.textContent !== trText) tr.textContent = trText;
   });
@@ -2176,8 +2176,6 @@ function bind() {
   $('#rec-stop').onclick = recStop;
   $('#rec-discard').onclick = recDiscard;
   $('#rec-pause').onclick = () => { recorder.state === 'paused' ? recorder.resume() : recorder.pause(); renderRec(); };
-  $('#toggle-live').checked = store.get('live', '0') === '1';
-  $('#toggle-live').onchange = (e) => store.set('live', e.target.checked ? '1' : '0');
 
   const dz = $('#dropzone');
   $('#file-input').onchange = (e) => { handleFiles(e.target.files); e.target.value = ''; };

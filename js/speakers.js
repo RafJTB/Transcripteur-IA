@@ -10,7 +10,7 @@
 //      partagée par deux personnes quand la ponctuation le permet).
 
 /** Couleurs des intervenants (lisibles en clair et en sombre). */
-export const SPEAKER_COLORS = ['#4f8ef7', '#22b07d', '#e0912f', '#d9577a', '#8b6cf0', '#1fa5b8', '#b0894f', '#7d9a2b'];
+export const SPEAKER_COLORS = ['#5b5bf0', '#22b07d', '#e0912f', '#d9577a', '#8b6cf0', '#1fa5b8', '#b0894f', '#7d9a2b'];
 export const speakerColor = (i) => SPEAKER_COLORS[i % SPEAKER_COLORS.length];
 export const defaultSpeakerName = (i) => `Personne ${i + 1}`;
 

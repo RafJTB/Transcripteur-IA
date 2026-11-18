@@ -141,17 +141,29 @@ nets entre réglages sont significatifs.
 
 ## Interface
 
-Deux apparences : **claire** et **sombre** (bouton soleil/lune en haut ; par défaut, celle de Windows). Bleu « ingénierie » comme couleur de marque.
+Deux apparences : **claire** et **sombre** (bouton soleil/lune en haut ; par défaut, celle de Windows). Couleurs indigo / violet.
 
-Trois colonnes qui tiennent dans l'écran (une seule colonne sur petit écran) :
-
-- **Gauche** : source (micro ou fichier), choix du modèle et de la langue (replié sur une ligne, s'ouvre au clic),
-  et l'**historique** toujours visible, avec une recherche dans les titres et le texte.
-- **Centre** : le texte, en grand. Barre d'outils : recherche dans le texte (surligne tous les résultats,
-  Entrée pour passer au suivant), lexique, copier, menu Exporter (.txt, .md, .srt), Résumer avec Claude.
-  En bas, le **lecteur** : forme d'onde cliquable, repères orange sur les passages à vérifier, vitesse 0,75× à 2×.
-  Clic sur un horodatage : l'audio repart à cette phrase, et la phrase lue est surlignée pendant la lecture.
-- **Droite** : le moniteur, puis les réglages repliés (son, optimisation, raccourcis), avec un résumé de ce qui est actif.
+- **Barre latérale** :
+  - **Accueil** : enregistrer, importer et choisir le modèle ;
+  - **Mes projets** et **Historique** : les transcriptions enregistrées ;
+  - **Paramètres** : moteur, lexique, stockage.
+  - En dessous, des éléments décoratifs (offre Pro, profil) qui n'ont pas d'effet.
+- **En haut** : recherche dans les transcriptions, thème, menu **Exporter** (.txt, .md, .srt, copier, Résumer avec Claude).
+- **Vue transcription** (ouverte automatiquement pendant un enregistrement ou une transcription) :
+  - titre modifiable et pastilles d'infos ;
+  - barre d'enregistrement (pause, arrêt) quand le micro tourne ;
+  - 4 onglets :
+    - **Transcription** : intervenants à gauche ; texte par prise de parole avec sa plage horaire ;
+    - **Analyse** : durée, mots, débit, temps de parole par personne, passages à vérifier cliquables ;
+    - **Résumé IA** : envoi à Claude, et zone pour garder le résumé avec la transcription ;
+    - **Traduction** : traduire, et choix de l'affichage (original, français, les deux) ;
+  - **Mode édition** (correction directe du texte, ou lecture seule) et **plein écran** ;
+  - le **lecteur** : forme d'onde cliquable, repères des passages à vérifier, volume, vitesse.
+- **Panneau « Analyse audio »** :
+  - moniteur (direct et relecture) ;
+  - **répartition des intervenants** (donut) ;
+  - **qualité de la transcription** : jauge de confiance du modèle et passages à vérifier ;
+  - réglages du son, optimisation, raccourcis.
 
 Raccourcis : `Espace` pause de l'enregistrement ou lecture/pause ; `Ctrl + Espace` lecture/pause même pendant
 la correction du texte ; `Ctrl + Entrée` transcrire ; `Ctrl + F` rechercher ; `Échap` fermer ou effacer la recherche.

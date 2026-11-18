@@ -30,6 +30,9 @@ const state = {
   language: store.get('lang', 'auto'),
   autoTr: store.get('autotr', '1') === '1', // traduire automatiquement en français
   autoSpk: store.get('autospk', '1') === '1', // identifier qui parle après chaque transcription
+  editMode: store.get('edit', '1') === '1', // texte modifiable directement
+  page: 'home', // vue affichée (accueil, document, projets, paramètres)
+  dtab: 'tr', // onglet du document
   capture: ['mic', 'mix', 'system'].includes(store.get('capture', 'mic')) ? store.get('capture', 'mic') : 'mic', // ce qu'on enregistre
   view: store.get('view', 'tr'), // texte affiché quand une traduction existe : orig | tr | both
   audio: null, // { pcm, blob, name, durationS, url, audioId, docId }
@@ -433,6 +436,7 @@ const recorder = new Recorder({
   },
   onTick(s) {
     $('#rec-time').textContent = fmtClock(s);
+    $('#rb-time').textContent = fmtClock(s);
     if (state.live) renderRecState();
   },
   // Chaque seconde, le morceau compressé est sauvegardé : rien n'est perdu si l'onglet plante.
@@ -700,6 +704,12 @@ function renderRec() {
   $('#rec-pause span').textContent = s === 'paused' ? 'Reprendre' : 'Pause';
   if (s === 'idle') $('#rec-time').textContent = '00:00';
   $('#step-source').dataset.rec = s;
+  const bar = $('#rec-bar');
+  bar.hidden = s === 'idle';
+  bar.classList.toggle('paused', s === 'paused');
+  $('#rb-state').textContent = s === 'paused' ? 'En pause' : 'Enregistrement en cours';
+  $('#rb-pause span').textContent = s === 'paused' ? 'Reprendre' : 'Pause';
+  if (s === 'idle') $('#rb-time').textContent = '00:00';
   renderCapture();
   renderSound();
   updateButtons();
@@ -1029,6 +1039,8 @@ function showDoc(doc, { editable = true } = {}) {
   renderMeta();
   renderSegments(state.segments, { editable });
   renderSpeakers();
+  renderSummary();
+  setView('doc');
 }
 
 function clearResult() {
@@ -1039,7 +1051,9 @@ function clearResult() {
   showWaiting(false);
   renderSegments([], {});
   renderSpeakers();
+  renderSummary();
   hideResume();
+  if (state.page === 'doc') setView('home');
 }
 
 /** Icônes des pastilles d'infos (traits, 24×24). */
@@ -1062,7 +1076,7 @@ function metaChip(icon, text, { title = '', cls = '', dev = '' } = {}) {
 function renderMeta() {
   const d = state.doc;
   const el = $('#result-meta');
-  if (!d) return (el.innerHTML = '');
+  if (!d) { el.innerHTML = ''; return renderInsights(); }
   const words = state.segments.reduce((n, s) => n + (s.text.match(/\S+/g)?.length || 0), 0);
   const created = new Date(d.createdAt);
   const chips = [];
@@ -1075,7 +1089,8 @@ function renderMeta() {
   if (d.durationS) chips.push(metaChip('audio', fmtClock(d.durationS), { title: 'Durée de l’audio' }));
   chips.push(metaChip('words', `${words} mot${words > 1 ? 's' : ''}`));
   const langs = langSummary(state.segments);
-  if (langs) chips.push(metaChip('lang', langs.replace(/^./, (c) => c.toUpperCase()), { title: 'Langues détectées' }));
+  const mainLang = d.language && d.language !== 'auto' ? d.language : 'fr';
+  chips.push(metaChip('lang', langs ? langs.replace(/^./, (c) => c.toUpperCase()) : `Langue : ${langName(mainLang)}`, { title: langs ? 'Langues détectées' : 'Langue' }));
   if (d.model) {
     const dev = d.device === 'webgpu' ? 'GPU' : d.device ? 'CPU' : '';
     chips.push(metaChip('model', d.model.replace(/^Whisper /, ''), { cls: 'model', dev,
@@ -1090,6 +1105,8 @@ function renderMeta() {
     if (low) chips.push(metaChip('check', `${low} à vérifier`, { cls: 'tocheck', title: 'Aller au passage suivant à vérifier (souligné dans le texte)' }));
   }
   el.innerHTML = chips.join('');
+  renderInsights();
+  if (state.dtab === 'analysis') renderAnalysis();
 }
 
 function langSummary(segs) {
@@ -1654,7 +1671,7 @@ function renderSegments(segs, { editable = true } = {}) {
     if (!row) {
       row = document.createElement('div');
       row.className = 'segment';
-      row.innerHTML = '<button class="spk" type="button" title="Changer l’intervenant de ce passage"></button><button class="ts" type="button"></button><div class="txt" spellcheck="true"></div><div class="tr" spellcheck="true" lang="fr"></div>';
+      row.innerHTML = '<button class="spk" type="button" title="Changer l’intervenant de ce passage"></button><button class="ts" type="button"></button><div class="txt" spellcheck="true"></div><div class="tr" spellcheck="true" lang="fr"></div><span class="turn-range"></span>';
       t.insertBefore(row, typing || null);
     }
     row.classList.toggle('partial', !editable);
@@ -1671,12 +1688,12 @@ function renderSegments(segs, { editable = true } = {}) {
     const txt = $('.txt', row);
     txt.dataset.i = i;
     txt.title = s.conf != null ? `Confiance du modèle : ${Math.round(s.conf * 100)} %${low ? ' — passage à vérifier' : ''}` : '';
-    if (editable) txt.setAttribute('contenteditable', 'plaintext-only');
+    if (editable && state.editMode) txt.setAttribute('contenteditable', 'plaintext-only');
     else txt.removeAttribute('contenteditable');
     if (document.activeElement !== txt && txt.textContent !== s.text) txt.textContent = s.text;
     const tr = $('.tr', row);
     tr.dataset.i = i;
-    if (editable && s.tr != null) tr.setAttribute('contenteditable', 'plaintext-only');
+    if (editable && state.editMode && s.tr != null) tr.setAttribute('contenteditable', 'plaintext-only');
     else tr.removeAttribute('contenteditable');
     row.classList.toggle('native', s.tr == null && (!s.lang || s.lang === 'fr'));
     row.classList.toggle('pending-tr', s.tr == null && !!s.lang && s.lang !== 'fr');
@@ -1691,8 +1708,14 @@ function renderSegments(segs, { editable = true } = {}) {
       row.style.setProperty('--spk', speakerColor(s.spk));
       chip.textContent = who.name;
       chip.dataset.i = i;
+      if (row.classList.contains('spk-start')) {
+        let j = i;
+        while (j + 1 < segs.length && segs[j + 1].spk === s.spk) j++;
+        $('.turn-range', row).textContent = `${fmtClock(s.start)} – ${fmtClock(segs[j].end)}`;
+      }
     } else row.style.removeProperty('--spk');
   });
+  $('#transcript').dataset.edit = state.editMode ? 'on' : 'off';
   renderView();
   updateButtons();
   // Le surlignage de lecture est recalculé : on retire l'ancien (les lignes sont réutilisées)
@@ -1786,6 +1809,7 @@ const find = {
   },
   clear() {
     $('#find').value = '';
+    $('#find-box').classList.remove('has-q');
     this.hits = [];
     this.cur = -1;
     this.paint(false);
@@ -2055,6 +2079,8 @@ function renderSpeakers() {
   const d = state.doc;
   const sp = d?.speakers;
   $('#spk-panel').hidden = !sp?.length;
+  $('#spk-side').hidden = !state.segments.length || d?.status === 'running' || d?.status === 'live';
+  renderInsights();
   if (!sp?.length) return;
   const t = speakingTime(state.segments, sp.length);
   const tot = t.reduce((a, b) => a + b, 0) || 1;
@@ -2126,6 +2152,191 @@ function openSpeakerMenu(chip) {
 }
 
 function closeSpeakerMenu() { $('#spk-pop').hidden = true; }
+
+// ======================================================================
+// Interface v3 : vues, onglets du document, panneau d'analyse
+// ======================================================================
+const PAGE_OF = { home: 'home', doc: 'doc', projects: 'history', history: 'history', settings: 'settings' };
+
+/** Affiche une vue (accueil, document, projets / historique, paramètres). */
+function setView(name) {
+  const page = PAGE_OF[name] || 'home';
+  state.page = page;
+  $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.page === page));
+  const navKey = page === 'doc' ? 'home' : name;
+  $$('#nav [data-nav]').forEach((b) => b.classList.toggle('active', b.dataset.nav === navKey));
+  if (page === 'history') $('#h-hist').textContent = name === 'projects' ? 'Mes projets' : 'Historique';
+  if (page === 'doc') requestAnimationFrame(() => player?.draw());
+}
+
+function setDocTab(tab) {
+  state.dtab = tab;
+  $$('[data-dtab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.dtab === tab)));
+  $$('[data-dpanel]').forEach((p) => (p.hidden = p.dataset.dpanel !== tab));
+  if (tab === 'analysis') renderAnalysis();
+  if (tab === 'summary') renderSummary();
+}
+
+const ICON_OK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.5L16 9.5"/></svg>';
+const ICON_WARN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16h.01"/></svg>';
+
+/** Panneau de droite : répartition des intervenants et qualité de la transcription. */
+function renderInsights() {
+  const d = state.doc;
+  const segs = state.segments;
+  // Donut des intervenants
+  const sp = d?.speakers;
+  const donut = $('#spk-donut');
+  const legend = $('#spk-legend');
+  const R = 15.915; // circonférence 100
+  if (sp?.length > 1) {
+    const t = speakingTime(segs, sp.length);
+    const tot = t.reduce((a, b) => a + b, 0) || 1;
+    let off = 0;
+    donut.innerHTML = `<circle cx="21" cy="21" r="${R}" stroke="rgb(var(--ov) / 0.06)"/>` + t.map((v, n) => {
+      const pct = (v / tot) * 100;
+      const c = `<circle cx="21" cy="21" r="${R}" stroke="${speakerColor(n)}" stroke-dasharray="${Math.max(0, pct - 0.6)} ${100 - Math.max(0, pct - 0.6)}" stroke-dashoffset="${-off}"/>`;
+      off += pct;
+      return c;
+    }).join('');
+    legend.innerHTML = sp.map((p, n) => `<li style="--spk:${speakerColor(n)}"><i class="dot"></i><span>${esc(p.name)}</span><b>${Math.round((t[n] / tot) * 100)} %</b></li>`).join('');
+  } else {
+    donut.innerHTML = `<circle cx="21" cy="21" r="${R}" stroke="rgb(var(--ov) / 0.08)"/>`;
+    legend.innerHTML = `<li class="none">${!d ? 'Ouvre une transcription pour voir qui parle.' : sp?.length === 1 ? 'Une seule voix reconnue.' : 'Clique sur « Qui parle ? » pour reconnaître les voix.'}</li>`;
+  }
+  // Jauge de qualité (confiance réelle du modèle)
+  const withC = segs.filter((x) => x.conf != null);
+  const gauge = $('#q-gauge');
+  const list = $('#q-list');
+  if (!withC.length) {
+    gauge.dataset.level = '';
+    $('#q-fill').classList.add('empty');
+    $('#q-val').textContent = '—';
+    list.innerHTML = `<li class="none">${d ? 'Pas de mesure de confiance pour cette transcription.' : 'La qualité s’affiche après une transcription.'}</li>`;
+    return;
+  }
+  const avg = withC.reduce((a, x) => a + x.conf, 0) / withC.length;
+  const pct = Math.round(avg * 100);
+  const level = avg >= CONF.good ? 'ok' : avg >= CONF.fair ? 'warn' : 'err';
+  gauge.dataset.level = level;
+  $('#q-fill').classList.remove('empty');
+  $('#q-fill').style.strokeDasharray = `${(pct / 100) * 100.5} 101`;
+  $('#q-val').textContent = `${pct} %`;
+  const low = withC.filter((x) => x.conf < CONF.fair).length;
+  const edited = segs.filter((x) => x.edited).length;
+  const items = [
+    [level, level === 'ok' ? 'Bonne compréhension' : level === 'warn' ? 'Compréhension moyenne' : 'Compréhension faible'],
+    [low ? 'warn' : 'ok', low ? `${low} passage${low > 1 ? 's' : ''} à vérifier` : 'Aucun passage à vérifier'],
+    ['ok', edited ? `${edited} phrase${edited > 1 ? 's' : ''} corrigée${edited > 1 ? 's' : ''}` : `${segs.length} phrase${segs.length > 1 ? 's' : ''}`],
+  ];
+  list.innerHTML = items.map(([lv, txt]) => `<li class="${lv}">${lv === 'ok' ? ICON_OK : ICON_WARN}${esc(txt)}</li>`).join('');
+}
+
+/** Onglet Analyse : chiffres clés, temps de parole, passages à vérifier. */
+function renderAnalysis() {
+  const box = $('#analysis');
+  const d = state.doc;
+  const segs = state.segments;
+  if (!d || !segs.length) return (box.innerHTML = '<p class="a-empty">Pas encore de texte à analyser.</p>');
+  const words = (s) => s.text.match(/\S+/g)?.length || 0;
+  const total = segs.reduce((n, s) => n + words(s), 0);
+  const dur = d.durationS || segs[segs.length - 1].end || 0;
+  const sp = d.speakers?.length > 1 ? d.speakers : null;
+  const langs = langSummary(segs);
+  const stats = [
+    ['Durée', fmtClock(dur)],
+    ['Mots', String(total)],
+    ['Débit', dur > 5 ? `${Math.round(total / (dur / 60))} mots/min` : '—'],
+    ['Phrases', String(segs.length)],
+    ['Intervenants', sp ? String(sp.length) : '—'],
+    ['Modèle', d.model ? `${d.model.replace(/^Whisper /, '')}${d.device ? ` · ${d.device === 'webgpu' ? 'GPU' : 'CPU'}` : ''}` : '—'],
+    ['Langue', langs ? langs.replace(/^./, (c) => c.toUpperCase()) : langName(d.language && d.language !== 'auto' ? d.language : 'fr')],
+  ];
+  let html = `<div class="stat-grid">${stats.map(([k, v]) => `<div class="stat"><small>${k}</small><b>${esc(v)}</b></div>`).join('')}</div>`;
+  if (sp) {
+    const t = speakingTime(segs, sp.length);
+    const tot = t.reduce((a, b) => a + b, 0) || 1;
+    const w = sp.map((_, n) => segs.filter((s) => s.spk === n).reduce((a, s) => a + words(s), 0));
+    html += `<div class="a-block"><h4>Temps de parole</h4><table class="a-table"><thead><tr><th>Intervenant</th><th>Temps</th><th>Mots</th><th style="width:40%">Part</th></tr></thead><tbody>${
+      sp.map((p, n) => `<tr style="--spk:${speakerColor(n)}"><td><i class="dot"></i>${esc(p.name)}</td><td>${fmtClock(t[n])}</td><td>${w[n]}</td><td><div class="bar-in"><i style="width:${Math.round((t[n] / tot) * 100)}%"></i></div></td></tr>`).join('')
+    }</tbody></table></div>`;
+  }
+  const low = segs.map((s, i) => ({ s, i })).filter(({ s }) => s.conf != null && s.conf < CONF.fair);
+  html += `<div class="a-block"><h4>Passages à vérifier</h4>${low.length
+    ? `<div class="check-list">${low.map(({ s, i }) => `<button type="button" data-i="${i}"><time>${fmtClock(s.start)}</time><span>${esc(s.text.length > 140 ? s.text.slice(0, 139) + '…' : s.text)}</span></button>`).join('')}</div>`
+    : '<p class="a-empty">Aucun : le modèle était sûr de lui sur tout le texte.</p>'}</div>`;
+  box.innerHTML = html;
+}
+
+/** Onglet Résumé IA : résumé collé depuis Claude, gardé avec la transcription. */
+function renderSummary() {
+  const ta = $('#summary-text');
+  if (document.activeElement !== ta) ta.value = state.doc?.summary || '';
+  ta.disabled = !state.doc;
+}
+
+async function toggleFullscreen() {
+  const el = $('#step-result');
+  if (document.fullscreenElement) return document.exitFullscreen().catch(() => {});
+  if (el.classList.contains('full-fallback')) return el.classList.remove('full-fallback');
+  try { await el.requestFullscreen(); } catch { el.classList.add('full-fallback'); }
+}
+
+function bindV3() {
+  $$('[data-nav]').forEach((b) => (b.onclick = () => setView(b.dataset.nav)));
+  $$('[data-dtab]').forEach((b) => (b.onclick = () => setDocTab(b.dataset.dtab)));
+  // Recherche du haut : transcriptions enregistrées
+  const hs = $('#hist-search');
+  hs.addEventListener('focus', () => { if (state.page !== 'history') setView('history'); });
+  hs.addEventListener('input', () => { if (state.page !== 'history') setView('history'); });
+  // Barre d'enregistrement et de progression (vue document)
+  $('#rb-pause').onclick = () => $('#rec-pause').click();
+  $('#rb-stop').onclick = () => $('#rec-stop').click();
+  $('#pb-cancel').onclick = () => $('#btn-cancel').click();
+  // Mode édition
+  $('#toggle-edit').checked = state.editMode;
+  $('#toggle-edit').onchange = (e) => {
+    state.editMode = e.target.checked;
+    store.set('edit', state.editMode ? '1' : '0');
+    const st = state.doc?.status;
+    renderSegments(state.segments, { editable: st !== 'running' && st !== 'live' });
+  };
+  // Plein écran, volume
+  $('#btn-full').onclick = toggleFullscreen;
+  $('#pl-full').onclick = toggleFullscreen;
+  $('#pl-vol').onclick = () => {
+    const a = $('#audio-player');
+    a.muted = !a.muted;
+    $('#pl-vol').classList.toggle('muted', a.muted);
+    $('#pl-vol').setAttribute('aria-label', a.muted ? 'Remettre le son' : 'Couper le son');
+  };
+  // Résumé IA
+  $('#btn-claude-tab').onclick = () => sendToClaude();
+  $('#summary-text').addEventListener('input', (e) => {
+    if (!state.doc) return;
+    state.doc.summary = e.target.value;
+    saveDoc(600);
+  });
+  // Analyse : clic sur un passage à vérifier → écoute + texte
+  $('#analysis').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-i]');
+    if (!b) return;
+    const i = Number(b.dataset.i);
+    setDocTab('tr');
+    const row = $$('#transcript .segment')[i];
+    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row?.classList.toggle('flash', true);
+    setTimeout(() => row?.classList.toggle('flash', false), 1300);
+    if (state.audio && state.segments[i]) player.seek(state.segments[i].start, { play: true });
+  });
+  // Menu Exporter : se referme après Copier / Claude
+  $$('#btn-copy, #btn-claude').forEach((b) => b.addEventListener('click', () => ($('#export-menu').open = false)));
+  // Loupe : reste ouverte tant qu'une recherche est saisie
+  $('#find').addEventListener('input', (e) => $('#find-box').classList.toggle('has-q', !!e.target.value));
+  setDocTab('tr');
+  setView('home');
+  renderInsights();
+}
 
 function bindSpeakers() {
   $('#btn-speakers').onclick = () => {
@@ -2412,7 +2623,8 @@ function updateButtons() {
     loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
   }[state.phase] || 'Transcrire';
   $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
-  $$('[data-export], #btn-copy, #btn-relex, #btn-claude, #btn-translate, #btn-speakers').forEach((b) => (b.disabled = !has));
+  $$('[data-export], #btn-copy, #btn-relex, #btn-claude, #btn-claude-tab, #btn-translate, #btn-speakers').forEach((b) => (b.disabled = !has));
+  $('#summary-text').disabled = !state.doc;
   $('#export-menu').classList.toggle('disabled', !has);
   if (!has) $('#export-menu').open = false;
   $('#find').disabled = !state.segments.length;
@@ -2733,6 +2945,7 @@ function bind() {
     row.classList.toggle('flash', true);
   });
   bindSpeakers();
+  bindV3();
   $$('#view-switch [data-view]').forEach((b) => (b.onclick = () => {
     state.view = b.dataset.view;
     store.set('view', state.view);

@@ -94,12 +94,31 @@ Limite : c'est la confiance du modèle, pas une garantie. Il peut se tromper ave
 
 - **Tester le micro** : affiche le niveau sur le graphique sans rien enregistrer.
 - **Micro** : choix du périphérique (les noms apparaissent après la première autorisation).
+  Un appareil éteint reste choisi (« non connecté ») ; alerte s'il manque ou se déconnecte.
+  Micro Bluetooth (AirPods) : le casque passe en mode « mains libres », qualité moindre.
+- **Sortie** : où écouter la relecture (casque, haut-parleurs), avec bouton « Tester » (Chrome, Edge).
 - **Gain** de −12 à +24 dB, modifiable pendant l'enregistrement, appliqué au son enregistré et transcrit.
 - **Ajuster automatiquement** : règle le gain pour que la voix soit vers −20 dBFS (crêtes plafonnées à −3 dBFS).
 - **Gain automatique**, **réduction du bruit**, **annulation d'écho** (traitements du navigateur) :
   changent au prochain démarrage du micro.
 - **Filtre des basses** : coupe les grondements sous 90 Hz, modifiable à tout moment.
 - Réglages mémorisés dans le navigateur ; bouton « Réglages par défaut ».
+
+## Enregistrer une visio (Teams, Meet, Zoom)
+
+Au-dessus du bouton d'enregistrement :
+
+- **Ma voix** : le micro seul (réunion en salle, dictée).
+- **Voix + visio** : le micro et le son des autres participants, mélangés.
+- **Visio seule** : uniquement le son partagé (webinaire, vidéo, visio où l'on ne parle pas).
+
+Au démarrage, Chrome ouvre la fenêtre de partage :
+
+- **visio dans le navigateur** : choisir l'onglet et cocher « Partager l'audio de l'onglet » ;
+- **application Teams ou Zoom** : choisir « Écran entier » et cocher « Partager l'audio du système » (Windows).
+
+L'image n'est pas gardée, seul le son l'est. Avec un casque, pas d'écho ; avec des haut-parleurs,
+le micro capte aussi la visio (voix en double). Chrome et Edge sur ordinateur uniquement.
 
 ## Optimiser la qualité (micro du PC portable)
 

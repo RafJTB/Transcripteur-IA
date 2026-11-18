@@ -7,8 +7,8 @@
   <meta name="description" content="Transcription audio → texte 100 % locale dans le navigateur (Whisper, WebGPU/WASM). Aucun audio n'est envoyé." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='#3f86ff'/%3E%3Cstop offset='1' stop-color='#1747b8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect class='tile' x='.5' y='.5' width='39' height='39' rx='10.5' fill='#fff' stroke='#d9e0ea'/%3E%3Cpath fill='url(#g)' d='M11.2 9.5h20.6l-1.1 5.4h-7.5l-3.1 14.6c-.3 1.6-1.8 2.6-3.4 2.3-1.6-.3-2.6-1.8-2.3-3.4l2.9-13.5h-7.2z'/%3E%3C/svg%3E" />
   <meta name="theme-color" content="#0a0e14" />
-  <meta name="app-version" content="2026-11-19-4" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-19-4" />
+  <meta name="app-version" content="2026-11-19-5" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-19-5" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -23,7 +23,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-19-4', 'sw.js', 'js/app.js?v=2026-11-19-4', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-19-5', 'sw.js', 'js/app.js?v=2026-11-19-5', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/langid.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -94,6 +94,14 @@
       </header>
 
       <div class="tab-panel" data-panel="mic">
+        <div class="capture-row" id="capture-row" hidden>
+          <div class="seg capture-seg" id="capture-seg" role="radiogroup" aria-label="Ce qui est enregistré">
+            <button type="button" data-capture="mic" title="Ton micro : réunion en salle, dictée">Ma voix</button>
+            <button type="button" data-capture="mix" title="Ton micro et le son de la visio : tous les participants">Voix + visio</button>
+            <button type="button" data-capture="system" title="Uniquement le son partagé : webinaire, vidéo, visio où tu ne parles pas">Visio seule</button>
+          </div>
+          <p class="capture-hint" id="capture-hint" hidden></p>
+        </div>
         <div class="recorder">
           <button class="rec-btn" id="rec-main" type="button" aria-label="Démarrer l’enregistrement">
             <span class="rec-core"></span>
@@ -390,6 +398,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-19-4"></script>
+  <script type="module" src="js/app.js?v=2026-11-19-5"></script>
 </body>
 </html>

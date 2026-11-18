@@ -1,7 +1,7 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming } from './config.js';
-import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, listSpeakers, canPickOutput, isBluetooth, speechStart, LevelBooster } from './audio.js';
+import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, listSpeakers, canPickOutput, isBluetooth, canCaptureSystem, speechStart, LevelBooster } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
 import { History, Audios, RecChunks, clearAll, newId } from './history.js';
@@ -28,6 +28,7 @@ const state = {
   modelId: MODELS.some((m) => m.id === store.get('model')) ? store.get('model') : DEFAULT_MODEL,
   language: store.get('lang', 'auto'),
   autoTr: store.get('autotr', '1') === '1', // traduire automatiquement en français
+  capture: ['mic', 'mix', 'system'].includes(store.get('capture', 'mic')) ? store.get('capture', 'mic') : 'mic', // ce qu'on enregistre
   view: store.get('view', 'tr'), // texte affiché quand une traduction existe : orig | tr | both
   audio: null, // { pcm, blob, name, durationS, url, audioId, docId }
   phase: 'idle', // idle | loading | transcribing | live
@@ -449,7 +450,12 @@ const recorder = new Recorder({
   // Voxtral : voix faibles remontées pour le modèle ; l'enregistrement, lui, reste intact.
   onPcm(pcm) { if (state.live) state.live.push(state.booster ? state.booster.process(pcm) : pcm); },
   // Casque Bluetooth éteint ou hors de portée pendant l'enregistrement
-  onDeviceLost(label) {
+  onDeviceLost(label, kind) {
+    if (kind === 'system') {
+      if (!recorder.stream) toast('Partage arrêté : le son de la visio n’arrive plus. Arrête l’enregistrement (ce qui précède est conservé).', 'err', 12000);
+      else toast('Partage arrêté : seul ton micro est encore enregistré.', 'warn', 8000);
+      return;
+    }
     const name = label ? `« ${label} »` : 'Le micro';
     if (micBusy()) toast(`${name} s’est déconnecté : l’enregistrement n’entend plus rien. Arrête-le (ce qui précède est conservé), puis relance avec un autre micro.`, 'err', 12000);
     else if (recorder.state === 'preview') { stopMicTest(); toast(`${name} s’est déconnecté.`, 'warn', 5000); }
@@ -474,7 +480,7 @@ async function recStart() {
   if (live && !(await confirmBigDownload(modelById(state.modelId)))) return;
   stopMicTest();
   try {
-    await recorder.start({ pcm: live, settings: sound });
+    await recorder.start({ pcm: live, settings: sound, capture: captureMode() });
   } catch (e) {
     status(e.message, 'err');
     toast(e.message, 'err', 7000);
@@ -656,6 +662,8 @@ async function recDiscard() {
 function renderRecState() {
   const s = micBusy() ? recorder.state : 'idle';
   let text = { idle: 'Prêt à enregistrer', recording: 'Enregistrement en cours…', paused: 'En pause' }[s];
+  if (s !== 'idle' && recorder.capturingSystem) text = text.replace('Enregistrement', recorder.stream ? 'Enregistrement voix + visio' : 'Enregistrement de la visio');
+  else if (s === 'idle' && captureMode() !== 'mic') text = captureMode() === 'mix' ? 'Prêt : ta voix + la visio' : 'Prêt : son de la visio';
   const l = state.live;
   if (l && s !== 'idle') {
     if (l.failed) text += ' · direct interrompu';
@@ -663,6 +671,27 @@ function renderRecState() {
     else text += l.lagS > 8 ? ` · direct (retard ≈ ${Math.round(l.lagS)} s)` : ' · direct';
   }
   $('#rec-state').textContent = text;
+}
+
+// ======================================================================
+// Ce qu'on enregistre : ma voix, ma voix + la visio, ou la visio seule
+// ======================================================================
+const CAPTURE_HINTS = {
+  mic: '',
+  mix: 'Au démarrage, choisis l’onglet de la visio (Meet, Teams ou Zoom dans le navigateur) et coche « Partager l’audio ». Appli Teams ou Zoom : choisis « Écran entier » et coche « Partager l’audio du système ». Avec un casque, pas d’écho.',
+  system: 'Seul le son partagé est enregistré (visio où tu ne parles pas, webinaire, vidéo…), pas ton micro. Au démarrage, coche « Partager l’audio ».',
+};
+const captureMode = () => (canCaptureSystem() ? state.capture : 'mic');
+
+function renderCapture() {
+  const m = captureMode();
+  $('#capture-row').hidden = !canCaptureSystem();
+  $$('#capture-seg button').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.capture === m));
+    b.disabled = micBusy();
+  });
+  $('#capture-hint').textContent = CAPTURE_HINTS[m];
+  $('#capture-hint').hidden = !CAPTURE_HINTS[m];
 }
 
 function renderRec() {
@@ -678,6 +707,7 @@ function renderRec() {
   $('#rec-pause span').textContent = s === 'paused' ? 'Reprendre' : 'Pause';
   if (s === 'idle') $('#rec-time').textContent = '00:00';
   $('#step-source').dataset.rec = s;
+  renderCapture();
   renderSound();
   updateButtons();
 }
@@ -2293,6 +2323,13 @@ function closeDrawers() {
 // ======================================================================
 function bind() {
   $$('.seg [data-tab]').forEach((b) => (b.onclick = () => selectTab(b.dataset.tab)));
+  $$('#capture-seg button').forEach((b) => (b.onclick = () => {
+    state.capture = b.dataset.capture;
+    store.set('capture', state.capture);
+    renderCapture();
+    renderRecState();
+  }));
+  renderCapture();
   $('#rec-main').onclick = recToggle;
   $('#rec-stop').onclick = recStop;
   $('#rec-discard').onclick = recDiscard;
@@ -2517,6 +2554,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
+  recorder,
   state, exportAs, sendToClaude, translateDoc, shownSegments, autoTranslate, guessLang, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,
   recorderState: () => recorder.state,
   monitorP90: () => { const w = monitor.levels.filter((l) => l.t >= monitor.now - 6).map((l) => l.db).sort((a, b) => a - b); return w[Math.floor(w.length * 0.9)]; },

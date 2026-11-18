@@ -747,3 +747,11 @@ kbd { font: 600 10.5px var(--mono); color: var(--text-2); border: 1px solid var(
 .out-line .btn { height: 38px; flex: none; }
 .bt-hint { margin: -6px 0 14px; padding: 9px 11px; border-radius: var(--radius-sm); font-size: 12.5px; line-height: 1.45; color: var(--text-2); background: rgb(var(--warn-rgb) / 0.09); border: 1px solid rgb(var(--warn-rgb) / 0.28); }
 .bt-hint b { color: var(--warn); font-weight: 600; }
+
+/* Ce qui est enregistré : voix, voix + visio, visio seule */
+.capture-row { margin-bottom: 14px; }
+.capture-seg { display: flex; width: 100%; }
+.capture-seg button { flex: 1; white-space: nowrap; }
+.capture-seg button:disabled { cursor: default; opacity: 0.55; }
+.capture-seg button[aria-selected='true']:disabled { opacity: 1; }
+.capture-hint { margin: 8px 2px 0; font-size: 12.5px; line-height: 1.45; color: var(--text-3); }

@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-3" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-3" />
+  <meta name="app-version" content="2026-11-22-4" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-4" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,7 +41,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-3', 'sw.js', 'js/app.js?v=2026-11-22-3', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-4', 'sw.js', 'js/app.js?v=2026-11-22-4', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -203,6 +203,7 @@
                       <button type="button" data-capture="mix" title="Ton micro et le son de la visio : tous les participants. Au démarrage, choisis l’onglet de la visio (ou « Écran entier » pour Teams / Zoom) et coche « Partager l’audio ».">Voix + visio</button>
                       <button type="button" data-capture="system" title="Uniquement le son partagé : webinaire, vidéo, visio où tu ne parles pas. Au démarrage, coche « Partager l’audio ».">Visio seule</button>
                     </div>
+                    <label class="switch video-opt" id="video-opt" hidden title="Garde aussi l’image de l’écran partagé (720p, 5 images/s, ≈ 150 Mo par heure), sur ce PC seulement. Pense à prévenir les participants."><input type="checkbox" id="toggle-video" /><span class="track"></span><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>Garder la vidéo de l’écran</label>
                   </div>
                   <div class="auto-row">
                     <label class="switch" title="Avant chaque enregistrement : choix du modèle selon ton PC et 3 s de diagnostic pour régler le son (gardé 1 h pour le même micro). Pendant l’enregistrement, le gain se corrige tout seul."><input type="checkbox" id="toggle-auto" /><span class="track"></span><b>Réglage automatique</b></label>
@@ -541,6 +542,7 @@
             <div class="help-list">
               <details class="glass help-item" open><summary>Comment enregistrer une réunion ?</summary><p>Accueil → <b>Nouvelle transcription</b>, puis le gros bouton rouge. À l’arrêt, la transcription démarre toute seule. En salle, choisis « Ma voix » ; en visio, « Voix + visio » pour entendre tous les participants.</p></details>
               <details class="glass help-item"><summary>Comment transcrire une visio Teams, Meet ou Zoom ?</summary><p>Choisis « Voix + visio ». Au démarrage, le navigateur te demande quoi partager : prends l’onglet de la visio (ou « Écran entier » pour l’appli Teams / Zoom) et coche <b>Partager l’audio</b>.</p></details>
+              <details class="glass help-item"><summary>Garder la vidéo de l’écran d’une visio ?</summary><p>En « Voix + visio » ou « Visio seule », active <b>Garder la vidéo de l’écran</b>. Dans le projet, l’écran enregistré s’affiche à droite et suit la lecture : clique sur une phrase pour revoir la slide ou la maquette montrée à ce moment. Environ 150 Mo par heure, gardés sur ce PC seulement. Préviens les participants.</p></details>
               <details class="glass help-item"><summary>Quel modèle choisir ?</summary><p>Laisse le <b>réglage automatique</b> : il choisit selon ton PC. Sans carte graphique, « Rapide » ou « Équilibré » ; avec une carte graphique, « Précis ». Détails dans la page <b>Modèles</b>.</p></details>
               <details class="glass help-item"><summary>Comment savoir qui parle ?</summary><p>Après la transcription, les voix sont comparées et chaque phrase reçoit une couleur. Clique sur « Personne 1 » pour la renommer : sa voix est alors mémorisée et elle sera reconnue toute seule aux réunions suivantes (Paramètres → Voix connues).</p></details>
               <details class="glass help-item"><summary>À quoi sert l’onglet Actions ?</summary><p>Il relève les décisions (« on valide », « on part sur ») et les actions (« tu peux… », « je m’en occupe »), avec le responsable et l’échéance. Coche ce qui est fait ; pour un relevé reformulé, « Affiner avec Claude ».</p></details>
@@ -675,6 +677,16 @@
             <button class="icon-btn panel-close" id="panel-close" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             <button class="icon-btn xs more" type="button" aria-label="Plus d’options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
           </header>
+
+          <section class="pblock doc-video-block" id="doc-video-block" hidden>
+            <header class="dv-head"><h3><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>Écran enregistré</h3><small id="doc-video-size"></small>
+              <button class="icon-btn xs" id="doc-video-pip" type="button" title="Incrustation (la vidéo reste visible par-dessus les autres fenêtres)" aria-label="Incrustation"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="6" rx="1"/></svg></button>
+              <button class="icon-btn xs" id="doc-video-full" type="button" title="Plein écran" aria-label="Plein écran"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+              <button class="icon-btn xs danger" id="doc-video-del" type="button" title="Supprimer la vidéo (garder le son)" aria-label="Supprimer la vidéo"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+            </header>
+            <video id="doc-video" muted playsinline preload="metadata"></video>
+            <p class="dv-note">Suit le lecteur : clique sur une phrase pour voir l’écran à ce moment.</p>
+          </section>
 
           <section class="pblock" id="step-monitor" aria-labelledby="h-monitor">
             <h3 id="h-monitor">Moniteur</h3>
@@ -826,6 +838,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-3"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-4"></script>
 </body>
 </html>

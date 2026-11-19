@@ -48,7 +48,10 @@ export const History = {
 export const Audios = {
   get: (id) => tx(A, 'readonly', (st) => st.get(id)),
   put: (item) => tx(A, 'readwrite', (st) => st.put(item)),
-  remove: (id) => tx(A, 'readwrite', (st) => st.delete(id)),
+  /** Supprime l'audio et, s'il y en a une, la vidéo de l'écran qui l'accompagne (« <id>.video »). */
+  remove: (id) => tx(A, 'readwrite', (st) => { st.delete(id); st.delete(`${id}.video`); }),
+  /** Supprime un seul élément (par exemple la vidéo seule). */
+  removeOnly: (id) => tx(A, 'readwrite', (st) => st.delete(id)),
   /** Retrouve un audio déjà stocké (même fichier : nom, taille, date) pour ne pas le dupliquer. */
   async findByKey(key) {
     let found = null;

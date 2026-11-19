@@ -157,16 +157,20 @@ export const isBluetooth = (label) => /airpods|bluetooth|hands-?free|mains libre
 /** Capture du son d'une visio possible (Chrome, Edge sur ordinateur). */
 export const canCaptureSystem = () => !!navigator.mediaDevices?.getDisplayMedia && !/Android|iPhone|iPad/i.test(navigator.userAgent);
 
+/** Qualité « réunion » de la vidéo d'écran : 720p, 5 images/s, ~350 kbit/s (≈ 150 Mo par heure). */
+export const VIDEO_QUALITY = { width: 1280, height: 720, frameRate: 5, bitrate: 350_000 };
+
 /**
  * Son d'un onglet ou de tout l'ordinateur, via la fenêtre de partage d'écran.
- * Chrome impose de partager une image : elle est coupée aussitôt, seul le son est gardé.
+ * Chrome impose de partager une image : sans `keepVideo`, elle est coupée aussitôt, seul le son est gardé.
+ * Avec `keepVideo`, la piste vidéo est rendue à part ({ stream, video }).
  */
-async function captureSystemAudio() {
+async function captureSystemAudio({ keepVideo = false } = {}) {
   if (!canCaptureSystem()) throw new AudioError('sys-unsupported', 'Ce navigateur ne permet pas de capter le son d’une visio. Utilise Chrome ou Edge sur ordinateur.');
   let s;
   try {
     s = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
+      video: keepVideo ? { width: { ideal: VIDEO_QUALITY.width }, height: { ideal: VIDEO_QUALITY.height }, frameRate: { ideal: VIDEO_QUALITY.frameRate, max: 10 } } : true,
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       systemAudio: 'include',
       selfBrowserSurface: 'exclude',
@@ -178,12 +182,18 @@ async function captureSystemAudio() {
       throw new AudioError('sys-cancelled', 'Partage annulé : rien n’a été enregistré.');
     throw new AudioError('sys-error', `Capture du son impossible : ${e.message || e.name}`);
   }
-  s.getVideoTracks().forEach((t) => { t.stop(); s.removeTrack(t); });
+  let video = null;
+  s.getVideoTracks().forEach((t) => {
+    s.removeTrack(t);
+    if (keepVideo && !video) video = t;
+    else t.stop();
+  });
   if (!s.getAudioTracks().length) {
     s.getTracks().forEach((t) => t.stop());
+    video?.stop();
     throw new AudioError('sys-no-audio', 'Aucun son partagé. Recommence et coche « Partager l’audio de l’onglet » (ou « du système » pour l’écran entier) dans la fenêtre de partage.');
   }
-  return s;
+  return keepVideo ? { stream: s, video } : s;
 }
 
 export class AudioError extends Error {
@@ -263,7 +273,8 @@ class StreamResampler {
  * Le résultat final est un Blob (webm/opus).
  */
 export class Recorder {
-  constructor({ onLevel, onTick, onChunk, onPcm, onDeviceLost } = {}) {
+  constructor({ onLevel, onTick, onChunk, onVideoChunk, onPcm, onDeviceLost } = {}) {
+    this.onVideoChunk = onVideoChunk;
     this.onLevel = onLevel;
     this.onDeviceLost = onDeviceLost;
     this.onTick = onTick;
@@ -288,12 +299,16 @@ export class Recorder {
    * Chaîne audio : micro → filtre des basses (option) → gain → [enregistrement, transcription, mesure]
    * Le gain est donc appliqué à tout : ce que tu vois sur le graphique est ce que le modèle entend.
    */
-  async start({ pcm = false, preview = false, settings = DEFAULT_AUDIO_SETTINGS, capture = 'mic', _fellBack = false } = {}) {
+  async start({ pcm = false, preview = false, settings = DEFAULT_AUDIO_SETTINGS, capture = 'mic', video = false, _fellBack = false } = {}) {
     if (!(await Recorder.isAvailable())) throw new AudioError('mic-unsupported', 'Ce navigateur ne permet pas l’enregistrement audio.');
     if (preview) capture = 'mic'; // le test ne concerne que le micro
     // Son de la visio : demandé en premier (la fenêtre de partage de Chrome)
     this.sysStream = null;
-    if (capture !== 'mic') this.sysStream = await captureSystemAudio();
+    if (!_fellBack) this.videoTrack = null;
+    if (capture !== 'mic') {
+      const c = await captureSystemAudio({ keepVideo: video && !preview });
+      if (c.stream) { this.sysStream = c.stream; this.videoTrack = c.video; } else this.sysStream = c;
+    }
     if (capture === 'system') {
       this.stream = null;
       this.deviceLabel = '';
@@ -318,6 +333,8 @@ export class Recorder {
       }
       this.sysStream?.getTracks().forEach((t) => t.stop());
       this.sysStream = null;
+      this.videoTrack?.stop();
+      this.videoTrack = null;
       if (e.name === 'NotAllowedError' || e.name === 'SecurityError')
         throw new AudioError('mic-denied', 'Accès au micro refusé. Autorise le micro dans la barre d’adresse (icône cadenas) puis réessaie.');
       if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError')
@@ -384,6 +401,7 @@ export class Recorder {
         this.onChunk?.(e.data, this.chunks.length - 1);
       };
       this.mr.start(1000);
+      this._startVideo();
     }
 
     if (pcm && !preview) {
@@ -460,25 +478,60 @@ export class Recorder {
     this._raf = requestAnimationFrame(() => this._loop());
   }
 
+  /** Vidéo de l'écran (si gardée) : enregistreur à part, démarré en même temps que le son. */
+  _startVideo() {
+    this.vr = null;
+    this.vchunks = [];
+    if (!this.videoTrack || this.videoTrack.readyState !== 'live') return;
+    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+    try {
+      this.vr = new MediaRecorder(new MediaStream([this.videoTrack]), { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: VIDEO_QUALITY.bitrate });
+    } catch { this.vr = null; return; }
+    this.vr.ondataavailable = (e) => {
+      if (!e.data.size) return;
+      this.vchunks.push(e.data);
+      this.onVideoChunk?.(e.data, this.vchunks.length - 1);
+    };
+    this.vr.start(1000);
+  }
+
+  /** La vidéo de l'écran est-elle en cours d'enregistrement ? */
+  get recordingVideo() { return !!this.vr && this.vr.state !== 'inactive'; }
+
+  _stopVideo() {
+    return new Promise((resolve) => {
+      const vr = this.vr;
+      if (!vr) return resolve(null);
+      const done = () => resolve(this.vchunks.length ? new Blob(this.vchunks, { type: vr.mimeType || 'video/webm' }) : null);
+      if (vr.state === 'inactive') return done();
+      vr.onstop = done;
+      try { vr.stop(); } catch { done(); }
+    });
+  }
+
   pause() {
     if (this.state !== 'recording') return;
     this.mr.pause();
+    if (this.vr?.state === 'recording') this.vr.pause();
     this.state = 'paused';
   }
 
   resume() {
     if (this.state !== 'paused') return;
     this.mr.resume();
+    if (this.vr?.state === 'paused') this.vr.resume();
     this.state = 'recording';
   }
 
   stop() {
     return new Promise((resolve) => {
       if (!this.mr || this.state === 'idle') return resolve(null);
-      this.mr.onstop = () => {
+      const videoP = this._stopVideo();
+      this.mr.onstop = async () => {
         const blob = new Blob(this.chunks, { type: this.mr.mimeType || 'audio/webm' });
+        const video = await videoP;
         this._cleanup();
-        resolve({ blob, seconds: this._elapsed });
+        resolve({ blob, seconds: this._elapsed, video });
       };
       this.mr.stop();
     });
@@ -491,6 +544,12 @@ export class Recorder {
       this.chunks = [];
       try { this.mr.stop(); } catch { /* ignore */ }
     }
+    if (this.vr) {
+      this.vr.onstop = null;
+      this.vr.ondataavailable = null;
+      this.vchunks = [];
+      try { if (this.vr.state !== 'inactive') this.vr.stop(); } catch { /* ignore */ }
+    }
     this._cleanup();
   }
 
@@ -501,6 +560,9 @@ export class Recorder {
     this.stream?.getTracks().forEach((t) => t.stop());
     this.sysStream?.getTracks().forEach((t) => t.stop());
     this.sysStream = null;
+    this.videoTrack?.stop();
+    this.videoTrack = null;
+    this.vr = null;
     this._sysNode = null;
     this.ctx?.close().catch(() => {});
     this.gain = null;

@@ -124,6 +124,18 @@ Au démarrage, Chrome ouvre la fenêtre de partage :
 L'image n'est pas gardée, seul le son l'est. Avec un casque, pas d'écho ; avec des haut-parleurs,
 le micro capte aussi la visio (voix en double). Chrome et Edge sur ordinateur uniquement.
 
+### Vidéo de l'écran (option)
+
+En « Voix + visio » ou « Visio seule », l'option **Garder la vidéo de l'écran** enregistre aussi l'image partagée
+(qualité réunion : 720p, 5 images/s, ≈ 350 kbit/s, soit ≈ 150 Mo par heure selon ce qui bouge à l'écran).
+
+- sauvegardée par morceaux pendant l'enregistrement, comme le son (récupérée si l'onglet plante) ;
+- dans le projet, **Écran enregistré** (panneau de droite) : la vidéo suit le lecteur — clic sur une phrase, la vidéo
+  saute au même moment ; plein écran, incrustation (par-dessus les autres fenêtres), **supprimer la vidéo** (le son est gardé) ;
+- reste **sur ce PC** : pas envoyée dans Google Drive ni dans les espaces partagés ;
+- partage d'un onglet (Teams dans le navigateur) : seule la réunion est filmée ; « Écran entier » : tout l'écran.
+- Filmer une visio, comme l'enregistrer : préviens les participants.
+
 ## Réglage automatique (activé par défaut)
 
 Quand tu lances un enregistrement :

@@ -1,6 +1,6 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
-import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming } from './config.js';
+import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming, LLM_MODELS } from './config.js';
 import { clusterSpeakers, buildTimeline, assignSpeakers, orderSpeakers, speakingTime, speakerColor, defaultSpeakerName } from './speakers.js';
 import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, listSpeakers, canPickOutput, isBluetooth, canCaptureSystem, speechStart, LevelBooster } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
@@ -16,6 +16,8 @@ import { guessLang } from './langid.js';
 import { VoiceBook, centroids, matchVoices, packEmb } from './voices.js';
 import { extractActions, actionsToMarkdown } from './actions.js';
 import { dashStats, dailyMinutes, weeklyMinutes, speakerTotals, topicShares, periodStart, searchMeetings } from './insights.js';
+import { buildContext, buildMessages, renderAnswer, citedRefs } from './assistant.js';
+import { BACKGROUNDS, DEFAULTS as PERSO_DEFAULTS, loadPerso, savePerso, applyPerso, customImage, shrinkImage, saveCustomImage } from './perso.js';
 import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -2516,7 +2518,7 @@ function closeSpeakerMenu() { $('#spk-pop').hidden = true; }
 // ======================================================================
 // Interface v3 : vues, onglets du document, panneau d'analyse
 // ======================================================================
-const PAGE_OF = { home: 'home', record: 'record', doc: 'doc', projects: 'history', history: 'history', settings: 'settings', analytics: 'analytics', models: 'models', help: 'help' };
+const PAGE_OF = { home: 'home', record: 'record', doc: 'doc', projects: 'history', history: 'history', settings: 'settings', analytics: 'analytics', models: 'models', help: 'help', custom: 'custom' };
 
 /** Affiche une vue (accueil, document, projets / historique, paramètres). */
 /** Téléphone : le panneau « Analyse audio » s'ouvre en plein écran (onglet Analyse). */
@@ -2547,6 +2549,7 @@ function setView(name) {
   else if (page !== 'record' && page !== 'doc') renderQuick();
   if (page === 'analytics') renderAnalytics();
   if (page === 'models') renderModelsPage();
+  if (page === 'custom') renderPerso();
   if (page === 'record') requestAnimationFrame(() => monitor?.draw());
   if (page === 'doc') requestAnimationFrame(() => player?.draw());
   else {
@@ -3493,7 +3496,7 @@ function chatAdd(role, html) {
 function renderChat() {
   const box = $('#chat');
   if (!chatLog.length) {
-    box.innerHTML = `<div class="chat-hello"><span class="bot-ico">${'<svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>'}</span><div><p>Pose une question sur tes réunions : je cherche dans tes transcriptions, sur ton appareil.</p>
+    box.innerHTML = `<div class="chat-hello"><span class="bot-ico">${'<svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>'}</span><div><p>Pose une question sur tes réunions : je lis tes transcriptions et je te réponds en citant mes sources.</p>
       <div class="chat-sugg"><button type="button" data-q="Quelles décisions cette semaine ?">Décisions de la semaine</button><button type="button" data-q="Quelles actions restent à faire ?">Actions à faire</button></div></div></div>`;
     return;
   }
@@ -3502,22 +3505,236 @@ function renderChat() {
 }
 
 let lastQuestion = '';
-async function askAssistant(q) {
-  q = q.trim();
-  if (!q) return;
-  lastQuestion = q;
-  chatAdd('me', esc(q));
-  const docs = (await myDocs()).filter((d) => d.status !== 'running' && d.status !== 'live');
-  if (!docs.length) return chatAdd('bot', '<p>Tu n’as encore aucune transcription : enregistre une réunion et je pourrai y chercher.</p>');
-  const sources = actionSources(docs);
+let lastExchange = null;
+
+// ---------- Moteurs de l'assistant ----------
+const CLAUDE_SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.5.0/+esm';
+const CLAUDE_MODELS = [
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (le plus capable)', fallbacks: true },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (rapide)', fallbacks: true },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (le plus économique)', fallbacks: false },
+];
+const asstEngine = () => lsGet('assistant.engine', 'auto');
+const claudeKey = () => lsGet('assistant.key', '');
+/** Modèle local choisi : le plus précis avec une carte graphique, le léger sinon. */
+function localLlm() {
+  const e = asstEngine();
+  const big = e === 'local-large' || (e === 'auto' && caps().webgpu);
+  return big && caps().webgpu ? LLM_MODELS.large : LLM_MODELS.small;
+}
+
+let llm = null;
+let llmReady = null;
+let llmSeq = 0;
+const llmPending = new Map();
+let llmIdle = null;
+function llmWorker() {
+  if (llm) return llm;
+  llm = new Worker(new URL('./llm-worker.js', import.meta.url), { type: 'module' });
+  // Le worker charge Transformers.js avant d'écouter : les messages attendent son signal « ready »
+  let ready;
+  llmReady = new Promise((r) => (ready = r));
+  llm.onmessage = ({ data: m }) => {
+    if (m.type === 'ready') return ready();
+    if (m.type === 'progress') { for (const p of llmPending.values()) p.onProgress?.(m); return; }
+    const p = llmPending.get(m.id);
+    if (!p) return;
+    if (m.type === 'token') return p.onToken?.(m.text);
+    llmPending.delete(m.id);
+    if (m.type === 'error') p.reject(new Error(m.message));
+    else p.resolve(m);
+  };
+  llm.onerror = (e) => {
+    for (const p of llmPending.values()) p.reject(new Error(e.message || 'Le modèle local s’est arrêté (mémoire insuffisante ?).'));
+    llmPending.clear();
+    llm?.terminate();
+    llm = null;
+    llmReady = null;
+  };
+  return llm;
+}
+function llmCall(msg, { onToken, onProgress } = {}) {
+  const id = ++llmSeq;
+  clearTimeout(llmIdle);
+  return new Promise((resolve, reject) => {
+    llmPending.set(id, { resolve, reject, onToken, onProgress });
+    const w = llmWorker();
+    llmReady.then(() => w.postMessage({ ...msg, id }));
+  }).finally(() => {
+    // Mémoire libérée après 15 min sans question
+    llmIdle = setTimeout(() => { if (!llmPending.size && llm) { llm.terminate(); llm = null; llmReady = null; } }, 15 * 60 * 1000);
+  });
+}
+
+let asstBusy = false;
+let asstAbort = null;
+
+async function answerLocal(messages, { onToken, onStatus }) {
+  const m = localLlm();
+  const spec = { repo: m.repo, device: m.device, dtype: m.dtype };
+  const { cached } = await llmCall({ type: 'cache-status', ...spec });
+  if (!cached && lsGet('assistant.consent', '') !== m.repo) {
+    const ok = await ask('Activer l’assistant IA ?', `L’assistant utilise un modèle de langage qui tourne sur ton appareil : ${m.label} (${fmtMB(m.sizeMB)}), téléchargé une seule fois. Tes réunions ne sont envoyées nulle part.`, `Télécharger (${fmtMB(m.sizeMB)})`);
+    if (!ok) return null;
+    lsSet('assistant.consent', m.repo);
+  }
+  onStatus(cached ? `Chargement de ${m.label} et lecture de tes réunions…` : `Téléchargement de ${m.label}…`);
+  asstAbort = () => llm?.postMessage({ type: 'stop' });
+  let first = true;
+  const r = await llmCall({ type: 'chat', ...spec, messages, max: 450 }, {
+    onProgress: (p) => onStatus(p.value >= 0.999 && p.total > 50e6 ? `${m.label} prêt : lecture de tes réunions…` : `Téléchargement de ${m.label}… ${Math.round(p.value * 100)} % (${fmtMB(p.loaded / 1e6)} / ${fmtMB(p.total / 1e6)})`),
+    onToken: (t) => { if (first) { first = false; onStatus(''); } onToken(t); },
+  });
+  return r.text;
+}
+
+async function answerClaude(messages, { onToken, onStatus }) {
+  const key = claudeKey();
+  if (!key) throw new Error('Aucune clé API Claude : renseigne-la dans Paramètres → Assistant IA.');
+  onStatus('Claude réfléchit…');
+  const { default: Anthropic } = await import(CLAUDE_SDK_URL);
+  const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+  const model = CLAUDE_MODELS.find((x) => x.id === lsGet('assistant.model', CLAUDE_MODELS[0].id)) || CLAUDE_MODELS[0];
+  const [sys, ...rest] = messages;
+  const params = {
+    model: model.id,
+    max_tokens: 4000,
+    system: sys.content,
+    messages: rest,
+    output_config: { effort: 'low' },
+  };
+  // Si le modèle décline une demande, l'API la relance sur un autre modèle (activé par défaut)
+  if (model.fallbacks) Object.assign(params, { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
+  const stream = model.fallbacks ? client.beta.messages.stream(params) : client.messages.stream(params);
+  asstAbort = () => stream.abort();
+  let text = '';
+  try {
+    for await (const ev of stream) {
+      if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') {
+        if (!text) onStatus('');
+        text += ev.delta.text;
+        onToken(ev.delta.text);
+      }
+    }
+    const final = await stream.finalMessage();
+    if (final.stop_reason === 'refusal') throw new Error('Claude a décliné cette demande.');
+  } catch (e) {
+    if (e instanceof Anthropic.APIUserAbortError) return text;
+    if (e instanceof Anthropic.AuthenticationError) throw new Error('Clé API Claude refusée : vérifie-la dans Paramètres → Assistant IA.');
+    if (e instanceof Anthropic.PermissionDeniedError) throw new Error('Cette clé API n’a pas accès à ce modèle.');
+    if (e instanceof Anthropic.RateLimitError) throw new Error('Trop de demandes à Claude pour l’instant : réessaie dans une minute.');
+    if (e instanceof Anthropic.APIConnectionError) throw new Error('Impossible de joindre Claude (connexion internet ?).');
+    if (e instanceof Anthropic.APIError) throw new Error(`Erreur de l’API Claude (${e.status ?? '?'}) : ${e.message}`);
+    throw e;
+  }
+  return text;
+}
+
+/** Ancienne réponse par mots-clés (moteur « Recherche simple », ou si le modèle n'est pas disponible). */
+function keywordAnswer(q, sources, note = '') {
   const openOnly = /reste|à faire|a faire|en cours/i.test(q);
   if (openOnly) sources.forEach((s) => (s.items = s.items.filter((x) => !x.done)));
   const { intent, hits } = searchMeetings(q, sources, { limit: 6 });
-  const lead = intent === 'decision' ? 'Voici les décisions trouvées' : intent === 'action' ? (openOnly ? 'Voici les actions encore à faire' : 'Voici les actions trouvées') : 'Voici les passages les plus proches';
   const claudeBtn = '<button class="chat-claude" type="button" data-claude>Demander à Claude</button>';
-  if (!hits.length) return chatAdd('bot', `<p>Je n’ai rien trouvé de net dans tes transcriptions. Essaie avec d’autres mots (un nom de projet, un lot, une personne), ou demande à Claude, qui lira les réunions récentes.</p>${claudeBtn}`);
+  if (!hits.length) return `<p>Je n’ai rien trouvé de net dans tes transcriptions. Essaie avec d’autres mots (un nom de projet, un lot, une personne).</p>${note}${claudeBtn}`;
+  const lead = intent === 'decision' ? 'Voici les décisions trouvées' : intent === 'action' ? (openOnly ? 'Voici les actions encore à faire' : 'Voici les actions trouvées') : 'Voici les passages les plus proches';
   const li = hits.map((h) => `<li><button type="button" data-open="${esc(h.doc.id)}" data-i="${h.i}">${h.type === 'decision' ? '<i class="tag dec">Décision</i>' : h.type === 'action' ? `<i class="tag act">Action${h.who ? ` · ${esc(h.who)}` : ''}</i>` : ''}${esc(h.text.length > 150 ? h.text.slice(0, 149) + '…' : h.text)}<small>${esc(h.doc.title)} · ${relDay(h.doc.createdAt)} · ${fmtClock(h.start)}</small></button></li>`).join('');
-  chatAdd('bot', `<p><svg class="ok-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.5L16 9.5"/></svg>${lead} :</p><ul class="chat-hits">${li}</ul><p class="chat-note">Recherche par mots-clés dans tes transcriptions. ${claudeBtn}</p>`);
+  return `<p><svg class="ok-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.5L16 9.5"/></svg>${lead} :</p><ul class="chat-hits">${li}</ul>${note}<p class="chat-note">Recherche par mots-clés. ${claudeBtn}</p>`;
+}
+
+function setChatBusy(on) {
+  asstBusy = on;
+  $('#chat-form').classList.toggle('busy', on);
+  $('.chat-send').setAttribute('aria-label', on ? 'Arrêter la réponse' : 'Envoyer');
+  $('.chat-send').innerHTML = on ? '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M4 12 20 4l-4 16-4-7z"/><path d="m12 13 8-9"/></svg>';
+}
+
+async function askAssistant(q) {
+  q = q.trim();
+  if (!q || asstBusy) return;
+  lastQuestion = q;
+  chatAdd('me', esc(q));
+  const docs = (await myDocs()).filter((d) => d.status !== 'running' && d.status !== 'live' && d.segments?.length);
+  if (!docs.length) return chatAdd('bot', '<p>Tu n’as encore aucune transcription : enregistre une réunion et je pourrai répondre à tes questions.</p>');
+  const sources = actionSources(docs);
+  const engine = asstEngine();
+  if (engine === 'search') return chatAdd('bot', keywordAnswer(q, sources));
+  const claude = engine === 'claude';
+  const local = !claude && localLlm();
+  const { refs, context } = buildContext(q, sources, { budget: claude ? 14000 : local === LLM_MODELS.large ? 5000 : 3000 });
+  // L'échange précédent aide aux questions de suivi, mais embrouille les petits modèles locaux
+  const messages = buildMessages(q, context, claude || local === LLM_MODELS.large ? lastExchange : null);
+  // Bulle de réponse mise à jour au fil de l'eau
+  chatAdd('bot', '<p class="typing"><i></i><i></i><i></i></p>');
+  const bubble = $$('#chat .msg.bot .bubble').pop();
+  const status = document.createElement('p');
+  status.className = 'chat-status';
+  let text = '';
+  let raf = 0;
+  const paint = () => {
+    raf = 0;
+    bubble.innerHTML = (text ? renderAnswer(text, refs) : '<p class="typing"><i></i><i></i><i></i></p>');
+    if (status.textContent) bubble.append(status);
+    $('#chat').scrollTop = $('#chat').scrollHeight;
+  };
+  const onToken = (t) => { text += t; if (!raf) raf = requestAnimationFrame(paint); };
+  const onStatus = (s) => { status.textContent = s; if (!raf) raf = requestAnimationFrame(paint); };
+  setChatBusy(true);
+  try {
+    const out = claude ? await answerClaude(messages, { onToken, onStatus }) : await answerLocal(messages, { onToken, onStatus });
+    if (out == null) { bubble.innerHTML = keywordAnswer(q, sources, '<p class="chat-note">Assistant IA non activé : voici une recherche par mots-clés.</p>'); return; }
+    text = out || text;
+    if (!text.trim()) text = 'Je n’ai pas pu formuler de réponse. Reformule ta question, ou demande à Claude.';
+    status.textContent = '';
+    const src = citedRefs(text, refs);
+    const engineLabel = claude ? (CLAUDE_MODELS.find((x) => x.id === lsGet('assistant.model', CLAUDE_MODELS[0].id)) || CLAUDE_MODELS[0]).label.replace(/ \(.*/, '') : `${local.label}, sur ton appareil`;
+    bubble.innerHTML = renderAnswer(text, refs)
+      + (src.length ? `<ul class="chat-src">${src.map((r) => `<li><button type="button" data-open="${esc(r.doc.id)}" data-i="${r.i}"><b>${r.n}</b><span>« ${esc(r.text.length > 110 ? r.text.slice(0, 109) + '…' : r.text)} »<small>${esc(r.doc.title)} · ${relDay(r.doc.createdAt)} · ${fmtClock(r.start)}</small></span></button></li>`).join('')}</ul>` : '')
+      + `<p class="chat-note">${esc(engineLabel)} · à vérifier dans les sources.${claude ? '' : ' <button class="chat-claude" type="button" data-claude>Demander à Claude</button>'}</p>`;
+    lastExchange = { q, a: text };
+    chatLog[chatLog.length - 1].html = bubble.innerHTML;
+  } catch (e) {
+    console.warn(e);
+    bubble.innerHTML = `<p class="chat-err">${esc(e.message || String(e))}</p>` + keywordAnswer(q, sources, '');
+    chatLog[chatLog.length - 1].html = bubble.innerHTML;
+  } finally {
+    asstAbort = null;
+    setChatBusy(false);
+    $('#chat').scrollTop = $('#chat').scrollHeight;
+  }
+}
+
+/** Paramètres → Assistant IA */
+function renderAssistantSettings() {
+  const sel = $('#asst-engine');
+  if (!sel) return;
+  sel.value = asstEngine();
+  const isClaude = sel.value === 'claude';
+  $('#asst-claude').hidden = !isClaude;
+  $('#asst-model').value = lsGet('assistant.model', CLAUDE_MODELS[0].id);
+  $('#asst-key').value = claudeKey() ? '••••••••••••' : '';
+  const m = localLlm();
+  $('#asst-info').textContent = sel.value === 'search' ? 'Recherche par mots-clés dans tes réunions, sans modèle de langage.'
+    : isClaude ? 'Les extraits utiles de tes réunions et ta question sont envoyés à Claude (Anthropic) via ta clé API. Facturé à l’usage sur ton compte Anthropic.'
+    : `${m.label} (${fmtMB(m.sizeMB)}), sur ${m.device === 'webgpu' ? 'la carte graphique' : 'le processeur'}. Rien ne quitte ton appareil.${m.device === 'wasm' ? ' Sans carte graphique, une réponse prend de 20 s à 1 min.' : ''}`;
+}
+
+function bindAssistantSettings() {
+  const sel = $('#asst-engine');
+  if (!sel) return;
+  $('#asst-model').innerHTML = CLAUDE_MODELS.map((m) => `<option value="${m.id}">${esc(m.label)}</option>`).join('');
+  sel.onchange = () => { lsSet('assistant.engine', sel.value); renderAssistantSettings(); };
+  $('#asst-model').onchange = (e) => lsSet('assistant.model', e.target.value);
+  $('#asst-key').onfocus = (e) => { if (e.target.value.startsWith('•')) e.target.value = ''; };
+  $('#asst-key').onchange = (e) => {
+    const v = e.target.value.trim();
+    if (v.startsWith('•')) return;
+    lsSet('assistant.key', v);
+    renderAssistantSettings();
+    toast(v ? 'Clé API enregistrée dans ce navigateur.' : 'Clé API effacée.', 'ok', 3000);
+  };
+  $('#asst-key-clear').onclick = () => { lsSet('assistant.key', ''); renderAssistantSettings(); toast('Clé API effacée.', 'ok', 2500); };
+  renderAssistantSettings();
 }
 
 /** Claude : la question + les transcriptions les plus utiles (dans la limite d'une consigne raisonnable). */
@@ -3567,6 +3784,7 @@ function bindDashboard() {
   $('#quick-range').onchange = () => renderQuick();
   $('#chat-form').addEventListener('submit', (e) => {
     e.preventDefault();
+    if (asstBusy) return asstAbort?.();
     const q = $('#chat-input').value;
     $('#chat-input').value = '';
     askAssistant(q);
@@ -3616,6 +3834,8 @@ function bindDashboard() {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#hist-search').focus(); }
   });
   renderChat();
+  bindAssistantSettings();
+  bindPerso();
 }
 
 function openRecentMenu(btn, d) {
@@ -3676,6 +3896,74 @@ async function renderAnalytics() {
   $('#an-actions').innerHTML = open.length
     ? `<ul class="an-acts">${open.slice(0, 30).map((x) => `<li><button type="button" data-open="${esc(x.doc.id)}"><span class="a-txt">${esc(x.text)}</span><span class="a-meta">${x.who ? `<i class="act-who"><i class="dot"></i>${esc(x.who)}</i>` : ''}${x.date ? `<i class="act-due">${esc(x.date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }))}</i>` : ''}<small>${esc(x.doc.title)} · ${relDay(x.doc.createdAt)}</small></span></button></li>`).join('')}</ul>`
     : `<p class="dash-empty">${acts.length ? 'Tout est fait sur cette période. 👏' : 'Aucune action repérée sur cette période.'}</p>`;
+}
+
+// ---------- Page Personnalisation ----------
+const PLUS_ICON = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
+function setPerso(patch) {
+  const p = { ...loadPerso(), ...patch };
+  p.css = (BACKGROUNDS.find((b) => b.id === p.bg) || BACKGROUNDS[0]).css;
+  savePerso(p);
+  applyPerso(p);
+  renderPerso();
+}
+
+function renderPerso() {
+  const grid = $('#bg-grid');
+  if (!grid) return;
+  const p = loadPerso();
+  const img = customImage();
+  grid.innerHTML = BACKGROUNDS.map((b) => `<button class="bg-tile${p.bg === b.id ? ' active' : ''}" type="button" data-bg="${b.id}"><span class="sw${b.id === 'uni' ? ' uni' : ''}" style="${b.id === 'uni' ? '' : `background:${esc(b.css)};background-size:cover;background-position:center`}"></span>${esc(b.label)}</button>`).join('')
+    + (img
+      ? `<button class="bg-tile${p.bg === 'custom' ? ' active' : ''}" type="button" data-bg="custom"><span class="sw" style="background-image:url('${img}')"></span>Ton image <small>· <span data-change>changer</span></small></button>`
+      : `<button class="bg-tile" type="button" data-import><span class="sw add">${PLUS_ICON}</span>Importer une image</button>`);
+  const light = document.documentElement.dataset.theme === 'light';
+  $('#perso-blur').value = p.blur;
+  $('#perso-blur-v').textContent = `${p.blur} px`;
+  $('#perso-veil').value = p.veil;
+  $('#perso-veil-l').textContent = light ? 'Éclaircissement du fond' : 'Assombrissement du fond';
+  $('#perso-veil-v').textContent = `${p.veil} %`;
+  $('#perso-panel').value = p.panel;
+  // Opacité réelle des panneaux dans le thème affiché
+  $('#perso-panel-v').textContent = `${Math.min(100, Math.round((light ? 28 : 16) * (p.panel / 100)))} %`;
+}
+
+function bindPerso() {
+  applyPerso();
+  $('#bg-grid').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-bg], [data-import]');
+    if (!t) return;
+    if (t.hasAttribute('data-import') || e.target.closest('[data-change]')) return $('#bg-file').click();
+    setPerso({ bg: t.dataset.bg });
+  });
+  $('#bg-file').onchange = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const url = await shrinkImage(f);
+      if (!saveCustomImage(url)) return toast('Stockage du navigateur plein : impossible de garder cette image.', 'err', 6000);
+      setPerso({ bg: 'custom' });
+      toast('Fond d’écran mis à jour.', 'ok', 2500);
+    } catch (err) {
+      toast(err.message || 'Image illisible.', 'err', 6000);
+    }
+  };
+  const live = (id, key) => {
+    $(id).addEventListener('input', (e) => {
+      const p = { ...loadPerso(), [key]: Number(e.target.value) };
+      applyPerso(p);
+      savePerso({ ...p, css: (BACKGROUNDS.find((b) => b.id === p.bg) || BACKGROUNDS[0]).css });
+      renderPerso();
+    });
+  };
+  live('#perso-blur', 'blur');
+  live('#perso-veil', 'veil');
+  live('#perso-panel', 'panel');
+  $('#perso-reset').onclick = () => setPerso({ ...PERSO_DEFAULTS });
+  // Le libellé et l'opacité affichée dépendent du thème
+  $('#btn-theme').addEventListener('click', () => setTimeout(renderPerso));
+  renderPerso();
 }
 
 // ---------- Page Modèles ----------
@@ -4320,9 +4608,9 @@ async function init() {
   await refreshCache();
   if (!state.caps.webgpu) status((state.caps.softwareGpu ? 'Pas de carte graphique exploitable (GPU logiciel détecté)' : 'WebGPU non disponible') + ' : transcription sur le processeur, plus lente. Préfère « Rapide » ou « Équilibré ».', 'warn');
   try {
-    if (await recover()) return;
-    const [last] = (await History.list()).filter(isMine);
-    if (last && !state.doc) openDoc(last);
+    // L'accueil reste la page d'arrivée : la dernière transcription n'est plus rouverte d'office
+    // (seul un enregistrement interrompu à récupérer ouvre directement sa transcription)
+    await recover();
   } catch (e) { console.warn(e); }
 }
 

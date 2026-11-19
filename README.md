@@ -171,15 +171,20 @@ Fond photo flouté et panneaux en **verre dépoli** (violet), en mode **clair** 
   - **Paramètres** (compte, voix connues, moteur, lexique, stockage) et **Aide** (questions courantes).
   - En bas, le **compte Google** (connexion, état de la synchronisation).
 - **Accueil (tableau de bord)** :
-  - « Bonjour » avec ton prénom (compte Google), boutons **Nouvelle transcription** et **Importer un fichier** ;
+  - c'est la page d'arrivée ; « Bonjour » avec ton prénom (compte Google), boutons **Nouvelle transcription** et **Importer un fichier** ;
   - 4 chiffres : transcriptions, audio traité, projets (dossiers) ou voix connues, compréhension moyenne, avec l'évolution sur 7 jours ;
   - **derniers projets** : écouter, ouvrir, ou menu (décisions et actions, résumer avec Claude) ;
   - **insights** : audio traité sur 7 jours (courbe), sujets principaux (mots-clés BIM, technique, organisation, chantier), actions extraites ;
   - à droite, **Analyse rapide** (qui parle le plus, sur la semaine, le mois ou depuis le début) et l'**Assistant**.
-- **Assistant** : pose une question (« Quelles décisions sur le projet Ledona ? », « Quelles actions restent à faire ? »).
-  Il cherche **sur ton appareil**, par mots-clés, dans les décisions, les actions et le texte de tes réunions
-  (« cette semaine », « ce mois », « hier » limitent la période). Ce n'est pas une IA qui rédige : pour une vraie
-  réponse, **Demander à Claude** ouvre Claude avec ta question et les réunions les plus utiles.
+- **Assistant IA** : pose une question (« Quelles décisions sur le projet Ledona ? », « Qui doit envoyer les plans, et pour quand ? »).
+  1. il cherche les extraits utiles de tes réunions (décisions, actions, passages ; « cette semaine », « hier »… limitent la période) ;
+  2. un modèle de langage rédige une réponse courte en citant ses sources (numéros cliquables qui ouvrent le passage).
+  - **Moteur** (Paramètres → Assistant IA) :
+    - *Local, automatique* (par défaut) : **Qwen3 1,7B** sur la carte graphique (≈ 1,4 Go) ou **Qwen3 0,6B** sur le processeur (≈ 620 Mo), téléchargé une fois après accord. Rien ne quitte l'appareil. Sans carte graphique : 20 s à 1 min par réponse ;
+    - *Claude* : avec ta clé API Anthropic (compte API, payant à l'usage, distinct de l'abonnement claude.ai). Les extraits et la question sont envoyés à Anthropic. Clé gardée dans le navigateur uniquement ;
+    - *Recherche simple* : mots-clés seulement, sans modèle.
+  - Les petits modèles locaux peuvent se tromper : vérifie dans les sources citées.
+- **Personnalisation** : fond d'écran (photo, dégradés, ou ta propre image, réduite et gardée dans le navigateur), flou du fond, assombrissement (éclaircissement en mode clair) et opacité des panneaux. Appliqué tout de suite, gardé dans ce navigateur.
 - **Nouvelle transcription** : la page d'enregistrement (source, réglage automatique, modèle, langue) avec, à droite,
   le moniteur et les réglages du son.
 - **En haut** : recherche dans les transcriptions, thème, **notifications** et menu **Exporter** (.txt, .md, .srt, copier, Résumer avec Claude).

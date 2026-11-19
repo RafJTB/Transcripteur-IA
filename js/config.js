@@ -113,3 +113,12 @@ export const CHUNKING = { chunkLengthS: 30, strideLengthS: 5 };
 
 
 export const SAMPLE_RATE = 16000;
+
+/**
+ * Assistant : petit modèle de langage local (Transformers.js).
+ * Avec une carte graphique (WebGPU) : Qwen3 1,7B ; sinon Qwen3 0,6B sur le processeur.
+ */
+export const LLM_MODELS = {
+  large: { repo: 'onnx-community/Qwen3-1.7B-ONNX', device: 'webgpu', dtype: 'q4f16', sizeMB: 1430, label: 'Qwen3 1,7B' },
+  small: { repo: 'onnx-community/Qwen3-0.6B-ONNX', device: 'wasm', dtype: 'q8', sizeMB: 620, label: 'Qwen3 0,6B' },
+};

@@ -65,6 +65,12 @@ end $$;
 drop trigger if exists spaces_add_owner on public.spaces;
 create trigger spaces_add_owner after insert on public.spaces for each row execute function public.add_owner_member();
 
+-- Droits d'accès des utilisateurs connectés (les projets Supabase récents ne les donnent plus d'office
+-- aux tables créées par script). Les règles ci-dessous (RLS) restent le vrai contrôle.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.spaces, public.space_members, public.space_docs to authenticated;
+grant execute on function public.my_email(), public.is_member(uuid), public.is_owner(uuid) to authenticated;
+
 -- Règles d'accès (Row Level Security)
 alter table public.spaces enable row level security;
 alter table public.space_members enable row level security;

@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-21-9" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-21-9" />
+  <meta name="app-version" content="2026-11-21-10" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-21-10" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -30,6 +30,8 @@
           s.setProperty('--bg-blur', (p.blur == null ? 14 : p.blur) + 'px');
           s.setProperty('--veil-k', String((p.veil == null ? 100 : p.veil) / 100));
           s.setProperty('--panel-k', String((p.panel == null ? 100 : p.panel) / 100));
+          var av = p.accentVars && p.accentVars[t];
+          if (av) for (var k in av) s.setProperty(k, av[k]);
         }
       } catch (e) {}
     })();
@@ -39,7 +41,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-9', 'sw.js', 'js/app.js?v=2026-11-21-9', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-10', 'sw.js', 'js/app.js?v=2026-11-21-10', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -471,11 +473,16 @@
 
           <!-- ===== PERSONNALISATION ===== -->
           <section class="view view-page" data-page="custom">
-            <div class="home-head"><h2>Personnalisation</h2><p>Fond d’écran, flou et transparence. Les changements s’appliquent tout de suite et restent dans ce navigateur.</p></div>
+            <div class="home-head"><h2>Personnalisation</h2><p>Fond d’écran, couleur d’accent, flou et transparence. Les changements s’appliquent tout de suite et restent dans ce navigateur.</p></div>
             <section class="glass dash-card">
               <header class="dash-head"><h3>Fond d’écran</h3></header>
               <div class="bg-grid" id="bg-grid"></div>
               <input type="file" id="bg-file" accept="image/*" hidden />
+            </section>
+            <section class="glass dash-card">
+              <header class="dash-head"><h3>Couleur d’accent</h3></header>
+              <div class="accent-row" id="accent-row"></div>
+              <div class="accent-preview" aria-hidden="true"><span class="fchip active">Onglet sélectionné <small>3</small></span><span class="btn primary sm">Bouton principal</span><span class="link-btn">Lien</span></div>
             </section>
             <section class="glass dash-card">
               <header class="dash-head"><h3>Effets</h3><button class="link-btn" id="perso-reset" type="button">Réinitialiser</button></header>
@@ -778,6 +785,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-21-9"></script>
+  <script type="module" src="js/app.js?v=2026-11-21-10"></script>
 </body>
 </html>

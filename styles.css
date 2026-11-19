@@ -1280,22 +1280,27 @@ img.avatar { object-fit: cover; }
 }
 
 body { background: var(--bg); }
-.bg-photo { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: url('assets/bg.webp') center / cover no-repeat, var(--bg); }
+.bg-photo { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; background: var(--bg); }
+/* Photo floutée une seule fois (fixe) : l'effet « verre » sans flou recalculé derrière chaque panneau */
+.bg-photo::before { content: ''; position: absolute; inset: -48px; background: url('assets/bg.webp') center / cover no-repeat; filter: blur(14px) saturate(145%); }
 .bg-photo::after { content: ''; position: absolute; inset: 0; background: var(--photo-veil); }
 
 /* Verre */
 .card, .glass, .panel-audio, .top-search, .notif-panel, .menu-list, .modal-box, .drawer-panel, .recent-pop {
   background: var(--card); border: 1px solid var(--glass-line); box-shadow: var(--shadow);
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
 }
+/* Le fond est une photo déjà floutée et fixe : flouter en direct ce qui est derrière les panneaux n'apporte rien
+   et provoque, avec certaines cartes graphiques, des bandes mal redessinées au survol. Le flou en direct est
+   réservé aux fenêtres flottantes, qui passent au-dessus du contenu. */
+.card, .glass, .panel-audio, .top-search, .sidebar, .glass-btn, .theme-btn.icon-btn { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.notif-panel, .menu-list, .modal-box, .drawer-panel, .recent-pop { -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .card, .glass { border-radius: var(--radius); }
 .notif-panel, .menu-list, .recent-pop, .modal-box, .drawer-panel { background: rgb(var(--card-solid-rgb) / 0.88); }
 
 /* Barre latérale */
 .app { grid-template-columns: 236px minmax(0, 1fr); }
 .sidebar {
-  background: var(--side-bg); color: var(--text-2); border-right: 1px solid var(--glass-line);
-  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); padding: 24px 14px 14px;
+  background: var(--side-bg); color: var(--text-2); border-right: 1px solid var(--glass-line); padding: 24px 14px 14px;
 }
 .side-brand { gap: 12px; padding: 0 6px 26px; }
 .side-logo { width: 40px; height: 40px; display: grid; place-items: center; filter: drop-shadow(0 6px 18px rgb(124 108 255 / 0.55)); }

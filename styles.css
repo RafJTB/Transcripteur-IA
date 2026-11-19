@@ -1860,3 +1860,30 @@ body[data-page='record'] .panel-dash, body[data-page='doc'] .panel-dash { displa
   .view.hist-card .proj-head h2 { font-size: 23px; }
   .view.hist-card .hist-item.proj-card { padding: 14px; }
 }
+
+/* Menu du profil : comptes */
+.user-menu { background: rgb(var(--card-solid-rgb) / 0.94); border-color: var(--glass-line); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+.user-menu button { color: var(--text); }
+.user-menu button:hover { background: rgb(var(--ov) / 0.08); }
+.user-menu button.danger { color: var(--err); }
+.um-me { display: flex; align-items: center; gap: 10px; padding: 8px 10px 10px; }
+.um-me > div, .um-acc span { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.um-me b, .um-acc b { font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.um-me small, .um-acc small { font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.um-me .um-check { width: 18px; height: 18px; flex: none; border-radius: 50%; background: var(--ok) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12 4 4 8-8'/%3E%3C/svg%3E") center / 12px no-repeat; }
+.user-menu .avatar { width: 34px; height: 34px; font-size: 12px; flex: none; object-fit: cover; }
+.um-label { margin: 4px 10px 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); }
+.um-acc { display: flex; align-items: center; }
+.um-acc > button:first-child { flex: 1; min-width: 0; }
+.user-menu .um-forget { width: 30px; flex: none; justify-content: center; padding: 6px; color: var(--text-3); opacity: 0; }
+.um-acc:hover .um-forget { opacity: 1; }
+.user-menu .um-add { color: var(--accent-text); font-weight: 500; }
+.um-sep { border: 0; border-top: 1px solid var(--line-2); margin: 6px 4px; }
+
+.asst-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.asst-report { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 10px; background: rgb(var(--ov) / 0.05); border: 1px solid var(--line); }
+.asst-report small { font-size: 12px; color: var(--text-3); }
+.asst-report small:empty { display: none; }
+.asst-report pre { margin: 0; font: 11.5px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; color: var(--text-2); max-height: 220px; overflow: auto; }
+.asst-report .btn { align-self: flex-start; }
+.chat-note.warn { color: var(--warn) !important; }

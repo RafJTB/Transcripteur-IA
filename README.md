@@ -170,6 +170,7 @@ Fond photo flouté et panneaux en **verre dépoli** (violet), en mode **clair** 
   - **Modèles** : les modèles de transcription, leur taille, s'ils sont téléchargés, et le choix du modèle ;
   - **Paramètres** (compte, voix connues, moteur, lexique, stockage) et **Aide** (questions courantes).
   - En bas, le **compte Google** (connexion, état de la synchronisation).
+- **Changer de compte Google** : clic sur ton profil (en bas à gauche) → les comptes déjà utilisés sur ce navigateur s'y affichent, un clic pour basculer ; « Utiliser un autre compte » ouvre le choix de Google. Chaque compte retrouve ses propres transcriptions et dossiers. (Téléphone : Paramètres → Compte Google → Changer de compte.)
 - **Accueil (tableau de bord)** :
   - c'est la page d'arrivée ; « Bonjour » avec ton prénom (compte Google), boutons **Nouvelle transcription** et **Importer un fichier** ;
   - 4 chiffres : transcriptions, audio traité, projets (dossiers) ou voix connues, compréhension moyenne, avec l'évolution sur 7 jours ;
@@ -185,6 +186,7 @@ Fond photo flouté et panneaux en **verre dépoli** (violet), en mode **clair** 
     - *Claude* : avec ta clé API Anthropic (compte API, payant à l'usage, distinct de l'abonnement claude.ai). Les extraits et la question sont envoyés à Anthropic. Clé gardée dans le navigateur uniquement ;
     - *Recherche simple* : mots-clés seulement, sans modèle.
   - Les petits modèles locaux peuvent se tromper : vérifie dans les sources citées.
+  - Si le modèle précis ne démarre pas sur la carte graphique, l'appli essaie le modèle léger sur la carte graphique, puis passe en recherche simple. **Tester l'assistant** (Paramètres) lance le modèle sur une question courte et donne un rapport à copier (carte, format, erreur exacte) ; **Oublier les échecs** permet de retenter.
 - **Personnalisation** : fond d'écran (photo, dégradés, ou ta propre image, réduite et gardée dans le navigateur), flou du fond, assombrissement (éclaircissement en mode clair) et opacité des panneaux. Appliqué tout de suite, gardé dans ce navigateur.
 - **Nouvelle transcription** : la page d'enregistrement (source, réglage automatique, modèle, langue) avec, à droite,
   le moniteur et les réglages du son.

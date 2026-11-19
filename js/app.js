@@ -3492,6 +3492,104 @@ function chatAdd(role, html) {
   if (chatLog.length > 12) chatLog.shift();
   renderChat();
 }
+// ---------- Périmètre de l'assistant : toutes les réunions, un dossier ou une réunion ----------
+let asstScope = (() => { try { return JSON.parse(lsGet('assistant.scope', 'null')) || { type: 'all' }; } catch { return { type: 'all' }; } })();
+const FOLDER_SVG = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const ALL_SVG = '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>';
+
+/** Réunions concernées par le périmètre choisi. */
+function scopeDocs(docs) {
+  if (asstScope.type === 'folder') return docs.filter((d) => (asstScope.id === 'none' ? !Folders.get(d.folderId) : d.folderId === asstScope.id));
+  if (asstScope.type === 'doc') return docs.filter((d) => d.id === asstScope.id);
+  return docs;
+}
+
+/** Le périmètre existe-t-il encore (dossier supprimé, réunion effacée…) ? Sinon : toutes les réunions. */
+async function checkScope() {
+  if (asstScope.type === 'folder' && asstScope.id !== 'none' && !Folders.get(asstScope.id)) setScope({ type: 'all' }, { quiet: true });
+  if (asstScope.type === 'doc' && !(await myDocs()).some((d) => d.id === asstScope.id)) setScope({ type: 'all' }, { quiet: true });
+}
+
+function renderScopeChip() {
+  const chip = $('#asst-scope');
+  if (!chip) return;
+  const icon = asstScope.type === 'folder' ? FOLDER_SVG : asstScope.type === 'doc' ? STAT_ICONS.docs.replace('M3 7a2', 'M3 7a2') : ALL_SVG;
+  chip.classList.toggle('on', asstScope.type !== 'all');
+  chip.innerHTML = `${asstScope.type === 'doc' ? '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>' : icon}<span><small>Sur</small>${esc(asstScope.label || 'Toutes les réunions')}</span><svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>`;
+  $('#asst-scope-clear').hidden = asstScope.type === 'all';
+}
+
+function setScope(sc, { quiet = false } = {}) {
+  asstScope = sc.type === 'all' ? { type: 'all' } : sc;
+  lsSet('assistant.scope', JSON.stringify(asstScope));
+  lastExchange = null;
+  renderScopeChip();
+  if (!quiet) {
+    chatAdd('sys', asstScope.type === 'all' ? 'Je réponds maintenant sur <b>toutes tes réunions</b>.' : `Je réponds maintenant sur <b>${esc(asstScope.label)}</b>${asstScope.type === 'folder' ? ` (${asstScope.n || 0} réunion${(asstScope.n || 0) > 1 ? 's' : ''})` : ''}.`);
+    $('#chat-input')?.focus();
+  }
+}
+
+/** Fenêtre de choix du périmètre (dossiers et réunions, avec recherche). */
+async function openScopePicker() {
+  const pop = $('#scope-pop');
+  if (!pop.hidden) return closeScopePicker();
+  const docs = (await myDocs()).filter((d) => d.segments?.length);
+  const folders = Folders.list();
+  const count = (id) => docs.filter((d) => (id === 'none' ? !Folders.get(d.folderId) : d.folderId === id)).length;
+  const render = (q = '') => {
+    const f = [...q.trim()].map(fold).join('');
+    const match = (t) => !f || [...String(t)].map(fold).join('').includes(f);
+    const row = (attrs, icon, title, sub, active) => `<button type="button" class="sp-row${active ? ' active' : ''}" ${attrs}><span class="sp-ico">${icon}</span><span class="sp-txt"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span>${active ? '<i class="sp-on"></i>' : ''}</button>`;
+    let html = '';
+    if (match('Toutes les réunions')) html += row('data-scope="all"', ALL_SVG, 'Toutes les réunions', `${docs.length} réunion${docs.length > 1 ? 's' : ''}`, asstScope.type === 'all');
+    const fl = folders.filter((x) => match(x.name));
+    if (fl.length || (folders.length && match('Sans dossier'))) {
+      html += '<p class="sp-label">Projets (dossiers)</p>';
+      html += fl.map((x) => row(`data-scope="folder" data-id="${esc(x.id)}" data-label="${esc(x.name)}" data-n="${count(x.id)}"`, FOLDER_SVG, x.name, `${count(x.id)} réunion${count(x.id) > 1 ? 's' : ''}`, asstScope.type === 'folder' && asstScope.id === x.id)).join('');
+      if (folders.length && match('Sans dossier') && count('none')) html += row(`data-scope="folder" data-id="none" data-label="Sans dossier" data-n="${count('none')}"`, FOLDER_SVG, 'Sans dossier', `${count('none')} réunion${count('none') > 1 ? 's' : ''}`, asstScope.type === 'folder' && asstScope.id === 'none');
+    }
+    const dl = docs.filter((d) => match(d.title)).slice(0, 30);
+    if (dl.length) {
+      html += '<p class="sp-label">Réunions</p>';
+      html += dl.map((d) => { const [tone, icon] = docIcon(d.title); return row(`data-scope="doc" data-id="${esc(d.id)}" data-label="${esc(d.title)}"`, `<span class="r-ico ${tone}">${icon}</span>`, d.title, `${relDay(d.createdAt)}${d.durationS ? ` · ${fmtShortDur(d.durationS)}` : ''}${Folders.get(d.folderId) ? ` · ${Folders.get(d.folderId).name}` : ''}`, asstScope.type === 'doc' && asstScope.id === d.id); }).join('');
+    }
+    $('#sp-list').innerHTML = html || '<p class="sp-empty">Aucun résultat.</p>';
+  };
+  render();
+  pop.hidden = false;
+  $('#sp-search').value = '';
+  $('#sp-search').oninput = (e) => render(e.target.value);
+  $('#sp-search').focus();
+}
+
+function closeScopePicker() {
+  const pop = $('#scope-pop');
+  if (pop) pop.hidden = true;
+}
+
+function bindScope() {
+  $('#asst-scope').onclick = (e) => { e.stopPropagation(); openScopePicker(); };
+  $('#asst-scope-clear').onclick = (e) => { e.stopPropagation(); closeScopePicker(); setScope({ type: 'all' }); };
+  $('#sp-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-scope]');
+    if (!b) return;
+    closeScopePicker();
+    setScope({ type: b.dataset.scope, id: b.dataset.id, label: b.dataset.label, n: Number(b.dataset.n) || undefined });
+  });
+  $('#sp-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeScopePicker(); $('#chat-input').focus(); }
+    if (e.key === 'Enter') { e.preventDefault(); $('#sp-list [data-scope]:not(.active)')?.click() || $('#sp-list [data-scope]')?.click(); }
+  });
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#scope-pop, #asst-scope')) closeScopePicker(); });
+  // « @ » au début du champ : ouvre le choix
+  $('#chat-input').addEventListener('input', (e) => {
+    if (e.target.value.endsWith('@') && $('#scope-pop').hidden) { e.target.value = e.target.value.slice(0, -1); openScopePicker(); }
+  });
+  renderScopeChip();
+  checkScope();
+}
+
 function renderChat() {
   const box = $('#chat');
   if (!chatLog.length) {
@@ -3499,7 +3597,7 @@ function renderChat() {
       <div class="chat-sugg"><button type="button" data-q="Quelles décisions cette semaine ?">Décisions de la semaine</button><button type="button" data-q="Quelles actions restent à faire ?">Actions à faire</button></div></div></div>`;
     return;
   }
-  box.innerHTML = chatLog.map((m) => `<div class="msg ${m.role}">${m.role === 'bot' ? '<span class="bot-ico"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span>' : ''}<div class="bubble">${m.html}</div></div>`).join('');
+  box.innerHTML = chatLog.map((m) => m.role === 'sys' ? `<p class="msg-sys">${m.html}</p>` : `<div class="msg ${m.role}">${m.role === 'bot' ? '<span class="bot-ico"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span>' : ''}<div class="bubble">${m.html}</div></div>`).join('');
   box.scrollTop = box.scrollHeight;
 }
 
@@ -3708,8 +3806,11 @@ async function askAssistant(q) {
   if (!q || asstBusy) return;
   lastQuestion = q;
   chatAdd('me', esc(q));
-  const docs = (await myDocs()).filter((d) => d.status !== 'running' && d.status !== 'live' && d.segments?.length);
-  if (!docs.length) return chatAdd('bot', '<p>Tu n’as encore aucune transcription : enregistre une réunion et je pourrai répondre à tes questions.</p>');
+  await checkScope();
+  const all = (await myDocs()).filter((d) => d.status !== 'running' && d.status !== 'live' && d.segments?.length);
+  if (!all.length) return chatAdd('bot', '<p>Tu n’as encore aucune transcription : enregistre une réunion et je pourrai répondre à tes questions.</p>');
+  const docs = scopeDocs(all);
+  if (!docs.length) return chatAdd('bot', `<p>« ${esc(asstScope.label)} » ne contient aucune transcription. Choisis un autre projet avec la pastille « Sur : … » sous la conversation.</p>`);
   const sources = actionSources(docs);
   const engine = asstEngine();
   if (engine === 'search') return chatAdd('bot', keywordAnswer(q, sources));
@@ -3717,7 +3818,7 @@ async function askAssistant(q) {
     return chatAdd('bot', keywordAnswer(q, sources, '<p class="chat-note">Sans carte graphique compatible, je fais une recherche dans tes réunions. Pour des réponses rédigées : Claude (clé API) ou le modèle léger, dans Paramètres → Assistant IA.</p>'));
   const claude = engine === 'claude';
   const local = !claude && localLlm();
-  const { refs, context } = buildContext(q, sources, { budget: claude ? 14000 : local.light ? 3000 : 5000 });
+  const { refs, context } = buildContext(q, sources, { budget: claude ? 14000 : local.light ? 3000 : 5000, fill: asstScope.type !== 'all' && docs.length <= 3 });
   // L'échange précédent aide aux questions de suivi, mais embrouille les petits modèles locaux
   const messages = buildMessages(q, context, claude || !local.light ? lastExchange : null);
   // Bulle de réponse mise à jour au fil de l'eau
@@ -3857,7 +3958,7 @@ function bindAssistantSettings() {
 
 /** Claude : la question + les transcriptions les plus utiles (dans la limite d'une consigne raisonnable). */
 async function askClaudeAbout(q) {
-  const docs = (await myDocs()).filter((d) => d.segments?.length);
+  const docs = scopeDocs((await myDocs()).filter((d) => d.segments?.length));
   const { hits } = searchMeetings(q, actionSources(docs), { limit: 20 });
   const ids = [...new Set(hits.map((h) => h.doc.id))];
   const pick = [...ids.map((id) => docs.find((d) => d.id === id)), ...docs].filter((d, i, a) => d && a.indexOf(d) === i).slice(0, 5);
@@ -3954,6 +4055,7 @@ function bindDashboard() {
   renderChat();
   bindAssistantSettings();
   bindPerso();
+  bindScope();
 }
 
 function openRecentMenu(btn, d) {
@@ -3961,7 +4063,7 @@ function openRecentMenu(btn, d) {
   const pop = document.createElement('div');
   pop.id = 'recent-pop';
   pop.className = 'recent-pop';
-  pop.innerHTML = `<button type="button" data-m="open">Ouvrir</button><button type="button" data-m="actions">Décisions et actions</button><button type="button" data-m="claude">Résumer avec Claude</button>`;
+  pop.innerHTML = `<button type="button" data-m="open">Ouvrir</button><button type="button" data-m="actions">Décisions et actions</button><button type="button" data-m="claude">Résumer avec Claude</button><button type="button" data-m="ask">Interroger l’assistant</button>`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect();
   pop.style.top = `${Math.min(innerHeight - 140, r.bottom + 6)}px`;
@@ -3972,6 +4074,11 @@ function openRecentMenu(btn, d) {
     const m = e.target.closest('[data-m]')?.dataset.m;
     if (!m) return;
     pop.remove();
+    if (m === 'ask') {
+      setScope({ type: 'doc', id: d.id, label: d.title });
+      if (matchMedia('(max-width: 760px)').matches) toggleSheet(true);
+      return;
+    }
     openDoc(d);
     if (m === 'actions') setDocTab('actions');
     if (m === 'claude') setTimeout(() => sendToClaude(), 50);

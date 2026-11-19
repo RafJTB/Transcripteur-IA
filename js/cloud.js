@@ -273,6 +273,34 @@ export const Sync = {
   enabled: () => !!Auth.user() && !!Auth.clientId(),
 
   /** Transcription supprimée ici : à supprimer aussi du Drive à la prochaine synchro. */
+  /** Envoyer aussi les vidéos de l'écran dans Google Drive (activé par défaut). */
+  videosEnabled: () => ls.get('videos', '1') === '1',
+  setVideosEnabled(on) { ls.set('videos', on ? '1' : '0'); if (on) Sync.schedule(1000); },
+
+  /** Vidéo de l'écran de cet audio présente dans Google Drive ? (d'après la dernière synchro) */
+  videoOnDrive: (aid) => Sync._remote?.find((x) => x.appProperties?.kind === 'video' && x.appProperties.aid === aid) || null,
+
+  /** Supprime seulement la vidéo de l'écran dans Google Drive (le son est gardé). */
+  forgetVideo(aid) {
+    if (!Sync.enabled()) return;
+    const t = json(ls.get(tombKey()), { docs: [], audios: [] });
+    t.videos = [...new Set([...(t.videos || []), aid])];
+    ls.set(tombKey(), JSON.stringify(t));
+    Sync.schedule();
+  },
+
+  /** Vidéo absente de ce navigateur : récupérée du Drive. */
+  async pullVideo(aid) {
+    if (!Sync.enabled() || !Auth.token() || !aid) return null;
+    let f = Sync.videoOnDrive(aid);
+    if (!f) { Sync._remote = await Drive.list(); f = Sync.videoOnDrive(aid); }
+    if (!f) return null;
+    const blob = await Drive.getBlob(f.id);
+    const rec = { id: `${aid}.video`, blob, name: 'Écran', durationS: Number(f.appProperties.dur) || undefined, createdAt: Date.now(), kind: 'video' };
+    await Audios.put(rec);
+    return rec;
+  },
+
   forget(docId, audioId = null) {
     if (!Sync.enabled()) return;
     const t = json(ls.get(tombKey()), { docs: [], audios: [] });
@@ -312,11 +340,13 @@ export const Sync = {
     Sync._remote = files;
     const rDocs = new Map();
     const rAudios = new Map();
+    const rVideos = new Map();
     let rFolders = null;
     for (const f of files) {
       const p = f.appProperties || {};
       if (p.kind === 'doc' && p.tid) rDocs.set(p.tid, f);
       else if (p.kind === 'audio' && p.aid) rAudios.set(p.aid, f);
+      else if (p.kind === 'video' && p.aid) rVideos.set(p.aid, f);
       else if (p.kind === 'folders') rFolders = f;
     }
 
@@ -328,7 +358,13 @@ export const Sync = {
     }
     for (const id of [...tomb.audios]) {
       if (rAudios.has(id)) { await Drive.remove(rAudios.get(id).id); rAudios.delete(id); }
+      // L'audio supprimé emporte sa vidéo d'écran
+      if (rVideos.has(id)) { await Drive.remove(rVideos.get(id).id); rVideos.delete(id); }
       tomb.audios = tomb.audios.filter((x) => x !== id);
+    }
+    for (const id of [...(tomb.videos || [])]) {
+      if (rVideos.has(id)) { await Drive.remove(rVideos.get(id).id); rVideos.delete(id); }
+      tomb.videos = tomb.videos.filter((x) => x !== id);
     }
     ls.set(tombKey(), JSON.stringify(tomb));
 
@@ -368,6 +404,21 @@ export const Sync = {
       const ext = (a.blob.type.split('/')[1] || 'audio').split(';')[0];
       const id = await Drive.put(null, `audio-${aid}.${ext}`, a.blob, { kind: 'audio', aid, name: String(a.name || '').slice(0, 100), dur: String(Math.round(a.durationS || 0)) });
       rAudios.set(aid, { id, appProperties: { kind: 'audio', aid } });
+    }
+
+    // 3 bis. Vidéos de l'écran (option, activée par défaut) : envoyées une fois, nom lisible dans Drive
+    if (Sync.videosEnabled()) {
+      for (const d of local) {
+        const aid = d.audioId;
+        if (!aid || rVideos.has(aid)) continue;
+        const v = await Audios.get(`${aid}.video`).catch(() => null);
+        if (!v?.blob?.size) continue;
+        Sync._set('syncing', `Envoi de la vidéo de l’écran (${Math.round(v.blob.size / 1e6)} Mo)…`);
+        const name = `${String(d.title || 'Réunion').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80)} · écran.webm`;
+        const id = await Drive.put(null, name, v.blob, { kind: 'video', aid, dur: String(Math.round(v.durationS || d.durationS || 0)) });
+        rVideos.set(aid, { id, appProperties: { kind: 'video', aid } });
+        Sync._remote.push({ id, appProperties: { kind: 'video', aid } });
+      }
     }
 
     // 4. Dossiers

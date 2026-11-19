@@ -132,7 +132,10 @@ En « Voix + visio » ou « Visio seule », l'option **Garder la vidéo de l'éc
 - sauvegardée par morceaux pendant l'enregistrement, comme le son (récupérée si l'onglet plante) ;
 - dans le projet, **Écran enregistré** (panneau de droite) : la vidéo suit le lecteur — clic sur une phrase, la vidéo
   saute au même moment ; plein écran, incrustation (par-dessus les autres fenêtres), **supprimer la vidéo** (le son est gardé) ;
-- reste **sur ce PC** : pas envoyée dans Google Drive ni dans les espaces partagés ;
+- **sauvegardée dans Google Drive** (compte connecté ; option dans Paramètres → Compte Google, activée par défaut) :
+  fichier « <titre> · écran.webm » dans le dossier « Transcripteur IA », lisible directement dans Drive ;
+  « Libérer la place sur ce PC » efface la copie locale (retéléchargée à la demande, aussi sur un autre appareil) ;
+  supprimer la vidéo l'efface aussi de Drive ; pas envoyée dans les espaces partagés ;
 - partage d'un onglet (Teams dans le navigateur) : seule la réunion est filmée ; « Écran entier » : tout l'écran.
 - Filmer une visio, comme l'enregistrer : préviens les participants.
 

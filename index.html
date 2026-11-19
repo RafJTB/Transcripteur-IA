@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-5" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-5" />
+  <meta name="app-version" content="2026-11-22-6" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-6" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,7 +41,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-5', 'sw.js', 'js/app.js?v=2026-11-22-5', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-6', 'sw.js', 'js/app.js?v=2026-11-22-6', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -544,7 +544,7 @@
             <div class="help-list">
               <details class="glass help-item" open><summary>Comment enregistrer une réunion ?</summary><p>Accueil → <b>Nouvelle transcription</b>, puis le gros bouton rouge. À l’arrêt, la transcription démarre toute seule. En salle, choisis « Ma voix » ; en visio, « Voix + visio » pour entendre tous les participants.</p></details>
               <details class="glass help-item"><summary>Comment transcrire une visio Teams, Meet ou Zoom ?</summary><p>Choisis « Voix + visio ». Au démarrage, le navigateur te demande quoi partager : prends l’onglet de la visio (ou « Écran entier » pour l’appli Teams / Zoom) et coche <b>Partager l’audio</b>.</p></details>
-              <details class="glass help-item"><summary>Garder la vidéo de l’écran d’une visio ?</summary><p>En « Voix + visio » ou « Visio seule », active <b>Garder la vidéo de l’écran</b>. Dans le projet, l’écran enregistré s’affiche à droite et suit la lecture : clique sur une phrase pour revoir la slide ou la maquette montrée à ce moment. Environ 150 Mo par heure, gardés sur ce PC seulement. Préviens les participants.</p></details>
+              <details class="glass help-item"><summary>Garder la vidéo de l’écran d’une visio ?</summary><p>En « Voix + visio » ou « Visio seule », active <b>Garder la vidéo de l’écran</b>. Dans le projet, l’écran enregistré s’affiche à droite et suit la lecture : clique sur une phrase pour revoir la slide ou la maquette montrée à ce moment. Environ 150 Mo par heure, sauvegardés dans ton Google Drive si tu es connecté (tu peux ensuite libérer la place sur ce PC). Préviens les participants.</p></details>
               <details class="glass help-item"><summary>Quel modèle choisir ?</summary><p>Laisse le <b>réglage automatique</b> : il choisit selon ton PC. Sans carte graphique, « Rapide » ou « Équilibré » ; avec une carte graphique, « Précis ». Détails dans la page <b>Modèles</b>.</p></details>
               <details class="glass help-item"><summary>Comment savoir qui parle ?</summary><p>Après la transcription, les voix sont comparées et chaque phrase reçoit une couleur. Clique sur « Personne 1 » pour la renommer : sa voix est alors mémorisée et elle sera reconnue toute seule aux réunions suivantes (Paramètres → Voix connues).</p></details>
               <details class="glass help-item"><summary>À quoi sert l’onglet Actions ?</summary><p>Il relève les décisions (« on valide », « on part sur ») et les actions (« tu peux… », « je m’en occupe »), avec le responsable et l’échéance. Coche ce qui est fait ; pour un relevé reformulé, « Affiner avec Claude ».</p></details>
@@ -576,6 +576,7 @@
                   <button class="btn" id="acc-switch" type="button" hidden>Changer de compte</button>
                   <button class="btn ghost" id="acc-logout" type="button" hidden>Se déconnecter</button>
                 </div>
+                <label class="switch acc-videos"><input type="checkbox" id="acc-videos" /><span class="track"></span>Sauvegarder aussi les vidéos de l’écran dans Google Drive</label>
                 <p class="acc-note">Connecté, chaque personne retrouve ses transcriptions et ses dossiers sur tous ses appareils : ils sont copiés dans <b>son</b> Google Drive (dossier « Transcripteur IA »). L’appli ne voit que les fichiers qu’elle a créés. La transcription, elle, reste faite sur ton PC. <a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></p>
                 <details class="acc-admin">
                   <summary>Configuration (administrateur)</summary>
@@ -687,6 +688,8 @@
               <button class="icon-btn xs danger" id="doc-video-del" type="button" title="Supprimer la vidéo (garder le son)" aria-label="Supprimer la vidéo"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
             </header>
             <video id="doc-video" muted playsinline preload="metadata"></video>
+            <div class="dv-remote" id="doc-video-remote" hidden><p>La vidéo est dans ton Google Drive.</p><button class="btn sm" type="button" id="doc-video-get">Télécharger pour la lire ici</button></div>
+            <p class="dv-drive" id="doc-video-drive"></p>
             <p class="dv-note">Suit le lecteur : clique sur une phrase pour voir l’écran à ce moment.</p>
           </section>
 
@@ -840,6 +843,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-5"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-6"></script>
 </body>
 </html>

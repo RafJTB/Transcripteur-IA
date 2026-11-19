@@ -761,11 +761,33 @@ async function loadDocVideo(doc) {
   if (state.doc?.audioId !== want) return; // un autre projet a été ouvert entre-temps
   if (videoUrl) URL.revokeObjectURL(videoUrl);
   videoUrl = null;
-  if (!rec?.blob) { block.hidden = true; v.removeAttribute('src'); return; }
+  const onDrive = Sync.enabled() && Sync.videoOnDrive(want);
+  $('#doc-video-remote').hidden = true;
+  if (!rec?.blob?.size) {
+    v.removeAttribute('src');
+    v.hidden = true;
+    // Vidéo seulement dans Google Drive (autre appareil, ou place libérée sur ce PC)
+    block.hidden = !onDrive;
+    if (onDrive) { $('#doc-video-remote').hidden = false; $('#doc-video-size').textContent = 'Google Drive'; renderVideoDrive(want, false); }
+    return;
+  }
+  v.hidden = false;
   videoUrl = URL.createObjectURL(rec.blob);
   v.src = videoUrl;
   block.hidden = false;
   $('#doc-video-size').textContent = fmtBytes(rec.blob.size);
+  renderVideoDrive(want, true);
+}
+
+/** Ligne d'état « Google Drive » du bloc vidéo. */
+function renderVideoDrive(aid, local) {
+  const el = $('#doc-video-drive');
+  const f = Sync.enabled() ? Sync.videoOnDrive(aid) : null;
+  const link = f ? `<a href="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/view" target="_blank" rel="noopener">Ouvrir dans Drive</a>` : '';
+  el.innerHTML = !Sync.enabled() ? 'Sur ce PC seulement (connecte-toi à Google pour la sauvegarder).'
+    : f ? `<span class="ok">✓ Sauvegardée dans Google Drive</span> · ${link}${local ? ' · <button class="link-btn" type="button" id="doc-video-free">Libérer la place sur ce PC</button>' : ''}`
+    : Sync.videosEnabled() ? 'Envoi vers Google Drive à la prochaine synchronisation…'
+    : 'Sur ce PC seulement (sauvegarde des vidéos désactivée dans Paramètres).';
 }
 
 function bindDocVideo() {
@@ -794,11 +816,35 @@ function bindDocVideo() {
   $('#doc-video-del').onclick = async () => {
     const d = state.doc;
     if (!d?.audioId) return;
-    if (!(await ask('Supprimer la vidéo de l’écran ?', 'Le son et la transcription sont gardés. La vidéo est effacée de ce navigateur.', 'Supprimer la vidéo', { danger: true }))) return;
+    const onDrive = Sync.enabled() && Sync.videoOnDrive(d.audioId);
+    if (!(await ask('Supprimer la vidéo de l’écran ?', `Le son et la transcription sont gardés. La vidéo est effacée de ce navigateur${onDrive ? ' et de ton Google Drive' : ''}.`, 'Supprimer la vidéo', { danger: true }))) return;
     await tx_deleteVideo(d.audioId);
+    if (onDrive) { Sync.forgetVideo(d.audioId); Sync._remote = Sync._remote.filter((x) => x !== onDrive); }
     loadDocVideo(d);
     renderStorage();
     toast('Vidéo supprimée.', 'ok', 2500);
+  };
+  // Place libérée : la copie du PC est effacée, celle de Drive reste
+  $('#doc-video-drive').addEventListener('click', async (e) => {
+    if (e.target.id !== 'doc-video-free') return;
+    const d = state.doc;
+    if (!d?.audioId || !Sync.videoOnDrive(d.audioId)) return;
+    if (!(await ask('Libérer la place sur ce PC ?', 'La vidéo reste dans ton Google Drive : elle sera retéléchargée si tu veux la revoir ici.', 'Libérer la place'))) return;
+    await tx_deleteVideo(d.audioId);
+    loadDocVideo(d);
+    renderStorage();
+    toast('Place libérée : la vidéo reste dans Google Drive.', 'ok', 3500);
+  });
+  $('#doc-video-get').onclick = async () => {
+    const d = state.doc;
+    if (!d?.audioId) return;
+    const b = $('#doc-video-get');
+    b.disabled = true;
+    b.textContent = 'Téléchargement depuis Google Drive…';
+    try { await Sync.pullVideo(d.audioId); } catch (err) { toast(`Vidéo indisponible : ${err.message}`, 'err', 6000); }
+    b.disabled = false;
+    b.textContent = 'Télécharger pour la lire ici';
+    if (state.doc === d) loadDocVideo(d);
   };
   // Option « Garder la vidéo de l'écran »
   $('#toggle-video').checked = state.keepVideo;
@@ -4751,6 +4797,7 @@ async function syncNow({ quiet = false } = {}) {
       if (state.doc && !d) clearResult();
       else if (d && (d.updatedAt || 0) > (state.doc.updatedAt || 0) && state.phase === 'idle' && !$('#step-result').contains(document.activeElement)) showDoc(d);
     }
+    if (state.page === 'doc' && state.doc) loadDocVideo(state.doc);
     if (!quiet) toast('Synchronisé avec Google Drive.', 'ok', 2500);
   } catch (e) {
     if (!quiet) toast(e.message, e.status === 401 ? 'warn' : 'err', 6000);
@@ -4919,6 +4966,8 @@ function bindAccount(authResult) {
     if (b) switchAccount(b.dataset.switch || null);
   });
   $('#acc-switch').onclick = () => switchAccount(null);
+  $('#acc-videos').checked = Sync.videosEnabled();
+  $('#acc-videos').onchange = (e) => { Sync.setVideosEnabled(e.target.checked); if (state.doc) loadDocVideo(state.doc); };
   document.addEventListener('click', (e) => { if (!e.target.closest('#user-menu')) $('#user-menu').hidden = true; });
   $('#um-sync').onclick = () => { $('#user-menu').hidden = true; syncNow(); };
   $('#um-settings').onclick = () => { $('#user-menu').hidden = true; setView('settings'); };

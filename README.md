@@ -244,6 +244,39 @@ Limites :
 - les très courtes interventions (« oui », « d'accord ») sont rattachées à la phrase autour ;
 - une parole simultanée (deux personnes en même temps) n'est pas séparée.
 
+### Voix connues (reconnaissance d'une réunion à l'autre)
+
+Quand tu renommes un intervenant (« Personne 1 » → « Julie »), l'empreinte moyenne de sa voix
+est gardée dans un **carnet de voix**, dans ce navigateur. Aux réunions suivantes, chaque voix
+est comparée au carnet : si elle ressemble assez à une voix connue, elle prend son nom.
+
+- prudent par conception : en cas de doute (ressemblance trop faible, ou deux noms possibles),
+  la voix reste « Personne N » plutôt que de recevoir un mauvais nom ;
+- chaque nouveau renommage affine la voix (micro, pièce différents) ;
+- Paramètres → **Voix connues** : liste des voix, « oublier » une voix ou tout le carnet,
+  interrupteur pour désactiver la reconnaissance.
+
+Le carnet reste dans le navigateur (il n'est pas synchronisé). L'empreinte de chaque intervenant
+est aussi gardée dans la transcription, pour pouvoir l'apprendre plus tard.
+
+## Décisions et actions (onglet « Actions »)
+
+L'onglet **Actions** d'une transcription relève, sur ton PC et sans IA, par des règles de langue :
+
+- les **décisions** : « on valide », « on part sur », « c'est acté », « on garde »… ;
+- les **actions** : « il faut », « tu peux… ? », « je m'en occupe », « je t'envoie »,
+  « Marc va exporter… » ;
+- **qui** : le prénom cité (« Julie, tu… »), sinon la personne qui parle (« je… ») ou celle qui
+  répond à une demande (« pas de souci, je m'en charge ») ;
+- **pour quand** : « vendredi », « demain », « d'ici la fin du mois », « le 12 mars »…, converti
+  en date réelle d'après le jour de la réunion.
+
+Coche une action quand elle est faite, retire (×) ce qui n'en est pas une : ces choix sont
+gardés avec la transcription. **Copier** donne le relevé en Markdown (mail, Teams, Notion).
+Le repérage par règles est volontairement prudent et rate des formulations ; pour un relevé
+complet et reformulé, **Affiner avec Claude** ouvre Claude avec une consigne dédiée
+(décisions, tableau action / responsable / échéance, points en suspens).
+
 ## Compte Google, dossiers et synchronisation (facultatif)
 
 Sans compte, tout reste dans le navigateur, comme avant. Avec un compte Google :

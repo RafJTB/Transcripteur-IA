@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-20-10" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-20-10" />
+  <meta name="app-version" content="2026-11-20-11" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-20-11" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -27,8 +27,8 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-20-10', 'sw.js', 'js/app.js?v=2026-11-20-10', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
-        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-20-11', 'sw.js', 'js/app.js?v=2026-11-20-11', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
         return Promise.all(FILES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); }));
@@ -261,6 +261,7 @@
               <div class="dtabs" role="tablist" aria-label="Sections">
                 <button type="button" role="tab" data-dtab="tr" aria-selected="true"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>Transcription</button>
                 <button type="button" role="tab" data-dtab="analysis" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M5 20V10M10 20V4M15 20v-7M20 20v-4"/></svg>Analyse</button>
+                <button type="button" role="tab" data-dtab="actions" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5"/></svg>Actions</button>
                 <button type="button" role="tab" data-dtab="summary" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 12h6M9 16h6"/></svg>Résumé IA</button>
                 <button type="button" role="tab" data-dtab="translation" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c0 4 3 7 6 8M11 5c0 4-3 8-7 9"/><path d="m13 21 4-9 4 9M14.5 18h5"/></svg>Traduction</button>
               </div>
@@ -317,6 +318,21 @@
 
             <!-- Onglet Analyse -->
             <div class="dpanel dpanel-scroll" data-dpanel="analysis" hidden><div class="analysis" id="analysis"></div></div>
+
+            <!-- Onglet Actions -->
+            <div class="dpanel dpanel-scroll" data-dpanel="actions" hidden>
+              <div class="act-box">
+                <div class="sum-intro">
+                  <span class="sum-ico"><svg viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5"/></svg></span>
+                  <div><b>Décisions et actions</b><p>Repérées automatiquement, sur ton PC. Coche ce qui est fait, retire ce qui n’en est pas.</p></div>
+                  <div class="act-btns">
+                    <button class="btn sm" id="act-copy" type="button" title="Copier le relevé (Markdown) pour un mail, Teams ou Notion"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copier</button>
+                    <button class="btn sm claude" id="act-claude" type="button">Affiner avec Claude</button>
+                  </div>
+                </div>
+                <div class="actions-list" id="actions"></div>
+              </div>
+            </div>
 
             <!-- Onglet Résumé IA -->
             <div class="dpanel dpanel-scroll" data-dpanel="summary" hidden>
@@ -403,6 +419,13 @@
                   <span class="label">Adresse de retour à déclarer dans Google Cloud</span>
                   <div class="acc-redirect"><code id="acc-redirect"></code><button class="btn xs" id="acc-copy" type="button">Copier</button></div>
                 </details>
+              </section>
+              <section class="card set-card voice-card">
+                <h3>Voix connues</h3>
+                <p>Quand tu renommes un intervenant, sa voix est mémorisée : aux réunions suivantes, il est reconnu et nommé tout seul. Le carnet de voix reste dans ce navigateur.</p>
+                <label class="switch"><input type="checkbox" id="toggle-voiceid" /><span class="track"></span>Reconnaître les voix connues</label>
+                <ul class="voice-list" id="voice-list"></ul>
+                <button class="link-btn danger" id="voice-clear" type="button" hidden>Oublier toutes les voix</button>
               </section>
               <section class="card set-card">
                 <h3>Moteur de calcul</h3>
@@ -587,6 +610,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-20-10"></script>
+  <script type="module" src="js/app.js?v=2026-11-20-11"></script>
 </body>
 </html>

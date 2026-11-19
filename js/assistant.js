@@ -26,7 +26,7 @@ const fold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
  * @param {{budget?: number, now?: number}} o budget : taille maximale des extraits (caractères)
  * @returns {{refs: object[], context: string, intent: string}}
  */
-export function buildContext(q, sources, { budget = 4000, now = Date.now() } = {}) {
+export function buildContext(q, sources, { budget = 4000, now = Date.now(), fill = false } = {}) {
   const fq = fold(q);
   const docs = sources.map((s) => s.doc).sort((a, b) => b.createdAt - a.createdAt);
   const { intent, hits } = searchMeetings(q, sources, { limit: 14, now });
@@ -47,6 +47,19 @@ export function buildContext(q, sources, { budget = 4000, now = Date.now() } = {
     used += len;
     refs.push({ ...r, n: refs.length + 1 });
     return true;
+  };
+  /** Texte d'une réunion en morceaux d'environ 700 caractères (avec qui parle). */
+  const addChunks = (d) => {
+    let chunk = '';
+    let start = 0;
+    let first = 0;
+    for (const [i, s] of (d.segments || []).entries()) {
+      if (chunk.length > 700) { if (!add({ doc: d, type: 'extrait', i: first, start, text: chunk.trim(), who: null })) return; chunk = ''; }
+      if (!chunk) { start = s.start; first = i; }
+      const who = speakerOf(d, i);
+      chunk += `${who ? `${who} : ` : ''}${s.text} `;
+    }
+    if (chunk) add({ doc: d, type: 'extrait', i: first, start, text: chunk.trim(), who: null });
   };
   // 1. « Ma dernière réunion », « résume… » : le début de la réunion la plus récente (ou celle nommée)
   const wantsSummary = /(derniere|precedente) reunion|resume|de quoi (on a|a-t-on|avons-nous) parle|sujet de la reunion/.test(fq);
@@ -86,6 +99,10 @@ export function buildContext(q, sources, { budget = 4000, now = Date.now() } = {
       }
     }
   }
+  // 4. Périmètre choisi (une réunion, un petit dossier) : on complète avec leur texte, dans la limite du budget
+  if (fill) for (const d of docs) addChunks(d);
+  refs.sort((a, b) => (a.doc.id === b.doc.id ? a.start - b.start : 0));
+  refs.forEach((r, k) => (r.n = k + 1));
   // Contenu d'abord, contexte ensuite (les petits modèles recopient sinon les en-têtes)
   const label = { decision: 'décision', action: 'action à faire', passage: 'passage', extrait: 'extrait' };
   const lines = refs.map((r) => `[R${r.n}] ${r.text} (${label[r.type] || 'passage'}${r.who ? `, ${r.type === 'action' ? 'responsable' : 'dit par'} ${r.who}` : ''}${r.done ? ', faite' : ''} ; réunion « ${r.doc.title} », ${fmtDate(r.doc.createdAt)})`);

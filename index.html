@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-21-8" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-21-8" />
+  <meta name="app-version" content="2026-11-21-9" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-21-9" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -39,7 +39,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-8', 'sw.js', 'js/app.js?v=2026-11-21-8', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-9', 'sw.js', 'js/app.js?v=2026-11-21-9', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -606,8 +606,16 @@
             <section class="glass pcard assistant">
               <header class="dash-head"><h3><span class="h-ico spark"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></span>Assistant</h3><span class="new-badge">Nouveau</span></header>
               <div class="chat" id="chat" aria-live="polite"></div>
+              <div class="scope-row">
+                <button type="button" class="scope-chip" id="asst-scope" title="Choisir le projet ou la réunion à questionner (ou tape @)"></button>
+                <button type="button" class="scope-x" id="asst-scope-clear" title="Revenir à toutes les réunions" aria-label="Revenir à toutes les réunions" hidden><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <div class="scope-pop" id="scope-pop" hidden>
+                  <label class="sp-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="sp-search" placeholder="Chercher un projet, une réunion…" autocomplete="off" /></label>
+                  <div class="sp-list" id="sp-list"></div>
+                </div>
+              </div>
               <form class="chat-form" id="chat-form" autocomplete="off">
-                <input id="chat-input" placeholder="Pose ta question…" aria-label="Question sur tes réunions" maxlength="300" />
+                <input id="chat-input" placeholder="Pose ta question… (@ : choisir un projet)" aria-label="Question sur tes réunions" maxlength="300" />
                 <button class="chat-send" type="submit" aria-label="Envoyer"><svg viewBox="0 0 24 24"><path d="M4 12 20 4l-4 16-4-7z"/><path d="m12 13 8-9"/></svg></button>
               </form>
             </section>
@@ -770,6 +778,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-21-8"></script>
+  <script type="module" src="js/app.js?v=2026-11-21-9"></script>
 </body>
 </html>

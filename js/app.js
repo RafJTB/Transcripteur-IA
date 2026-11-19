@@ -17,7 +17,7 @@ import { VoiceBook, centroids, matchVoices, packEmb } from './voices.js';
 import { extractActions, actionsToMarkdown } from './actions.js';
 import { dashStats, dailyMinutes, weeklyMinutes, speakerTotals, topicShares, periodStart, searchMeetings } from './insights.js';
 import { buildContext, buildMessages, renderAnswer, citedRefs } from './assistant.js';
-import { BACKGROUNDS, DEFAULTS as PERSO_DEFAULTS, loadPerso, savePerso, applyPerso, customImage, shrinkImage, saveCustomImage } from './perso.js';
+import { ACCENTS, accentVars, BACKGROUNDS, DEFAULTS as PERSO_DEFAULTS, loadPerso, savePerso, applyPerso, customImage, shrinkImage, saveCustomImage } from './perso.js';
 import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -4128,8 +4128,11 @@ const PLUS_ICON = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
 function setPerso(patch) {
   const p = { ...loadPerso(), ...patch };
   p.css = (BACKGROUNDS.find((b) => b.id === p.bg) || BACKGROUNDS[0]).css;
+  // Gardé tout calculé pour le petit script en tête de page (couleur appliquée avant l'affichage)
+  p.accentVars = p.accent ? accentVars(p.accent) : null;
   savePerso(p);
   applyPerso(p);
+  applyThemeColors();
   renderPerso();
 }
 
@@ -4142,6 +4145,12 @@ function renderPerso() {
     + (img
       ? `<button class="bg-tile${p.bg === 'custom' ? ' active' : ''}" type="button" data-bg="custom"><span class="sw" style="background-image:url('${img}')"></span>Ton image <small>· <span data-change>changer</span></small></button>`
       : `<button class="bg-tile" type="button" data-import><span class="sw add">${PLUS_ICON}</span>Importer une image</button>`);
+  const cur = (p.accent || ACCENTS[0].hex).toLowerCase();
+  const known = ACCENTS.find((a) => a.hex === cur);
+  $('#accent-row').innerHTML = ACCENTS.map((a) => {
+    const v = accentVars(a.hex).dark;
+    return `<button type="button" class="acc-sw${a.hex === cur ? ' active' : ''}" data-accent="${a.hex}" title="${esc(a.label)}" aria-label="${esc(a.label)}" style="--a:rgb(${v['--sel-a']});--b:${a.hex}"><i></i></button>`;
+  }).join('') + `<label class="acc-sw custom${known ? '' : ' active'}" title="Couleur personnalisée"><i></i><input type="color" id="accent-custom" value="${cur}" aria-label="Couleur personnalisée" /></label><span class="accent-name">${esc(known ? known.label : `Personnalisée (${cur})`)}</span>`;
   const light = document.documentElement.dataset.theme === 'light';
   $('#perso-blur').value = p.blur;
   $('#perso-blur-v').textContent = `${p.blur} px`;
@@ -4186,8 +4195,20 @@ function bindPerso() {
   live('#perso-veil', 'veil');
   live('#perso-panel', 'panel');
   $('#perso-reset').onclick = () => setPerso({ ...PERSO_DEFAULTS });
+  $('#accent-row').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-accent]');
+    if (b) setPerso({ accent: b.dataset.accent === ACCENTS[0].hex ? null : b.dataset.accent });
+  });
+  // Sélecteur libre : aperçu en direct, enregistré à la fermeture
+  $('#accent-row').addEventListener('input', (e) => {
+    if (e.target.id !== 'accent-custom') return;
+    applyPerso({ ...loadPerso(), accent: e.target.value });
+  });
+  $('#accent-row').addEventListener('change', (e) => {
+    if (e.target.id === 'accent-custom') setPerso({ accent: e.target.value.toLowerCase() });
+  });
   // Le libellé et l'opacité affichée dépendent du thème
-  $('#btn-theme').addEventListener('click', () => setTimeout(renderPerso));
+  $('#btn-theme').addEventListener('click', () => setTimeout(() => { applyPerso(); applyThemeColors(); renderPerso(); }));
   renderPerso();
 }
 

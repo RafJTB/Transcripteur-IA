@@ -3515,13 +3515,28 @@ const CLAUDE_MODELS = [
 ];
 const asstEngine = () => lsGet('assistant.engine', 'auto');
 const claudeKey = () => lsGet('assistant.key', '');
-/** Modèle local choisi : le plus précis avec une carte graphique, le léger sinon. */
-function localLlm() {
+/**
+ * Modèles locaux à essayer, dans l'ordre. Sur carte graphique : format q4f16 si elle gère la
+ * demi-précision (shader-f16), sinon q4. Les échecs mémorisés sont sautés.
+ */
+function localCandidates() {
   const e = asstEngine();
-  const big = e === 'local-large' || (e === 'auto' && caps().webgpu && !lsGet('assistant.largeFailed', ''));
-  if (!big || !caps().webgpu) return LLM_MODELS.small;
-  return caps().f16 ? LLM_MODELS.large : { ...LLM_MODELS.large, dtype: 'q4', sizeMB: 2150 };
+  const gpu = caps().webgpu;
+  const f16 = !!caps().f16;
+  const failed = (k) => !!lsGet(`assistant.failed.${k}`, '');
+  const big = { ...LLM_MODELS.large, dtype: f16 ? 'q4f16' : 'q4', sizeMB: f16 ? 1430 : 2150, key: `large-${f16 ? 'q4f16' : 'q4'}` };
+  const smallGpu = { ...LLM_MODELS.small, device: 'webgpu', dtype: f16 ? 'q4f16' : 'q4', sizeMB: f16 ? 570 : 920, key: `small-gpu-${f16 ? 'q4f16' : 'q4'}`, light: true };
+  const smallCpu = { ...LLM_MODELS.small, key: 'small-cpu', light: true };
+  let list;
+  if (e === 'local-large') list = gpu ? [big, smallGpu, smallCpu] : [smallCpu];
+  else if (e === 'local-small') list = gpu ? [smallGpu, smallCpu] : [smallCpu];
+  else list = gpu ? [big, smallGpu] : [];
+  const ok = list.filter((m) => !failed(m.key));
+  // Choix explicite : on retente au moins le dernier ; automatique : recherche simple si tout a échoué
+  return ok.length || e === 'auto' ? ok : list.slice(-1);
 }
+/** Premier modèle local qui sera essayé (pour l'affichage). */
+const localLlm = () => localCandidates()[0] || LLM_MODELS.small;
 
 let llm = null;
 let llmReady = null;
@@ -3579,25 +3594,34 @@ function llmError(e) {
 }
 
 async function answerLocal(messages, opts) {
-  try {
-    return await answerLocalWith(localLlm(), messages, opts);
-  } catch (e) {
-    // Le grand modèle ne passe pas sur cette carte graphique : on bascule sur le léger
-    const m = localLlm();
-    const raw = String(e?.message || e);
-    if (m.repo === LLM_MODELS.large.repo && m.device === 'webgpu') {
+  const tries = localCandidates();
+  let lastErr = null;
+  const errors = [];
+  for (let k = 0; k < tries.length; k++) {
+    const m = tries[k];
+    try {
+      const text = await answerLocalWith(m, messages, opts, k > 0);
+      if (text != null && k > 0) opts.onNote?.(`${tries[0].label} n’a pas pu démarrer sur cet appareil : réponse de ${m.label}${m.light ? ' (modèle léger, réponses plus approximatives)' : ''}.`);
+      return text;
+    } catch (e) {
+      lastErr = e;
+      const raw = String(e?.message || e);
       if (llm) { llm.terminate(); llm = null; llmReady = null; }
-      // Un problème de réseau n'est pas un échec du modèle : on pourra réessayer
-      const network = /fetch|network|Failed to load|ERR_|timeout/i.test(raw);
-      if (!network && asstEngine() === 'auto') lsSet('assistant.largeFailed', raw.slice(0, 300));
-      const err = new Error(network
-        ? `Téléchargement de ${m.label} interrompu (connexion ?). Repose ta question pour reprendre.`
-        : `${m.label} n'a pas pu démarrer sur la carte graphique de cet appareil : je passe en recherche simple. Tu peux réessayer ou choisir Claude dans Paramètres → Assistant IA.`);
-      err.detail = `${m.repo} · ${m.dtype} · ${caps().adapter || 'GPU'} — ${raw.slice(0, 300)}`;
-      throw err;
+      // Un problème de réseau n'est pas un échec du modèle : on s'arrête là, on pourra réessayer
+      if (/fetch|network|Failed to load|ERR_|timeout/i.test(raw)) {
+        const err = new Error(`Téléchargement de ${m.label} interrompu (connexion ?). Repose ta question pour reprendre.`);
+        err.detail = `${m.repo} · ${m.device} · ${m.dtype} — ${raw.slice(0, 300)}`;
+        throw err;
+      }
+      lsSet(`assistant.failed.${m.key}`, raw.slice(0, 300));
+      errors.push(`${m.label} (${m.device}, ${m.dtype}) : ${raw.slice(0, 220)}`);
+      if (k < tries.length - 1) opts.onStatus(`${m.label} n’a pas pu démarrer (${llmError(e).message.replace(/\.$/, '')}) : essai avec ${tries[k + 1].label}…`);
     }
-    throw llmError(e);
   }
+  const err = llmError(lastErr);
+  err.message = `Aucun modèle local n’a pu démarrer sur cet appareil : je passe en recherche simple. Envoie-moi le détail ci-dessous, ou choisis Claude dans Paramètres → Assistant IA.`;
+  err.detail = `${caps().adapter || 'Pas de carte graphique'} · f16 ${caps().f16 ? 'oui' : 'non'} · ${errors.join(' | ')}`;
+  throw err;
 }
 
 async function answerLocalWith(m, messages, { onToken, onStatus }, consented = false) {
@@ -3689,13 +3713,13 @@ async function askAssistant(q) {
   const sources = actionSources(docs);
   const engine = asstEngine();
   if (engine === 'search') return chatAdd('bot', keywordAnswer(q, sources));
-  if (engine === 'auto' && (!caps().webgpu || lsGet('assistant.largeFailed', '')))
+  if (engine === 'auto' && (!caps().webgpu || !localCandidates().length))
     return chatAdd('bot', keywordAnswer(q, sources, '<p class="chat-note">Sans carte graphique compatible, je fais une recherche dans tes réunions. Pour des réponses rédigées : Claude (clé API) ou le modèle léger, dans Paramètres → Assistant IA.</p>'));
   const claude = engine === 'claude';
   const local = !claude && localLlm();
-  const { refs, context } = buildContext(q, sources, { budget: claude ? 14000 : local === LLM_MODELS.large ? 5000 : 3000 });
+  const { refs, context } = buildContext(q, sources, { budget: claude ? 14000 : local.light ? 3000 : 5000 });
   // L'échange précédent aide aux questions de suivi, mais embrouille les petits modèles locaux
-  const messages = buildMessages(q, context, claude || local === LLM_MODELS.large ? lastExchange : null);
+  const messages = buildMessages(q, context, claude || !local.light ? lastExchange : null);
   // Bulle de réponse mise à jour au fil de l'eau
   chatAdd('bot', '<p class="typing"><i></i><i></i><i></i></p>');
   const bubble = $$('#chat .msg.bot .bubble').pop();
@@ -3711,17 +3735,20 @@ async function askAssistant(q) {
   };
   const onToken = (t) => { text += t; if (!raf) raf = requestAnimationFrame(paint); };
   const onStatus = (s) => { status.textContent = s; if (!raf) raf = requestAnimationFrame(paint); };
+  let note = '';
+  const onNote = (n) => { note = n; };
   setChatBusy(true);
   try {
-    const out = claude ? await answerClaude(messages, { onToken, onStatus }) : await answerLocal(messages, { onToken, onStatus });
+    const out = claude ? await answerClaude(messages, { onToken, onStatus }) : await answerLocal(messages, { onToken, onStatus, onNote });
     if (out == null) { bubble.innerHTML = keywordAnswer(q, sources, '<p class="chat-note">Assistant IA non activé : voici une recherche par mots-clés.</p>'); return; }
     text = out || text;
     if (!text.trim()) text = 'Je n’ai pas pu formuler de réponse. Reformule ta question, ou demande à Claude.';
     status.textContent = '';
     const src = citedRefs(text, refs);
-    const engineLabel = claude ? (CLAUDE_MODELS.find((x) => x.id === lsGet('assistant.model', CLAUDE_MODELS[0].id)) || CLAUDE_MODELS[0]).label.replace(/ \(.*/, '') : `${local.label}, sur ton appareil`;
+    const engineLabel = claude ? (CLAUDE_MODELS.find((x) => x.id === lsGet('assistant.model', CLAUDE_MODELS[0].id)) || CLAUDE_MODELS[0]).label.replace(/ \(.*/, '') : `${localLlm().label}, sur ton appareil`;
     bubble.innerHTML = renderAnswer(text, refs)
       + (src.length ? `<ul class="chat-src">${src.map((r) => `<li><button type="button" data-open="${esc(r.doc.id)}" data-i="${r.i}"><b>${r.n}</b><span>« ${esc(r.text.length > 110 ? r.text.slice(0, 109) + '…' : r.text)} »<small>${esc(r.doc.title)} · ${relDay(r.doc.createdAt)} · ${fmtClock(r.start)}</small></span></button></li>`).join('')}</ul>` : '')
+      + (note ? `<p class="chat-note warn">${esc(note)}</p>` : '')
       + `<p class="chat-note">${esc(engineLabel)} · à vérifier dans les sources.${claude ? '' : ' <button class="chat-claude" type="button" data-claude>Demander à Claude</button>'}</p>`;
     lastExchange = { q, a: text };
     chatLog[chatLog.length - 1].html = bubble.innerHTML;
@@ -3736,6 +3763,46 @@ async function askAssistant(q) {
   }
 }
 
+/** Paramètres → Assistant IA → Tester : lance le modèle sur une question simple et produit un rapport. */
+async function runAssistantTest() {
+  const out = $('#asst-report');
+  const lines = [];
+  const log = (t) => { lines.push(t); out.hidden = false; $('#asst-report pre').textContent = lines.join('\n'); };
+  const c = caps();
+  log(`Navigateur : ${navigator.userAgent.match(/(Edg|Chrome|Firefox|Safari)\/[\d.]+/g)?.join(' ') || navigator.userAgent.slice(0, 80)}`);
+  log(`Carte graphique : ${c.webgpu ? c.adapter || 'oui' : 'non disponible'}${c.softwareGpu ? ' (logicielle)' : ''} · demi-précision (f16) : ${c.f16 ? 'oui' : 'non'} · tampon max : ${c.maxBufferMB ?? '?'} Mo · mémoire : ${navigator.deviceMemory ?? '?'} Go · cœurs : ${navigator.hardwareConcurrency ?? '?'}`);
+  const engine = asstEngine();
+  log(`Moteur choisi : ${engine}`);
+  if (engine === 'claude' || engine === 'search') return log('Le test concerne le modèle local : choisis « Local » dans le menu Moteur.');
+  const tries = localCandidates();
+  if (!tries.length) return log('Pas de carte graphique compatible : en automatique, l’assistant fait une recherche simple. Choisis « Local léger » pour tester le modèle sur le processeur.');
+  $('#asst-test').disabled = true;
+  for (const [k, m] of tries.entries()) {
+    const t0 = performance.now();
+    log(`→ ${m.label} · ${m.device} · ${m.dtype} (${fmtMB(m.sizeMB)})…`);
+    try {
+      let first = 0;
+      let txt = '';
+      const r = await answerLocalWith(m, [{ role: 'system', content: 'Réponds en un seul mot.' }, { role: 'user', content: 'Dis simplement : bonjour' }], {
+        onToken: (t) => { if (!first) first = performance.now(); txt += t; },
+        onStatus: (s) => { if (s) $('#asst-report small').textContent = s; },
+      }, k > 0);
+      if (r == null) { log('  annulé (téléchargement refusé).'); break; }
+      log(`  ✓ OK en ${((performance.now() - t0) / 1000).toFixed(1)} s (1er mot après ${first ? ((first - t0) / 1000).toFixed(1) : '?'} s) : « ${(r || txt).trim().slice(0, 40)} »`);
+      lsSet(`assistant.failed.${m.key}`, '');
+      localStorage.removeItem(`assistant.failed.${m.key}`);
+      break;
+    } catch (e) {
+      log(`  ✗ échec : ${String(e?.message || e).slice(0, 400)}`);
+      if (!/fetch|network|Failed to load|ERR_|timeout/i.test(String(e?.message))) lsSet(`assistant.failed.${m.key}`, String(e?.message || e).slice(0, 300));
+      if (llm) { llm.terminate(); llm = null; llmReady = null; }
+    }
+  }
+  $('#asst-report small').textContent = '';
+  $('#asst-test').disabled = false;
+  renderAssistantSettings();
+}
+
 /** Paramètres → Assistant IA */
 function renderAssistantSettings() {
   const sel = $('#asst-engine');
@@ -3746,15 +3813,17 @@ function renderAssistantSettings() {
   $('#asst-model').value = lsGet('assistant.model', CLAUDE_MODELS[0].id);
   $('#asst-key').value = claudeKey() ? '••••••••••••' : '';
   const m = localLlm();
-  const failed = lsGet('assistant.largeFailed', '');
-  const noGpu = !caps().webgpu || !!failed;
+  const fails = Object.keys(localStorage).filter((k) => k.startsWith('assistant.failed.')).map((k) => `${k.slice(17)} : ${localStorage.getItem(k)}`);
+  const failed = fails.join(' | ');
+  const noGpu = !caps().webgpu;
   $('#asst-retry').hidden = !failed;
   $('#asst-fail').hidden = !failed;
-  $('#asst-fail').textContent = failed ? `Échec du modèle local sur cette carte graphique : ${failed}` : '';
+  $('#asst-fail').textContent = failed ? `Échecs mémorisés : ${failed}` : '';
   $('#asst-info').textContent = sel.value === 'search' ? 'Recherche par mots-clés dans tes réunions, sans modèle de langage.'
-    : sel.value === 'auto' && failed ? 'Le modèle local n’a pas pu démarrer sur cette carte graphique : recherche dans tes réunions, sans réponse rédigée. Réessaie, ou choisis Claude pour des réponses rédigées.'
+    : sel.value === 'auto' && caps().webgpu && !localCandidates().length ? 'Aucun modèle local n’a pu démarrer sur cette carte graphique : recherche dans tes réunions, sans réponse rédigée. Lance le test pour voir pourquoi, ou choisis Claude.'
+    : sel.value === 'auto' && failed && m.light ? `${m.label} sur la carte graphique (le modèle plus précis n’a pas pu démarrer). Réponses plus approximatives ; réessaie ou choisis Claude.`
     : sel.value === 'auto' && noGpu ? 'Pas de carte graphique compatible détectée : recherche dans tes réunions, sans réponse rédigée. Pour des réponses rédigées, choisis Claude (le plus fiable) ou le modèle local léger (expérimental, réponses approximatives).'
-    : sel.value === 'local-small' ? `${LLM_MODELS.small.label} (${fmtMB(LLM_MODELS.small.sizeMB)}), sur le processeur. Expérimental : petit modèle, réponses parfois approximatives ; vérifie dans les sources. 20 s à 2 min par réponse.`
+    : sel.value === 'local-small' ? `${m.label} (${fmtMB(m.sizeMB)}), sur ${m.device === 'webgpu' ? 'la carte graphique' : 'le processeur'}. Expérimental : petit modèle, réponses parfois approximatives ; vérifie dans les sources.${m.device === 'wasm' ? ' 20 s à 2 min par réponse.' : ''}`
     : isClaude ? 'Les extraits utiles de tes réunions et ta question sont envoyés à Claude (Anthropic) via ta clé API. Facturé à l’usage sur ton compte Anthropic.'
     : `${m.label} (${fmtMB(m.sizeMB)}), sur ${m.device === 'webgpu' ? 'la carte graphique' : 'le processeur'}. Rien ne quitte ton appareil.${m.device === 'wasm' ? ' Sans carte graphique, une réponse prend de 20 s à 1 min.' : ''}`;
 }
@@ -3762,8 +3831,8 @@ function renderAssistantSettings() {
 function bindAssistantSettings() {
   const sel = $('#asst-engine');
   if (!sel) return;
-  // Ancien échec mémorisé sans détail (avant l'adaptation du modèle à la carte graphique) : on retente
-  if (lsGet('assistant.largeFailed', '') === '1') localStorage.removeItem('assistant.largeFailed');
+  // Anciens échecs (avant la chaîne de repli) : on retente avec la nouvelle logique
+  localStorage.removeItem('assistant.largeFailed');
   $('#asst-model').innerHTML = CLAUDE_MODELS.map((m) => `<option value="${m.id}">${esc(m.label)}</option>`).join('');
   sel.onchange = () => { lsSet('assistant.engine', sel.value); renderAssistantSettings(); };
   $('#asst-model').onchange = (e) => lsSet('assistant.model', e.target.value);
@@ -3775,7 +3844,13 @@ function bindAssistantSettings() {
     renderAssistantSettings();
     toast(v ? 'Clé API enregistrée dans ce navigateur.' : 'Clé API effacée.', 'ok', 3000);
   };
-  $('#asst-retry').onclick = () => { localStorage.removeItem('assistant.largeFailed'); renderAssistantSettings(); toast('C’est noté : pose ta question à l’assistant pour réessayer.', 'ok', 4000); };
+  $('#asst-retry').onclick = () => {
+    Object.keys(localStorage).filter((k) => k.startsWith('assistant.failed.') || k === 'assistant.largeFailed').forEach((k) => localStorage.removeItem(k));
+    renderAssistantSettings();
+    toast('Échecs oubliés : pose ta question à l’assistant (ou lance le test) pour réessayer.', 'ok', 4000);
+  };
+  $('#asst-test').onclick = runAssistantTest;
+  $('#asst-report-copy').onclick = async () => { await writeClipboard($('#asst-report pre').textContent); toast('Rapport copié : colle-le dans la conversation.', 'ok', 3000); };
   $('#asst-key-clear').onclick = () => { lsSet('assistant.key', ''); renderAssistantSettings(); toast('Clé API effacée.', 'ok', 2500); };
   renderAssistantSettings();
 }
@@ -4040,7 +4115,7 @@ function renderModelsPage() {
 const G_ICON = '<svg class="g-ico" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>';
 
 const esc2 = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const initials = (name) => String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+const initials = (name) => (String(name || '').match(/[\p{L}\p{N}]+/gu) || []).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
 
 function syncLabel() {
   if (!Auth.clientId()) return 'Connexion Google à configurer';
@@ -4083,15 +4158,37 @@ function renderAccount() {
   $('#acc-login').disabled = !Auth.clientId();
   $('#acc-sync').hidden = !u || Auth.expired();
   $('#acc-logout').hidden = !u;
+  $('#acc-switch').hidden = !u;
   $('#acc-client').value = Auth.clientId();
   $('#acc-redirect').textContent = redirectUri();
 }
 
-function signIn(silent = false) {
+function signIn(silent = false, { email = null, choose = false } = {}) {
   if (state.phase !== 'idle' || micBusy()) return toast('Attends la fin de l’enregistrement ou de la transcription en cours.', 'warn');
   if (!Auth.clientId()) { setView('settings'); return toast('Renseigne d’abord l’identifiant client Google (Paramètres → Compte Google).', 'warn', 6000); }
   saveDoc();
-  try { Auth.signIn({ silent }); } catch (e) { toast(e.message, 'err'); }
+  try { Auth.signIn({ silent, email, choose }); } catch (e) { toast(e.message, 'err'); }
+}
+
+/** Changer de compte Google : le compte voulu (déjà utilisé ici) ou le choix de Google. */
+function switchAccount(email = null) {
+  $('#user-menu').hidden = true;
+  if (email && email === Auth.user()?.email) return;
+  signIn(false, email ? { email } : { choose: true });
+}
+
+const avatarHtml = (a, cls = 'avatar') => (a.picture
+  ? `<img class="${cls}" src="${esc2(a.picture)}" alt="" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'${cls}',textContent:'${initials(a.name).replace(/'/g, '')}'}))" />`
+  : `<span class="${cls}">${esc2(initials(a.name))}</span>`);
+
+/** Menu du profil : compte actuel, autres comptes de ce navigateur, actions. */
+function renderUserMenu() {
+  const u = Auth.user();
+  if (!u) return;
+  const others = Auth.accounts().filter((a) => a.email !== u.email);
+  $('#um-accounts').innerHTML = `<div class="um-me">${avatarHtml(u)}<div><b>${esc2(u.name)}</b><small>${esc2(u.email)}</small></div><i class="um-check"></i></div>`
+    + (others.length ? `<p class="um-label">Changer de compte</p>${others.map((a) => `<div class="um-acc"><button type="button" data-switch="${esc2(a.email)}">${avatarHtml(a)}<span><b>${esc2(a.name)}</b><small>${esc2(a.email)}</small></span></button><button type="button" class="um-forget" data-forget-acc="${esc2(a.email)}" title="Retirer de cette liste" aria-label="Retirer ${esc2(a.email)} de la liste"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')}` : '')
+    + `<button type="button" class="um-add" data-switch=""><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6"/></svg>Utiliser un autre compte</button>`;
 }
 
 async function syncNow({ quiet = false } = {}) {
@@ -4263,8 +4360,17 @@ function bindAccount(authResult) {
     if (!u) return signIn();
     if (Auth.expired()) return signIn(true);
     const menu = $('#user-menu');
+    if (menu.hidden) renderUserMenu();
     menu.hidden = !menu.hidden;
   };
+  $('#um-accounts').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const f = e.target.closest('[data-forget-acc]');
+    if (f) { Auth.forgetAccount(f.dataset.forgetAcc); return renderUserMenu(); }
+    const b = e.target.closest('[data-switch]');
+    if (b) switchAccount(b.dataset.switch || null);
+  });
+  $('#acc-switch').onclick = () => switchAccount(null);
   document.addEventListener('click', (e) => { if (!e.target.closest('#user-menu')) $('#user-menu').hidden = true; });
   $('#um-sync').onclick = () => { $('#user-menu').hidden = true; syncNow(); };
   $('#um-settings').onclick = () => { $('#user-menu').hidden = true; setView('settings'); };
@@ -4315,7 +4421,7 @@ function bindAccount(authResult) {
     (async () => {
       if (authResult.first) await offerImport();
       await syncNow({ quiet: true });
-      if (authResult.first) toast(`Connecté : ${Auth.user().email}. Tes transcriptions sont sauvegardées dans ton Google Drive.`, 'ok', 6000);
+      if (authResult.first) toast(`Connecté : ${Auth.user().email}. ${Auth.accounts().length > 1 ? 'Tu vois maintenant les transcriptions et dossiers de ce compte.' : 'Tes transcriptions sont sauvegardées dans ton Google Drive.'}`, 'ok', 6000);
     })();
   } else if (authResult && !authResult.ok) {
     const silentFail = ['login_required', 'interaction_required', 'consent_required'].includes(authResult.error);

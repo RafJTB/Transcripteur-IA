@@ -47,8 +47,15 @@ export const Auth = {
   /** Connecté, mais l'autorisation a expiré : il faut repasser par Google. */
   expired: () => !!Auth.user() && !Auth.token(),
 
-  /** Part chez Google, puis revient sur l'appli. silent : sans écran si la session Google est ouverte. */
-  signIn({ silent = false } = {}) {
+  /** Comptes Google déjà utilisés dans ce navigateur (pour changer de compte en un clic). */
+  accounts: () => json(ls.get('accounts'), []).filter((a) => a?.email),
+  forgetAccount(email) { ls.set('accounts', JSON.stringify(Auth.accounts().filter((a) => a.email !== email))); },
+
+  /**
+   * Part chez Google, puis revient sur l'appli.
+   * silent : sans écran si la session Google est ouverte ; email : compte voulu ; choose : choisir un autre compte.
+   */
+  signIn({ silent = false, email = null, choose = false } = {}) {
     const id = Auth.clientId();
     if (!id) throw new Error('La connexion Google n’est pas encore configurée (Paramètres).');
     const st = crypto.randomUUID();
@@ -62,9 +69,13 @@ export const Auth = {
       state: st,
     });
     const u = Auth.user();
-    if (u?.email) p.set('login_hint', u.email);
+    const hint = choose ? null : email || u?.email;
+    if (hint) p.set('login_hint', hint);
     if (silent) p.set('prompt', 'none');
-    else if (!u) p.set('prompt', 'select_account');
+    else if (choose || !hint) p.set('prompt', 'select_account');
+    if (email || choose) ss.set('switching', '1');
+    // Le compte actuel reste dans la liste pour pouvoir y revenir en un clic
+    if (u && !Auth.accounts().some((x) => x.email === u.email)) ls.set('accounts', JSON.stringify([u, ...Auth.accounts()].slice(0, 6)));
     location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${p}`);
   },
 
@@ -90,7 +101,11 @@ export const Auth = {
     if (!r.ok) return { ok: false, error: `Profil Google illisible (${r.status}).` };
     const p = await r.json();
     const user = { email: p.email, name: p.name || p.email, picture: p.picture || '' };
+    // Changement de compte : le dossier Drive mémorisé appartenait à l'autre compte
+    if (before && before.email !== user.email) ls.del('folderId');
     ls.set('user', JSON.stringify(user));
+    ls.set('accounts', JSON.stringify([user, ...Auth.accounts().filter((a) => a.email !== user.email)].slice(0, 6)));
+    ss.del('switching');
     return { ok: true, first: !before || before.email !== user.email };
   },
 

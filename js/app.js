@@ -3585,8 +3585,7 @@ async function answerLocal(messages, opts) {
     if (localLlm() === LLM_MODELS.large && asstEngine() === 'auto') {
       lsSet('assistant.largeFailed', '1');
       if (llm) { llm.terminate(); llm = null; llmReady = null; }
-      opts.onStatus(`${LLM_MODELS.large.label} ne passe pas sur cet appareil : bascule sur ${LLM_MODELS.small.label}…`);
-      try { return await answerLocalWith(LLM_MODELS.small, messages, opts, true); } catch (e2) { throw llmError(e2); }
+      throw new Error(`${LLM_MODELS.large.label} ne passe pas sur la carte graphique de cet appareil. Je passe en recherche simple ; pour des réponses rédigées, choisis Claude dans Paramètres → Assistant IA.`);
     }
     throw llmError(e);
   }
@@ -3681,6 +3680,8 @@ async function askAssistant(q) {
   const sources = actionSources(docs);
   const engine = asstEngine();
   if (engine === 'search') return chatAdd('bot', keywordAnswer(q, sources));
+  if (engine === 'auto' && (!caps().webgpu || lsGet('assistant.largeFailed', '') === '1'))
+    return chatAdd('bot', keywordAnswer(q, sources, '<p class="chat-note">Sans carte graphique compatible, je fais une recherche dans tes réunions. Pour des réponses rédigées : Claude (clé API) ou le modèle léger, dans Paramètres → Assistant IA.</p>'));
   const claude = engine === 'claude';
   const local = !claude && localLlm();
   const { refs, context } = buildContext(q, sources, { budget: claude ? 14000 : local === LLM_MODELS.large ? 5000 : 3000 });
@@ -3736,7 +3737,10 @@ function renderAssistantSettings() {
   $('#asst-model').value = lsGet('assistant.model', CLAUDE_MODELS[0].id);
   $('#asst-key').value = claudeKey() ? '••••••••••••' : '';
   const m = localLlm();
+  const noGpu = !caps().webgpu || lsGet('assistant.largeFailed', '') === '1';
   $('#asst-info').textContent = sel.value === 'search' ? 'Recherche par mots-clés dans tes réunions, sans modèle de langage.'
+    : sel.value === 'auto' && noGpu ? 'Pas de carte graphique compatible détectée : recherche dans tes réunions, sans réponse rédigée. Pour des réponses rédigées, choisis Claude (le plus fiable) ou le modèle local léger (expérimental, réponses approximatives).'
+    : sel.value === 'local-small' ? `${LLM_MODELS.small.label} (${fmtMB(LLM_MODELS.small.sizeMB)}), sur le processeur. Expérimental : petit modèle, réponses parfois approximatives ; vérifie dans les sources. 20 s à 2 min par réponse.`
     : isClaude ? 'Les extraits utiles de tes réunions et ta question sont envoyés à Claude (Anthropic) via ta clé API. Facturé à l’usage sur ton compte Anthropic.'
     : `${m.label} (${fmtMB(m.sizeMB)}), sur ${m.device === 'webgpu' ? 'la carte graphique' : 'le processeur'}. Rien ne quitte ton appareil.${m.device === 'wasm' ? ' Sans carte graphique, une réponse prend de 20 s à 1 min.' : ''}`;
 }

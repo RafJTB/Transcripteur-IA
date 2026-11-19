@@ -180,7 +180,8 @@ Fond photo flouté et panneaux en **verre dépoli** (violet), en mode **clair** 
   1. il cherche les extraits utiles de tes réunions (décisions, actions, passages ; « cette semaine », « hier »… limitent la période) ;
   2. un modèle de langage rédige une réponse courte en citant ses sources (numéros cliquables qui ouvrent le passage).
   - **Moteur** (Paramètres → Assistant IA) :
-    - *Local, automatique* (par défaut) : **Qwen3 1,7B** sur la carte graphique (≈ 1,4 Go) ou **Qwen3 0,6B** sur le processeur (≈ 620 Mo), téléchargé une fois après accord. Rien ne quitte l'appareil. Sans carte graphique : 20 s à 1 min par réponse ;
+    - *Local, automatique* (par défaut) : avec une carte graphique (WebGPU), **Qwen3 1,7B** (≈ 1,4 Go, téléchargé une fois après accord), rien ne quitte l'appareil. Sans carte graphique compatible : recherche dans les réunions, sans réponse rédigée (le 1,7B ne tient pas en mémoire sur le processeur) ;
+    - *Local léger* (expérimental) : **Qwen3 0,6B** sur le processeur (≈ 620 Mo). Fonctionne partout mais réponses souvent approximatives, 20 s à 2 min ;
     - *Claude* : avec ta clé API Anthropic (compte API, payant à l'usage, distinct de l'abonnement claude.ai). Les extraits et la question sont envoyés à Anthropic. Clé gardée dans le navigateur uniquement ;
     - *Recherche simple* : mots-clés seulement, sans modèle.
   - Les petits modèles locaux peuvent se tromper : vérifie dans les sources citées.

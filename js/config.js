@@ -128,5 +128,5 @@ export const LLM_MODELS = {
  * Ces deux valeurs sont faites pour être publiques (la sécurité vient des règles d'accès du script SQL).
  * Vides : à renseigner dans l'appli (onglet Espaces). Ne jamais mettre la clé « service_role ».
  */
-export const SUPABASE_URL = '';
-export const SUPABASE_ANON_KEY = '';
+export const SUPABASE_URL = 'https://qcrtmhghjaetfxnwsqto.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_ChGBljQJ7O0ks4eNnsn4Zw_hbJnlu7c';

@@ -1501,18 +1501,36 @@ function autoSoundFrom({ noise, label, outLabel }) {
   return { settings, micKind, room, headphones };
 }
 
+const AI_ICONS = {
+  mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  bt: '<svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>',
+  chip: '<svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>',
+};
+const aiChip = (cls, icon, html, title = '') => `<span class="ai-chip ${cls}"${title ? ` title="${title}"` : ''}>${icon}${html}</span>`;
+
 function renderAutoInfo() {
   const el = $('#auto-info');
   $('#toggle-auto').checked = state.autoTune;
   $('#auto-redo').hidden = !state.autoTune;
-  if (!state.autoTune) { el.textContent = 'Réglages manuels (son et modèle).'; return; }
+  const m = modelById(state.modelId);
+  const manualModel = store.get('model.manual') === '1';
+  const model = aiChip('model', AI_ICONS.chip, `${m.label}<em>${manualModel ? 'ton choix' : 'auto'}</em>`, 'Modèle de transcription');
+  if (!state.autoTune) { el.innerHTML = `<span class="ai-note">Réglages manuels du son</span>${model}`; return; }
   let last = null;
   try { last = JSON.parse(store.get('auto.last', 'null')); } catch { /* ignore */ }
-  const m = modelById(state.modelId);
-  const model = store.get('model.manual') === '1' ? `modèle ${m.label} (ton choix)` : `modèle ${m.label} (auto)`;
-  if (!last) { el.textContent = `Avant le premier enregistrement : 3 s de diagnostic pour régler le son · ${model}.`; return; }
-  const on = [last.res.settings.noiseSuppression && 'anti-bruit', last.res.settings.echoCancellation && 'anti-écho', last.res.settings.highpass && 'filtre basses'].filter(Boolean);
-  el.textContent = `${last.res.micKind[0].toUpperCase()}${last.res.micKind.slice(1)} · ${last.res.room} (${String(Math.round(last.noise)).replace('-', '−')} dB) · ${on.join(', ') || 'son brut'} · ${model}`;
+  if (!last) { el.innerHTML = `<span class="ai-note">3 s de diagnostic au premier enregistrement</span>${model}`; return; }
+  const r = last.res, st = r.settings;
+  const kind = r.micKind[0].toUpperCase() + r.micKind.slice(1);
+  const lvl = r.room === 'pièce calme' ? 1 : r.room === 'pièce bruyante' ? 3 : 2;
+  const bars = `<i class="ai-bars l${lvl}"><b></b><b></b><b></b></i>`;
+  const db = String(Math.round(last.noise)).replace('-', '−');
+  const filters = [st.noiseSuppression && 'Anti-bruit', st.echoCancellation && 'Anti-écho', st.highpass && 'Coupe-bas'].filter(Boolean);
+  el.innerHTML =
+    aiChip('mic', /bluetooth/i.test(r.micKind) ? AI_ICONS.bt : AI_ICONS.mic, kind, 'Micro détecté') +
+    aiChip(`noise l${lvl}`, bars, `${db} dB`, `Bruit de fond : ${r.room}`) +
+    model +
+    (filters.length ? aiChip('filter', AI_ICONS.check, filters.join('<s>·</s>'), 'Filtres activés') : aiChip('filter off', '', 'Son brut'));
 }
 
 function setAutoTune(on, msg = '') {

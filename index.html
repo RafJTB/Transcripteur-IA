@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-4" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-4" />
+  <meta name="app-version" content="2026-11-22-5" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-5" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,7 +41,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-4', 'sw.js', 'js/app.js?v=2026-11-22-4', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-5', 'sw.js', 'js/app.js?v=2026-11-22-5', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -217,6 +217,7 @@
                     <div class="rec-info">
                       <div class="rec-time" id="rec-time">00:00</div>
                       <div class="rec-state" id="rec-state">Prêt à enregistrer</div>
+                      <span class="lag-chip" id="rec-lag" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg><b></b></span>
                     </div>
                   </div>
                   <div class="rec-actions">
@@ -298,6 +299,7 @@
               <span class="rb-dot"></span>
               <b id="rb-state">Enregistrement</b>
               <span class="rb-time" id="rb-time">00:00</span>
+              <span class="lag-chip" id="rb-lag" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg><b></b></span>
               <span class="grow"></span>
               <button class="btn sm" id="rb-pause" type="button"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
               <button class="btn sm danger-solid" id="rb-stop" type="button"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Arrêter</button>
@@ -838,6 +840,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-4"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-5"></script>
 </body>
 </html>

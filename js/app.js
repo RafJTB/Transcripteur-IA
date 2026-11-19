@@ -449,7 +449,7 @@ const recorder = new Recorder({
   onTick(s) {
     $('#rec-time').textContent = fmtClock(s);
     $('#rb-time').textContent = fmtClock(s);
-    if (state.live) renderRecState();
+    if (state.live) { renderRecState(); renderLag(); }
   },
   // Chaque seconde, le morceau compressé est sauvegardé : rien n'est perdu si l'onglet plante.
   onChunk(blob, idx) {
@@ -517,8 +517,10 @@ async function recStart() {
   hideResume();
   // Amplification réservée à Voxtral (sensible au volume absolu). Whisper normalise lui-même chaque bloc.
   state.booster = live && isStreaming(modelById(state.modelId)) ? new LevelBooster() : null;
+  state.lagStats = null;
   if (live) startLive(rec);
   renderRec();
+  renderLag(true);
 }
 
 function startLive(rec) {
@@ -620,9 +622,12 @@ async function recStop() {
   RecChunks.remove(`${rec.id}.video`).catch(() => {});
   store.del('rec.active');
 
+  renderLag(true);
   if (rec.live && state.live) {
     const s = state.live;
     const doc = state.doc;
+    const st = state.lagStats;
+    if (doc && st?.n) doc.liveLag = { avg: Math.round((st.sum / st.n) * 10) / 10, max: Math.round(st.max * 10) / 10 };
     let finalSegs = null;
     if (s.kind === 'voxtral') {
       finalSegs = await s.finish(); // le modèle termine l'audio déjà reçu, sans tout retranscrire
@@ -687,6 +692,41 @@ async function recDiscard() {
   }
 }
 
+// ---------- Décalage entre la parole et le texte en direct ----------
+const fmtLag = (s) => (s < 60 ? `${Math.max(0, Math.round(s))} s` : `${Math.floor(s / 60)} min ${String(Math.round(s % 60)).padStart(2, '0')}`);
+let lagLast = 0;
+
+/** Indicateur « décalage » pendant l'enregistrement + statistiques (moyenne, maximum) gardées dans le projet. */
+function renderLag(force = false) {
+  const chips = [$('#rb-lag'), $('#rec-lag')];
+  const l = state.live;
+  const active = l && micBusy() && recorder.state !== 'idle';
+  if (!active) { chips.forEach((c) => c && (c.hidden = true)); return; }
+  const now = performance.now();
+  if (!force && now - lagLast < 250) return;
+  lagLast = now;
+  let cls = 'wait', text = 'Chargement du modèle…', title = 'Le modèle se charge : le texte apparaîtra dans quelques instants.';
+  if (l.failed) { cls = 'err'; text = 'Direct interrompu'; title = 'La transcription en direct s’est arrêtée : l’enregistrement continue, le texte sera fait à l’arrêt.'; }
+  else if (l.ready) {
+    const lag = l.lagS;
+    if (recorder.state === 'recording') {
+      const st = (state.lagStats ??= { sum: 0, n: 0, max: 0 });
+      st.sum += lag; st.n++; st.max = Math.max(st.max, lag);
+    }
+    cls = lag <= 5 ? 'ok' : lag <= 15 ? 'warn' : 'err';
+    text = `Décalage ${fmtLag(lag)}`;
+    const st = state.lagStats;
+    title = `Temps entre ce qui est dit et son apparition dans le texte${st?.n ? ` · moyenne ${fmtLag(st.sum / st.n)}, maximum ${fmtLag(st.max)}` : ''}.${cls === 'err' ? ' Le modèle n’arrive pas à suivre : il rattrapera son retard à l’arrêt. Un modèle plus rapide réduit le décalage.' : ' Le texte peut encore se corriger quelques secondes après.'}`;
+  }
+  for (const c of chips) {
+    if (!c) continue;
+    c.hidden = false;
+    c.className = `lag-chip ${cls}`;
+    c.title = title;
+    $('b', c).textContent = text;
+  }
+}
+
 function renderRecState() {
   const s = micBusy() ? recorder.state : 'idle';
   let text = { idle: 'Prêt à enregistrer', recording: 'Enregistrement en cours…', paused: 'En pause' }[s];
@@ -696,7 +736,7 @@ function renderRecState() {
   if (l && s !== 'idle') {
     if (l.failed) text += ' · direct interrompu';
     else if (!l.ready) text += ' · chargement du modèle…';
-    else text += l.lagS > 8 ? ` · direct (retard ≈ ${Math.round(l.lagS)} s)` : ' · direct';
+    else text += ' · direct';
   }
   $('#rec-state').textContent = text;
 }
@@ -2765,6 +2805,7 @@ function renderAnalysis() {
     ['Débit', dur > 5 ? `${Math.round(total / (dur / 60))} mots/min` : '—'],
     ['Phrases', String(segs.length)],
     ['Intervenants', sp ? String(sp.length) : '—'],
+    ...(d.liveLag ? [['Décalage du direct', `${fmtLag(d.liveLag.avg)} en moyenne · max ${fmtLag(d.liveLag.max)}`]] : []),
     ['Modèle', d.model ? `${d.model.replace(/^Whisper /, '')}${d.device ? ` · ${d.device === 'webgpu' ? 'GPU' : 'CPU'}` : ''}` : '—'],
     ['Langue', langs ? langs.replace(/^./, (c) => c.toUpperCase()) : langName(d.language && d.language !== 'auto' ? d.language : 'fr')],
   ];

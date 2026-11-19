@@ -3519,7 +3519,7 @@ const claudeKey = () => lsGet('assistant.key', '');
 /** Modèle local choisi : le plus précis avec une carte graphique, le léger sinon. */
 function localLlm() {
   const e = asstEngine();
-  const big = e === 'local-large' || (e === 'auto' && caps().webgpu);
+  const big = e === 'local-large' || (e === 'auto' && caps().webgpu && lsGet('assistant.largeFailed', '') !== '1');
   return big && caps().webgpu ? LLM_MODELS.large : LLM_MODELS.small;
 }
 
@@ -3569,11 +3569,33 @@ function llmCall(msg, { onToken, onProgress } = {}) {
 let asstBusy = false;
 let asstAbort = null;
 
-async function answerLocal(messages, { onToken, onStatus }) {
-  const m = localLlm();
+/** Messages d'erreur du moteur local, en clair. */
+function llmError(e) {
+  const t = String(e?.message || e);
+  if (/bad_alloc|out of memory|OOM|memory/i.test(t)) return new Error('Mémoire insuffisante pour faire tourner ce modèle sur cet appareil.');
+  if (/fetch|network|Failed to load/i.test(t)) return new Error('Téléchargement du modèle impossible (connexion, ou Hugging Face bloqué par le réseau).');
+  return new Error(`Le modèle local a rencontré une erreur : ${t.slice(0, 160)}`);
+}
+
+async function answerLocal(messages, opts) {
+  try {
+    return await answerLocalWith(localLlm(), messages, opts);
+  } catch (e) {
+    // Le grand modèle ne passe pas sur cette carte graphique : on bascule sur le léger
+    if (localLlm() === LLM_MODELS.large && asstEngine() === 'auto') {
+      lsSet('assistant.largeFailed', '1');
+      if (llm) { llm.terminate(); llm = null; llmReady = null; }
+      opts.onStatus(`${LLM_MODELS.large.label} ne passe pas sur cet appareil : bascule sur ${LLM_MODELS.small.label}…`);
+      try { return await answerLocalWith(LLM_MODELS.small, messages, opts, true); } catch (e2) { throw llmError(e2); }
+    }
+    throw llmError(e);
+  }
+}
+
+async function answerLocalWith(m, messages, { onToken, onStatus }, consented = false) {
   const spec = { repo: m.repo, device: m.device, dtype: m.dtype };
   const { cached } = await llmCall({ type: 'cache-status', ...spec });
-  if (!cached && lsGet('assistant.consent', '') !== m.repo) {
+  if (!cached && !consented && lsGet('assistant.consent', '') !== m.repo) {
     const ok = await ask('Activer l’assistant IA ?', `L’assistant utilise un modèle de langage qui tourne sur ton appareil : ${m.label} (${fmtMB(m.sizeMB)}), téléchargé une seule fois. Tes réunions ne sont envoyées nulle part.`, `Télécharger (${fmtMB(m.sizeMB)})`);
     if (!ok) return null;
     lsSet('assistant.consent', m.repo);

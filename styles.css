@@ -1593,6 +1593,10 @@ body[data-page='record'] .panel-dash, body[data-page='doc'] .panel-dash { displa
 .chat-form.busy .chat-send { background: rgb(var(--ov) / 0.18); box-shadow: none; }
 .chat-form.busy .chat-send svg { fill: currentColor; }
 .asst-info { font-size: 13px !important; }
+.asst-fail { font: 11.5px/1.45 var(--mono) !important; color: var(--warn) !important; word-break: break-word; }
+.chat-detail { margin: 2px 0 8px; font-size: 11.5px; color: var(--text-3); }
+.chat-detail summary { cursor: pointer; }
+.chat-detail code { display: block; margin-top: 4px; font: 11px/1.45 var(--mono); word-break: break-word; color: var(--text-2); }
 .asst-claude { display: flex; flex-direction: column; gap: 8px; }
 .asst-claude .label { margin: 4px 0 0; }
 

@@ -300,6 +300,37 @@ Le repérage par règles est volontairement prudent et rate des formulations ; p
 complet et reformulé, **Affiner avec Claude** ouvre Claude avec une consigne dédiée
 (décisions, tableau action / responsable / échéance, points en suspens).
 
+## Espaces partagés (collaboratif, facultatif)
+
+Onglet **Espaces** : un espace = un groupe de personnes qui partagent des réunions (un projet, une équipe, la famille).
+
+- le propriétaire crée l'espace et **invite par adresse e-mail** (Google) ; la personne le voit dès sa connexion
+  dans l'onglet Espaces avec cette adresse (aucun e-mail n'est envoyé : « Copier l'invitation » prépare le message) ;
+- **Partager une transcription** envoie le texte, les intervenants et, au choix, l'**audio compressé en qualité voix**
+  (Opus mono ≈ 24 kbit/s, ≈ 11 Mo par heure, fait dans le navigateur) ; les empreintes de voix ne sont pas partagées ;
+- **Ouvrir** une réunion d'un espace en fait une copie dans « Mes projets » (badge du nom de l'espace), avec son audio :
+  écoute, onglet Actions, assistant… ;
+- l'auteur ou le propriétaire peut retirer une réunion ; le propriétaire peut retirer un membre, renommer ou supprimer
+  l'espace ; un membre peut quitter l'espace.
+
+**Confidentialité** : contrairement au reste de l'appli, ce qui est partagé dans un espace est stocké sur le serveur
+Supabase configuré. Les règles d'accès (`supabase/schema.sql`) limitent la lecture aux membres de l'espace.
+
+### Mise en place (une fois, ≈ 10 min, gratuit)
+
+1. Créer un projet sur [supabase.com](https://supabase.com/dashboard) (région Europe).
+2. SQL Editor → coller [`supabase/schema.sql`](supabase/schema.sql) (bouton « Copier le script SQL » dans l'onglet Espaces) → **Run**.
+3. Authentication → Sign In / Providers → **Google** : activer, coller l'ID client et le code secret du client OAuth
+   (Google Cloud → API et services → Identifiants) ; dans Google Cloud, ajouter à ce client l'URI de redirection
+   `https://<projet>.supabase.co/auth/v1/callback`.
+4. Authentication → URL Configuration : *Site URL* et *Redirect URLs* = l'adresse de l'appli
+   (`https://rafjtb.github.io/Transcripteur-IA/`).
+5. Project Settings → API : coller l'URL du projet et la clé **anon / publishable** dans l'onglet Espaces
+   (ou dans `js/config.js` : `SUPABASE_URL`, `SUPABASE_ANON_KEY`, pour tous les utilisateurs). Jamais la clé `service_role`.
+
+Palier gratuit Supabase : 500 Mo de base, 1 Go de fichiers (≈ 90 h d'audio compressé), 50 Mo par fichier ;
+le projet se met en pause après 7 jours sans activité (réactivation d'un clic dans le tableau de bord).
+
 ## Compte Google, dossiers et synchronisation (facultatif)
 
 Sans compte, tout reste dans le navigateur, comme avant. Avec un compte Google :

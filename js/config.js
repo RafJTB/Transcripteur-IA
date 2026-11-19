@@ -122,3 +122,11 @@ export const LLM_MODELS = {
   large: { repo: 'onnx-community/Qwen3-1.7B-ONNX', device: 'webgpu', dtype: 'q4f16', sizeMB: 1430, label: 'Qwen3 1,7B' },
   small: { repo: 'onnx-community/Qwen3-0.6B-ONNX', device: 'wasm', dtype: 'q8', sizeMB: 620, label: 'Qwen3 0,6B' },
 };
+
+/**
+ * Espaces collaboratifs (Supabase) : adresse du projet et clé publique « anon » / « publishable ».
+ * Ces deux valeurs sont faites pour être publiques (la sécurité vient des règles d'accès du script SQL).
+ * Vides : à renseigner dans l'appli (onglet Espaces). Ne jamais mettre la clé « service_role ».
+ */
+export const SUPABASE_URL = '';
+export const SUPABASE_ANON_KEY = '';

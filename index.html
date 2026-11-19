@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-21-11" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-21-11" />
+  <meta name="app-version" content="2026-11-22-1" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-1" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,8 +41,8 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-11', 'sw.js', 'js/app.js?v=2026-11-21-11', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
-        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-1', 'sw.js', 'js/app.js?v=2026-11-22-1', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
         return Promise.all(FILES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); }));
@@ -92,6 +92,7 @@
       <nav class="nav" id="nav">
         <button type="button" data-nav="home" class="active"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Accueil</span></button>
         <button type="button" data-nav="projects"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Mes projets</span></button>
+        <button type="button" data-nav="spaces" class="d-only"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg><span>Espaces</span></button>
         <button type="button" data-nav="history"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Historique</span></button>
         <button type="button" data-nav="panel" class="m-only" aria-label="Analyse audio et réglages du son"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Analyse</span></button>
         <button type="button" data-nav="analytics" class="d-only"><svg viewBox="0 0 24 24"><path d="M5 20V11M10 20V5M15 20v-6M20 20V9"/></svg><span>Analyses</span></button>
@@ -448,6 +449,45 @@
             <div class="hist-list" id="hist-list"></div>
           </section>
 
+          <!-- ===== ESPACES COLLABORATIFS ===== -->
+          <section class="view view-page" data-page="spaces">
+            <div class="home-head"><h2>Espaces partagés</h2><p>Partage des réunions avec d’autres personnes : chaque membre voit les transcriptions et écoute l’audio.</p></div>
+
+            <section class="glass dash-card spc-setup" id="spc-setup" hidden>
+              <header class="dash-head"><h3>Mise en place (une fois, ≈ 10 min)</h3></header>
+              <ol class="spc-steps">
+                <li><b>Crée un projet gratuit</b> sur <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com</a>, région <b>Europe</b> (Paris ou Francfort).</li>
+                <li><b>Base de données</b> : SQL Editor → New query → colle le script, puis <b>Run</b>. <button class="btn xs" type="button" id="spc-copy-sql">Copier le script SQL</button></li>
+                <li><b>Connexion Google</b> : Authentication → Sign In / Providers → <b>Google</b> → active, puis colle l’<i>ID client</i> et le <i>code secret</i> de ton client OAuth Google Cloud. Dans Google Cloud, ajoute à ce client l’URI de redirection indiquée par Supabase (<code>https://xxxx.supabase.co/auth/v1/callback</code>).</li>
+                <li><b>Adresses autorisées</b> : Authentication → URL Configuration → <i>Site URL</i> et <i>Redirect URLs</i> : <code id="spc-redirect"></code> <button class="btn xs" type="button" id="spc-copy-redirect">Copier</button></li>
+                <li><b>Clés</b> : Project Settings → API → copie l’<i>URL du projet</i> et la clé <i>anon / publishable</i> ici (jamais la clé <i>service_role</i>).</li>
+              </ol>
+              <div class="spc-form">
+                <label class="label" for="spc-url">URL du projet</label>
+                <input class="text-input" id="spc-url" placeholder="https://xxxx.supabase.co" spellcheck="false" autocomplete="off" />
+                <label class="label" for="spc-key">Clé publique (anon / publishable)</label>
+                <input class="text-input" id="spc-key" placeholder="eyJ… ou sb_publishable_…" spellcheck="false" autocomplete="off" />
+                <button class="btn primary sm" type="button" id="spc-save">Enregistrer</button>
+              </div>
+              <p class="an-note">Gratuit (palier gratuit Supabase : 500 Mo de base, 1 Go de fichiers ≈ 90 h d’audio compressé). Le projet se met en pause après 7 jours sans aucune utilisation : on le relance d’un clic dans le tableau de bord Supabase.</p>
+            </section>
+
+            <section class="glass dash-card spc-login" id="spc-login" hidden>
+              <span class="r-ico violet"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg></span>
+              <div><b>Connecte-toi à l’espace collaboratif</b><p>Avec ton compte Google : tu verras les espaces où tu es invité(e) avec cette adresse.</p></div>
+              <button class="btn primary" type="button" id="spc-signin">Se connecter avec Google</button>
+            </section>
+
+            <div class="spc-main" id="spc-main" hidden>
+              <aside class="glass dash-card spc-side">
+                <header class="dash-head"><h3>Mes espaces</h3><button class="btn sm" type="button" id="spc-new"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nouveau</button></header>
+                <div class="spc-list" id="spc-list"></div>
+                <footer class="spc-me"><div id="spc-me"></div><button class="link-btn" type="button" id="spc-signout">Se déconnecter</button></footer>
+              </aside>
+              <div class="spc-content" id="spc-content"></div>
+            </div>
+          </section>
+
           <!-- ===== ANALYSES ===== -->
           <section class="view view-page" data-page="analytics">
             <div class="home-head"><h2>Analyses</h2><p>Toutes tes réunions en un coup d’œil : volume, intervenants, sujets et actions en cours.</p></div>
@@ -516,6 +556,7 @@
           <section class="view view-settings" data-page="settings">
             <div class="home-head"><h2>Paramètres</h2><p>Compte, voix, moteur, lexique et stockage. Les réglages du micro sont sur la page « Nouvelle transcription », dans le panneau de droite.</p></div>
             <div class="m-links">
+              <button class="btn glass-btn" type="button" data-nav="spaces"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg>Espaces</button>
               <button class="btn glass-btn" type="button" data-nav="analytics"><svg viewBox="0 0 24 24"><path d="M5 20V11M10 20V5M15 20v-6M20 20V9"/></svg>Analyses</button>
               <button class="btn glass-btn" type="button" data-nav="models"><svg viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Modèles</button>
               <button class="btn glass-btn" type="button" data-nav="custom"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2a1.7 1.7 0 0 1 1.3-2.9H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10" cy="7" r="1.2"/><circle cx="14.5" cy="7" r="1.2"/></svg>Personnalisation</button>
@@ -785,6 +826,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-21-11"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-1"></script>
 </body>
 </html>

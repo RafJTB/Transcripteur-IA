@@ -3200,36 +3200,34 @@ async function renderHistory() {
   items = items.filter(isMine);
   renderFolderBar(items);
   if (state.folder !== 'all') items = items.filter((it) => (state.folder === 'none' ? !Folders.get(it.folderId) : it.folderId === state.folder));
-  $('#hist-count').textContent = items.length ? `${items.length} transcription${items.length > 1 ? 's' : ''}` : '';
-  if (!items.length) { list.innerHTML = '<p class="hist-empty">Aucune transcription enregistrée pour l’instant.</p>'; return; }
+  const total = items.reduce((a, it) => a + (it.durationS || 0), 0);
+  $('#hist-count').textContent = items.length ? `${items.length} transcription${items.length > 1 ? 's' : ''}${total ? ` · ${fmtHours(total)} d’audio` : ''}` : '';
+  if (!items.length) { list.innerHTML = `<div class="hist-empty"><span class="r-ico violet">${STAT_ICONS.docs}</span><b>${state.folder === 'all' ? 'Aucune transcription pour l’instant' : 'Ce dossier est vide'}</b><small>${state.folder === 'all' ? 'Lance ta première avec « Nouvelle transcription » sur l’accueil.' : 'Range une transcription ici avec son menu « Dossier ».'}</small></div>`; return; }
   const q = [...$('#hist-search').value.trim()].map(fold).join('');
   const textOf = (it) => [...`${it.title} ${it.segments.map((x) => x.text).join(' ')}`].map(fold).join('');
   if (q) items = items.filter((it) => textOf(it).includes(q));
   if (!items.length) { list.innerHTML = '<p class="hist-empty">Aucun résultat.</p>'; return; }
   list.innerHTML = '';
   for (const it of items) {
-    const el = document.createElement('div');
-    el.className = 'hist-item' + (state.doc?.id === it.id ? ' current' : '');
+    const el = document.createElement('article');
+    el.className = 'hist-item proj-card' + (state.doc?.id === it.id ? ' current' : '');
     el.tabIndex = 0;
-    el.innerHTML = `<strong></strong><select class="hist-move" title="Ranger dans un dossier" aria-label="Dossier"></select><button class="icon-btn danger" type="button" aria-label="Supprimer" title="Supprimer la transcription et son audio"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button><small></small><p></p>`;
+    const [tone, icon] = docIcon(it.title);
+    const sp = (it.speakers || []).filter((x) => x?.name);
+    const audioSize = it.audioId ? sizes[it.audioId] : null;
+    const interrupted = it.status === 'interrupted' || it.status === 'running';
+    el.innerHTML = `<div class="pc-top"><span class="r-ico ${tone}">${icon}</span><div class="pc-title"><strong></strong><small></small></div>
+      <button class="icon-btn danger pc-del" type="button" aria-label="Supprimer" title="Supprimer la transcription et son audio"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></div>
+      <div class="pc-chips">${it.durationS ? `<span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${fmtShortDur(it.durationS)}</span>` : ''}${sp.length > 1 ? `<span>${STAT_ICONS.people}${sp.length} intervenants</span>` : ''}${it.model ? `<span>${esc(it.model.replace(/^Whisper /, ''))}</span>` : ''}${audioSize != null ? `<span><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${fmtBytes(audioSize)}</span>` : ''}${interrupted ? '<span class="warn">Interrompue</span>' : ''}</div>
+      <p></p>
+      <div class="pc-foot"><label class="pc-folder" title="Ranger dans un dossier"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><select class="hist-move" aria-label="Dossier"></select></label>
+        ${sp.length > 1 ? `<span class="pc-avatars">${sp.slice(0, 3).map((x, n) => `<i style="--spk:${speakerColor(n)}" title="${esc(x.name)}">${esc(/^Personne (\d+)$/.test(x.name) ? x.name.replace(/\D/g, '') : initials(x.name).slice(0, 2))}</i>`).join('')}${sp.length > 3 ? `<i class="more">+${sp.length - 3}</i>` : ''}</span>` : ''}
+        <span class="pc-open" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>`;
     $('strong', el).textContent = it.title;
+    $('.pc-title small', el).textContent = `${relDay(it.createdAt)} · ${new Date(it.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
     const mv = $('.hist-move', el);
     mv.innerHTML = folderOptions(it.folderId);
     mv.onchange = () => moveToFolder(it, mv.value);
-    const audioSize = it.audioId ? sizes[it.audioId] : null;
-    $('small', el).textContent = [
-      new Date(it.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }),
-      it.durationS ? fmtClock(it.durationS) : null,
-      it.model,
-      audioSize != null ? `audio ${fmtBytes(audioSize)}` : null,
-    ].filter(Boolean).join(' · ');
-    if (it.status === 'interrupted' || it.status === 'running') {
-      const b = document.createElement('span');
-      b.className = 'badge warn';
-      b.textContent = 'Interrompue';
-      b.style.marginLeft = '8px';
-      $('small', el).appendChild(b);
-    }
     const all = it.segments.map((x) => x.text).join(' ');
     let preview = all.slice(0, 160);
     if (q) {
@@ -3238,10 +3236,11 @@ async function renderHistory() {
       if (at > 40) preview = '…' + all.slice(at - 40, at + 120);
     }
     $('p', el).textContent = preview || '(vide)';
+    if (!preview) $('p', el).classList.add('empty');
     const open = () => openDoc(it);
-    el.addEventListener('click', (e) => { if (!e.target.closest('.icon-btn, .hist-move')) open(); });
+    el.addEventListener('click', (e) => { if (!e.target.closest('.icon-btn, .hist-move, .pc-folder')) open(); });
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
-    $('.icon-btn', el).onclick = async () => {
+    $('.pc-del', el).onclick = async () => {
       if (state.run?.doc.id === it.id || state.doc?.id === it.id && state.phase !== 'idle') return toast('Cette transcription est en cours.', 'warn');
       const ok = await ask('Supprimer cette transcription ?', `« ${it.title} »${it.audioId ? ' et son audio seront' : ' sera'} définitivement effacé${it.audioId ? 's' : 'e'} de ce navigateur.`, 'Supprimer', { danger: true });
       if (!ok) return;

@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-21-6" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-21-6" />
+  <meta name="app-version" content="2026-11-21-7" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-21-7" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -39,7 +39,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-6', 'sw.js', 'js/app.js?v=2026-11-21-6', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-7', 'sw.js', 'js/app.js?v=2026-11-21-7', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -429,10 +429,9 @@
           </section>
 
           <!-- ===== MES PROJETS / HISTORIQUE ===== -->
-          <section class="view card hist-card" data-page="history" id="step-history" aria-labelledby="h-hist">
-            <header class="card-head">
-              <h2 id="h-hist">Historique</h2>
-              <span class="hist-count" id="hist-count"></span>
+          <section class="view view-page hist-card" data-page="history" id="step-history" aria-labelledby="h-hist">
+            <header class="card-head proj-head">
+              <div><h2 id="h-hist">Historique</h2><span class="hist-count" id="hist-count"></span></div>
               <button class="icon-btn danger" id="hist-clear" type="button" title="Tout supprimer (transcriptions et audios)" aria-label="Tout supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
             </header>
             <div class="folder-row">
@@ -764,6 +763,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-21-6"></script>
+  <script type="module" src="js/app.js?v=2026-11-21-7"></script>
 </body>
 </html>

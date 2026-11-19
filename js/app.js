@@ -677,11 +677,6 @@ function renderRecState() {
 // ======================================================================
 // Ce qu'on enregistre : ma voix, ma voix + la visio, ou la visio seule
 // ======================================================================
-const CAPTURE_HINTS = {
-  mic: '',
-  mix: 'Au démarrage : choisis l’onglet de la visio (ou « Écran entier » pour l’appli Teams / Zoom) et coche « Partager l’audio ».',
-  system: 'Sans ton micro. Au démarrage, coche « Partager l’audio ».',
-};
 const captureMode = () => (canCaptureSystem() ? state.capture : 'mic');
 
 function renderCapture() {
@@ -691,8 +686,6 @@ function renderCapture() {
     b.setAttribute('aria-selected', String(b.dataset.capture === m));
     b.disabled = micBusy();
   });
-  $('#capture-hint').textContent = CAPTURE_HINTS[m];
-  $('#capture-hint').hidden = !CAPTURE_HINTS[m];
 }
 
 function renderRec() {

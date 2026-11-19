@@ -1227,10 +1227,10 @@ img.avatar { object-fit: cover; }
    ===================================================================== */
 :root {
   --bg: #15123a;
-  --card: rgb(32 27 78 / 0.42);
+  --card: rgb(32 27 78 / 0.26);
   --card-solid: #221d52;
   --card-solid-rgb: 34 29 82;
-  --glass-blur: blur(26px) saturate(150%);
+  --glass-blur: blur(22px) saturate(160%);
   --glass-line: rgb(255 255 255 / 0.13);
   --glass-hi: rgb(255 255 255 / 0.07);
   --line: rgb(255 255 255 / 0.09);
@@ -1251,11 +1251,11 @@ img.avatar { object-fit: cover; }
   --radius: 20px;
   --shadow: 0 1px 0 var(--glass-hi) inset, 0 24px 60px -32px rgb(6 3 30 / 0.85);
   --photo-veil: linear-gradient(180deg, rgb(16 11 48 / 0.28), rgb(14 10 40 / 0.5));
-  --side-bg: rgb(18 14 52 / 0.38);
+  --side-bg: rgb(18 14 52 / 0.22);
 }
 :root[data-theme='light'] {
   --bg: #efedfd;
-  --card: rgb(255 255 255 / 0.6);
+  --card: rgb(255 255 255 / 0.4);
   --card-solid: #ffffff;
   --card-solid-rgb: 255 255 255;
   --glass-line: rgb(255 255 255 / 0.75);
@@ -1276,7 +1276,7 @@ img.avatar { object-fit: cover; }
   --rec-btn-2: rgb(240 238 255 / 0.8);
   --shadow: 0 1px 0 var(--glass-hi) inset, 0 18px 46px -26px rgb(46 34 120 / 0.35);
   --photo-veil: linear-gradient(180deg, rgb(246 244 255 / 0.74), rgb(240 237 255 / 0.84));
-  --side-bg: rgb(255 255 255 / 0.5);
+  --side-bg: rgb(255 255 255 / 0.32);
 }
 
 body { background: var(--bg); }

@@ -2027,3 +2027,15 @@ body[data-page='record'] .panel-dash, body[data-page='doc'] .panel-dash { displa
 .cl-paste p { margin: 0 0 8px; }
 .cl-paste ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: var(--text-2); }
 .cl-raw { width: 100%; margin-top: 10px; font: 12px/1.4 var(--mono); border-radius: 10px; border: 1px solid var(--line-2); background: rgb(var(--ov) / 0.05); color: var(--text-2); padding: 8px; resize: vertical; }
+
+/* Vidéo de l'écran */
+.video-opt { margin: 10px 0 0; font-size: 13.5px; color: var(--text-2); }
+.video-opt svg { width: 16px; height: 16px; margin: 0 2px 0 -2px; vertical-align: -3px; }
+.doc-video-block { display: flex; flex-direction: column; gap: 8px; }
+.dv-head { display: flex; align-items: center; gap: 6px; }
+.dv-head h3 { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; font: 600 14px var(--font-display); }
+.dv-head h3 svg { width: 17px; height: 17px; color: var(--accent); }
+.dv-head small { color: var(--text-3); font-size: 12px; margin-right: 4px; }
+#doc-video { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: #000; object-fit: contain; cursor: pointer; border: 1px solid var(--glass-line); }
+.dv-note { margin: 0; font-size: 11.5px; color: var(--text-3); }
+.pc-chips .vid { background: rgb(var(--accent-rgb) / 0.14); color: var(--accent-text); }

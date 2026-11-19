@@ -2,7 +2,7 @@
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 import { MODELS, DEFAULT_MODEL, LANGUAGES, CHUNKING, TRANSFORMERS_VERSION, SAMPLE_RATE as SR, pickVariant, lighterModel, isStreaming, LLM_MODELS } from './config.js';
 import { clusterSpeakers, buildTimeline, assignSpeakers, orderSpeakers, speakingTime, speakerColor, defaultSpeakerName } from './speakers.js';
-import { decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, listSpeakers, canPickOutput, isBluetooth, canCaptureSystem, speechStart, LevelBooster } from './audio.js';
+import { VIDEO_QUALITY, decodeToMono16k, isAcceptedFile, Recorder, DEFAULT_AUDIO_SETTINGS, listMicrophones, listSpeakers, canPickOutput, isBluetooth, canCaptureSystem, speechStart, LevelBooster } from './audio.js';
 import { loadLexicon, saveLexicon, compileLexicon, applyLexicon, DEFAULT_LEXICON } from './lexicon.js';
 import { toTxt, toMarkdown, toSrt, download, fmtClock, safeFilename } from './exporters.js';
 import { History, Audios, RecChunks, newId } from './history.js';
@@ -37,6 +37,7 @@ const state = {
   modelId: MODELS.some((m) => m.id === store.get('model')) ? store.get('model') : DEFAULT_MODEL,
   language: store.get('lang', 'auto'),
   autoTr: store.get('autotr', '1') === '1', // traduire automatiquement en français
+  keepVideo: store.get('video', '0') === '1', // garder la vidéo de l'écran (visio)
   voiceId: store.get('voiceid', '1') === '1', // reconnaître les voix déjà nommées (carnet de voix)
   autoSpk: store.get('autospk', '1') === '1', // identifier qui parle après chaque transcription
   editMode: store.get('edit', '1') === '1', // texte modifiable directement
@@ -456,6 +457,11 @@ const recorder = new Recorder({
     if (!r) return;
     r.pending = r.pending.then(() => RecChunks.add(r.id, idx, blob)).catch(() => {});
   },
+  onVideoChunk(blob, idx) {
+    const r = state.rec;
+    if (!r) return;
+    r.pending = r.pending.then(() => RecChunks.add(`${r.id}.video`, idx, blob)).catch(() => {});
+  },
   // Voxtral : voix faibles remontées pour le modèle ; l'enregistrement, lui, reste intact.
   onPcm(pcm) { if (state.live) state.live.push(state.booster ? state.booster.process(pcm) : pcm); },
   // Casque Bluetooth éteint ou hors de portée pendant l'enregistrement
@@ -490,7 +496,7 @@ async function recStart() {
   if (live && !(await confirmBigDownload(modelById(state.modelId)))) return;
   stopMicTest();
   try {
-    await recorder.start({ pcm: live, settings: sound, capture: captureMode() });
+    await recorder.start({ pcm: live, settings: sound, capture: captureMode(), video: state.keepVideo && captureMode() !== 'mic' });
   } catch (e) {
     status(e.message, 'err');
     toast(e.message, 'err', 7000);
@@ -498,11 +504,15 @@ async function recStart() {
   }
   warnFallback();
   startAutoGain();
-  const rec = { id: newId(), live, mime: recorder.mimeType, startedAt: Date.now(), pending: Promise.resolve() };
+  if (state.keepVideo && captureMode() !== 'mic') {
+    if (recorder.recordingVideo) toast('Vidéo de l’écran enregistrée en même temps (qualité réunion, ≈ 150 Mo par heure). Pense à prévenir les participants.', 'info', 6000);
+    else toast('Vidéo de l’écran indisponible : seul le son est enregistré.', 'warn', 6000);
+  }
+  const rec = { id: newId(), live, mime: recorder.mimeType, video: recorder.recordingVideo, startedAt: Date.now(), pending: Promise.resolve() };
   state.rec = rec;
   monitor?.start();
   refreshDevices();
-  store.set('rec.active', JSON.stringify({ id: rec.id, live, mime: rec.mime, startedAt: rec.startedAt }));
+  store.set('rec.active', JSON.stringify({ id: rec.id, live, mime: rec.mime, video: rec.video, startedAt: rec.startedAt }));
   clearAudio();
   hideResume();
   // Amplification réservée à Voxtral (sensible au volume absolu). Whisper normalise lui-même chaque bloc.
@@ -601,6 +611,13 @@ async function recStop() {
   } catch {
     audioId = null;
   }
+  if (r.video && audioId) {
+    try {
+      await Audios.put({ id: videoIdOf(audioId), blob: r.video, name: `${name} (écran)`, durationS: r.seconds, createdAt: Date.now(), kind: 'video' });
+      toast(`Vidéo de l’écran gardée (${fmtBytes(r.video.size)}).`, 'ok', 4000);
+    } catch { toast('Vidéo de l’écran trop lourde pour le stockage du navigateur : seul le son est gardé.', 'warn', 7000); }
+  }
+  RecChunks.remove(`${rec.id}.video`).catch(() => {});
   store.del('rec.active');
 
   if (rec.live && state.live) {
@@ -656,6 +673,7 @@ async function recDiscard() {
   if (rec) {
     await rec.pending;
     await RecChunks.remove(rec.id).catch(() => {});
+    await RecChunks.remove(`${rec.id}.video`).catch(() => {});
     await History.remove(rec.id).catch(() => {});
     await Audios.remove(rec.id).catch(() => {});
   }
@@ -688,9 +706,73 @@ function renderRecState() {
 // ======================================================================
 const captureMode = () => (canCaptureSystem() ? state.capture : 'mic');
 
+// ---------- Vidéo de l'écran (visio) ----------
+const videoIdOf = (audioId) => `${audioId}.video`;
+let videoUrl = null;
+
+/** Affiche la vidéo de l'écran du projet (si elle existe), calée sur le lecteur audio. */
+async function loadDocVideo(doc) {
+  const block = $('#doc-video-block');
+  const v = $('#doc-video');
+  if (!block) return;
+  const want = doc?.audioId;
+  if (!want) { block.hidden = true; v.removeAttribute('src'); if (videoUrl) URL.revokeObjectURL(videoUrl); videoUrl = null; return; }
+  const rec = await Audios.get(videoIdOf(want)).catch(() => null);
+  if (state.doc?.audioId !== want) return; // un autre projet a été ouvert entre-temps
+  if (videoUrl) URL.revokeObjectURL(videoUrl);
+  videoUrl = null;
+  if (!rec?.blob) { block.hidden = true; v.removeAttribute('src'); return; }
+  videoUrl = URL.createObjectURL(rec.blob);
+  v.src = videoUrl;
+  block.hidden = false;
+  $('#doc-video-size').textContent = fmtBytes(rec.blob.size);
+}
+
+function bindDocVideo() {
+  const v = $('#doc-video');
+  const a = $('#audio-player');
+  if (!v || !a) return;
+  // La vidéo (muette) suit le lecteur audio : lecture, pause, position, vitesse
+  const sync = (force = false) => {
+    if (!v.src || !v.duration) return;
+    const t = Math.min(a.currentTime, v.duration - 0.05);
+    if (force || Math.abs(v.currentTime - t) > 0.35) v.currentTime = Math.max(0, t);
+  };
+  a.addEventListener('play', () => { sync(true); v.play().catch(() => {}); });
+  a.addEventListener('pause', () => v.pause());
+  a.addEventListener('seeked', () => sync(true));
+  a.addEventListener('timeupdate', () => sync());
+  a.addEventListener('ratechange', () => (v.playbackRate = a.playbackRate));
+  // Clic sur la vidéo : lecture / pause du lecteur
+  v.addEventListener('click', () => (a.paused ? a.play() : a.pause()).catch?.(() => {}));
+  $('#doc-video-full').onclick = () => (v.requestFullscreen?.() || Promise.reject()).catch(() => toast('Plein écran indisponible.', 'warn', 2500));
+  $('#doc-video-pip').onclick = async () => {
+    try { document.pictureInPictureElement ? await document.exitPictureInPicture() : await v.requestPictureInPicture(); }
+    catch { toast('Mode incrustation indisponible dans ce navigateur.', 'warn', 3000); }
+  };
+  $('#doc-video-pip').hidden = !document.pictureInPictureEnabled;
+  $('#doc-video-del').onclick = async () => {
+    const d = state.doc;
+    if (!d?.audioId) return;
+    if (!(await ask('Supprimer la vidéo de l’écran ?', 'Le son et la transcription sont gardés. La vidéo est effacée de ce navigateur.', 'Supprimer la vidéo', { danger: true }))) return;
+    await tx_deleteVideo(d.audioId);
+    loadDocVideo(d);
+    renderStorage();
+    toast('Vidéo supprimée.', 'ok', 2500);
+  };
+  // Option « Garder la vidéo de l'écran »
+  $('#toggle-video').checked = state.keepVideo;
+  $('#toggle-video').onchange = (e) => { state.keepVideo = e.target.checked; store.set('video', state.keepVideo ? '1' : '0'); renderCapture(); };
+}
+
+// Audios.remove(id) supprime l'audio ET sa vidéo : ici on ne veut que la vidéo
+const tx_deleteVideo = (audioId) => Audios.removeOnly(videoIdOf(audioId)).catch(() => {});
+
 function renderCapture() {
   const m = captureMode();
   $('#capture-row').hidden = !canCaptureSystem();
+  $('#video-opt').hidden = m === 'mic';
+  $('#toggle-video').disabled = micBusy();
   $$('#capture-seg button').forEach((b) => {
     b.setAttribute('aria-selected', String(b.dataset.capture === m));
     b.disabled = micBusy();
@@ -1060,6 +1142,7 @@ const applyLexiconTo = (segs) => { const r = lexRules(); return segs.map((s) => 
 
 function showDoc(doc, { editable = true } = {}) {
   state.doc = doc;
+  loadDocVideo(doc);
   state.segments = doc.segments || [];
   $('#result-title').value = doc.title;
   renderMeta();
@@ -1072,6 +1155,7 @@ function showDoc(doc, { editable = true } = {}) {
 
 function clearResult() {
   state.doc = null;
+  loadDocVideo(null);
   state.segments = [];
   $('#result-title').value = '';
   renderMeta();
@@ -3256,7 +3340,7 @@ async function renderHistory() {
     const interrupted = it.status === 'interrupted' || it.status === 'running';
     el.innerHTML = `<div class="pc-top"><span class="r-ico ${tone}">${icon}</span><div class="pc-title"><strong></strong><small></small></div>
       <button class="icon-btn danger pc-del" type="button" aria-label="Supprimer" title="Supprimer la transcription et son audio"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button></div>
-      <div class="pc-chips">${it.durationS ? `<span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${fmtShortDur(it.durationS)}</span>` : ''}${sp.length > 1 ? `<span>${STAT_ICONS.people}${sp.length} intervenants</span>` : ''}${it.model ? `<span>${esc(it.model.replace(/^Whisper /, ''))}</span>` : ''}${audioSize != null ? `<span><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${fmtBytes(audioSize)}</span>` : ''}${interrupted ? '<span class="warn">Interrompue</span>' : ''}${it.fromSpace ? `<span class="shared">${SP_PEOPLE}${esc(it.fromSpace.name)}${it.fromSpace.by ? ` · ${esc(it.fromSpace.by)}` : ''}</span>` : ''}</div>
+      <div class="pc-chips">${it.durationS ? `<span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${fmtShortDur(it.durationS)}</span>` : ''}${sp.length > 1 ? `<span>${STAT_ICONS.people}${sp.length} intervenants</span>` : ''}${it.model ? `<span>${esc(it.model.replace(/^Whisper /, ''))}</span>` : ''}${audioSize != null ? `<span><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>${fmtBytes(audioSize)}</span>` : ''}${it.audioId && sizes[videoIdOf(it.audioId)] != null ? `<span class="vid"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>vidéo ${fmtBytes(sizes[videoIdOf(it.audioId)])}</span>` : ''}${interrupted ? '<span class="warn">Interrompue</span>' : ''}${it.fromSpace ? `<span class="shared">${SP_PEOPLE}${esc(it.fromSpace.name)}${it.fromSpace.by ? ` · ${esc(it.fromSpace.by)}` : ''}</span>` : ''}</div>
       <p></p>
       <div class="pc-foot"><label class="pc-folder" title="Ranger dans un dossier"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><select class="hist-move" aria-label="Dossier"></select></label>
         ${sp.length > 1 ? `<span class="pc-avatars">${sp.slice(0, 3).map((x, n) => `<i style="--spk:${speakerColor(n)}" title="${esc(x.name)}">${esc(/^Personne (\d+)$/.test(x.name) ? x.name.replace(/\D/g, '') : initials(x.name).slice(0, 2))}</i>`).join('')}${sp.length > 3 ? `<i class="more">+${sp.length - 3}</i>` : ''}</span>` : ''}
@@ -4873,6 +4957,11 @@ async function recover() {
       const name = `Enregistrement récupéré (${new Date(act.startedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })})`;
       await Audios.put({ id: act.id, blob, name, createdAt: Date.now() });
       await RecChunks.remove(act.id);
+      if (act.video) {
+        const vb = await RecChunks.blob(`${act.id}.video`, 'video/webm').catch(() => null);
+        if (vb?.size) await Audios.put({ id: videoIdOf(act.id), blob: vb, name: `${name} (écran)`, createdAt: Date.now(), kind: 'video' }).catch(() => {});
+        await RecChunks.remove(`${act.id}.video`).catch(() => {});
+      }
       const doc = await History.get(act.id).catch(() => null);
       if (doc) {
         Object.assign(doc, { audioId: act.id, source: name, status: 'interrupted', stopReason: 'crash' });
@@ -5029,6 +5118,7 @@ function bind() {
   bindActions();
   bindV3();
   bindDashboard();
+  bindDocVideo();
   $$('#view-switch [data-view]').forEach((b) => (b.onclick = () => {
     state.view = b.dataset.view;
     store.set('view', state.view);

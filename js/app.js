@@ -3348,7 +3348,7 @@ const STATUS = (d) => (d.status === 'running' || d.status === 'live' ? ['run', '
 
 function recentRows(docs) {
   if (!docs.length) return '<p class="dash-empty">Aucune transcription pour l’instant. Lance ta première avec « Nouvelle transcription ».</p>';
-  return docs.slice(0, 4).map((d) => {
+  return docs.slice(0, 12).map((d) => {
     const [tone, icon] = docIcon(d.title);
     const [sk, sl] = STATUS(d);
     const n = d.speakers?.length || 0;

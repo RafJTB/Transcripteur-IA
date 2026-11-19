@@ -161,13 +161,27 @@ nets entre réglages sont significatifs.
 
 ## Interface
 
-Deux apparences : **claire** et **sombre** (bouton soleil/lune en haut ; par défaut, celle de Windows). Couleurs indigo / violet.
+Fond photo flouté et panneaux en **verre dépoli** (violet), en mode **clair** et **sombre** (interrupteur soleil / lune en haut ; par défaut, celui de Windows).
 
 - **Barre latérale** :
-  - **Accueil** : enregistrer, importer et choisir le modèle ;
+  - **Accueil** : tableau de bord (voir ci-dessous) ;
   - **Mes projets** et **Historique** : les transcriptions enregistrées ;
-  - **Paramètres** : moteur, lexique, stockage.
+  - **Analyses** : volume par semaine, temps de parole par personne, sujets, **actions en cours** de toutes les réunions ;
+  - **Modèles** : les modèles de transcription, leur taille, s'ils sont téléchargés, et le choix du modèle ;
+  - **Paramètres** (compte, voix connues, moteur, lexique, stockage) et **Aide** (questions courantes).
   - En bas, le **compte Google** (connexion, état de la synchronisation).
+- **Accueil (tableau de bord)** :
+  - « Bonjour » avec ton prénom (compte Google), boutons **Nouvelle transcription** et **Importer un fichier** ;
+  - 4 chiffres : transcriptions, audio traité, projets (dossiers) ou voix connues, compréhension moyenne, avec l'évolution sur 7 jours ;
+  - **derniers projets** : écouter, ouvrir, ou menu (décisions et actions, résumer avec Claude) ;
+  - **insights** : audio traité sur 7 jours (courbe), sujets principaux (mots-clés BIM, technique, organisation, chantier), actions extraites ;
+  - à droite, **Analyse rapide** (qui parle le plus, sur la semaine, le mois ou depuis le début) et l'**Assistant**.
+- **Assistant** : pose une question (« Quelles décisions sur le projet Ledona ? », « Quelles actions restent à faire ? »).
+  Il cherche **sur ton appareil**, par mots-clés, dans les décisions, les actions et le texte de tes réunions
+  (« cette semaine », « ce mois », « hier » limitent la période). Ce n'est pas une IA qui rédige : pour une vraie
+  réponse, **Demander à Claude** ouvre Claude avec ta question et les réunions les plus utiles.
+- **Nouvelle transcription** : la page d'enregistrement (source, réglage automatique, modèle, langue) avec, à droite,
+  le moniteur et les réglages du son.
 - **En haut** : recherche dans les transcriptions, thème, **notifications** et menu **Exporter** (.txt, .md, .srt, copier, Résumer avec Claude).
 - **Notifications (cloche)** :
   - événements signalés : transcription terminée, voix reconnues, traduction terminée, enregistrement récupéré, transcription interrompue, synchronisation en erreur, reconnexion Google, synchronisation rétablie ;

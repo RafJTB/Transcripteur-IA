@@ -3519,8 +3519,9 @@ const claudeKey = () => lsGet('assistant.key', '');
 /** Modèle local choisi : le plus précis avec une carte graphique, le léger sinon. */
 function localLlm() {
   const e = asstEngine();
-  const big = e === 'local-large' || (e === 'auto' && caps().webgpu && lsGet('assistant.largeFailed', '') !== '1');
-  return big && caps().webgpu ? LLM_MODELS.large : LLM_MODELS.small;
+  const big = e === 'local-large' || (e === 'auto' && caps().webgpu && !lsGet('assistant.largeFailed', ''));
+  if (!big || !caps().webgpu) return LLM_MODELS.small;
+  return caps().f16 ? LLM_MODELS.large : { ...LLM_MODELS.large, dtype: 'q4', sizeMB: 2150 };
 }
 
 let llm = null;
@@ -3572,6 +3573,7 @@ let asstAbort = null;
 /** Messages d'erreur du moteur local, en clair. */
 function llmError(e) {
   const t = String(e?.message || e);
+  if (e?.detail) return e;
   if (/bad_alloc|out of memory|OOM|memory/i.test(t)) return new Error('Mémoire insuffisante pour faire tourner ce modèle sur cet appareil.');
   if (/fetch|network|Failed to load/i.test(t)) return new Error('Téléchargement du modèle impossible (connexion, ou Hugging Face bloqué par le réseau).');
   return new Error(`Le modèle local a rencontré une erreur : ${t.slice(0, 160)}`);
@@ -3582,10 +3584,18 @@ async function answerLocal(messages, opts) {
     return await answerLocalWith(localLlm(), messages, opts);
   } catch (e) {
     // Le grand modèle ne passe pas sur cette carte graphique : on bascule sur le léger
-    if (localLlm() === LLM_MODELS.large && asstEngine() === 'auto') {
-      lsSet('assistant.largeFailed', '1');
+    const m = localLlm();
+    const raw = String(e?.message || e);
+    if (m.repo === LLM_MODELS.large.repo && m.device === 'webgpu') {
       if (llm) { llm.terminate(); llm = null; llmReady = null; }
-      throw new Error(`${LLM_MODELS.large.label} ne passe pas sur la carte graphique de cet appareil. Je passe en recherche simple ; pour des réponses rédigées, choisis Claude dans Paramètres → Assistant IA.`);
+      // Un problème de réseau n'est pas un échec du modèle : on pourra réessayer
+      const network = /fetch|network|Failed to load|ERR_|timeout/i.test(raw);
+      if (!network && asstEngine() === 'auto') lsSet('assistant.largeFailed', raw.slice(0, 300));
+      const err = new Error(network
+        ? `Téléchargement de ${m.label} interrompu (connexion ?). Repose ta question pour reprendre.`
+        : `${m.label} n'a pas pu démarrer sur la carte graphique de cet appareil : je passe en recherche simple. Tu peux réessayer ou choisir Claude dans Paramètres → Assistant IA.`);
+      err.detail = `${m.repo} · ${m.dtype} · ${caps().adapter || 'GPU'} — ${raw.slice(0, 300)}`;
+      throw err;
     }
     throw llmError(e);
   }
@@ -3594,10 +3604,10 @@ async function answerLocal(messages, opts) {
 async function answerLocalWith(m, messages, { onToken, onStatus }, consented = false) {
   const spec = { repo: m.repo, device: m.device, dtype: m.dtype };
   const { cached } = await llmCall({ type: 'cache-status', ...spec });
-  if (!cached && !consented && lsGet('assistant.consent', '') !== m.repo) {
+  if (!cached && !consented && lsGet('assistant.consent', '') !== `${m.repo}|${m.dtype}`) {
     const ok = await ask('Activer l’assistant IA ?', `L’assistant utilise un modèle de langage qui tourne sur ton appareil : ${m.label} (${fmtMB(m.sizeMB)}), téléchargé une seule fois. Tes réunions ne sont envoyées nulle part.`, `Télécharger (${fmtMB(m.sizeMB)})`);
     if (!ok) return null;
-    lsSet('assistant.consent', m.repo);
+    lsSet('assistant.consent', `${m.repo}|${m.dtype}`);
   }
   onStatus(cached ? `Chargement de ${m.label} et lecture de tes réunions…` : `Téléchargement de ${m.label}…`);
   asstAbort = () => llm?.postMessage({ type: 'stop' });
@@ -3680,7 +3690,7 @@ async function askAssistant(q) {
   const sources = actionSources(docs);
   const engine = asstEngine();
   if (engine === 'search') return chatAdd('bot', keywordAnswer(q, sources));
-  if (engine === 'auto' && (!caps().webgpu || lsGet('assistant.largeFailed', '') === '1'))
+  if (engine === 'auto' && (!caps().webgpu || lsGet('assistant.largeFailed', '')))
     return chatAdd('bot', keywordAnswer(q, sources, '<p class="chat-note">Sans carte graphique compatible, je fais une recherche dans tes réunions. Pour des réponses rédigées : Claude (clé API) ou le modèle léger, dans Paramètres → Assistant IA.</p>'));
   const claude = engine === 'claude';
   const local = !claude && localLlm();
@@ -3718,7 +3728,7 @@ async function askAssistant(q) {
     chatLog[chatLog.length - 1].html = bubble.innerHTML;
   } catch (e) {
     console.warn(e);
-    bubble.innerHTML = `<p class="chat-err">${esc(e.message || String(e))}</p>` + keywordAnswer(q, sources, '');
+    bubble.innerHTML = `<p class="chat-err">${esc(e.message || String(e))}</p>${e.detail ? `<details class="chat-detail"><summary>Détail technique</summary><code>${esc(e.detail)}</code></details>` : ''}` + keywordAnswer(q, sources, '');
     chatLog[chatLog.length - 1].html = bubble.innerHTML;
   } finally {
     asstAbort = null;
@@ -3737,8 +3747,13 @@ function renderAssistantSettings() {
   $('#asst-model').value = lsGet('assistant.model', CLAUDE_MODELS[0].id);
   $('#asst-key').value = claudeKey() ? '••••••••••••' : '';
   const m = localLlm();
-  const noGpu = !caps().webgpu || lsGet('assistant.largeFailed', '') === '1';
+  const failed = lsGet('assistant.largeFailed', '');
+  const noGpu = !caps().webgpu || !!failed;
+  $('#asst-retry').hidden = !failed;
+  $('#asst-fail').hidden = !failed;
+  $('#asst-fail').textContent = failed ? `Échec du modèle local sur cette carte graphique : ${failed}` : '';
   $('#asst-info').textContent = sel.value === 'search' ? 'Recherche par mots-clés dans tes réunions, sans modèle de langage.'
+    : sel.value === 'auto' && failed ? 'Le modèle local n’a pas pu démarrer sur cette carte graphique : recherche dans tes réunions, sans réponse rédigée. Réessaie, ou choisis Claude pour des réponses rédigées.'
     : sel.value === 'auto' && noGpu ? 'Pas de carte graphique compatible détectée : recherche dans tes réunions, sans réponse rédigée. Pour des réponses rédigées, choisis Claude (le plus fiable) ou le modèle local léger (expérimental, réponses approximatives).'
     : sel.value === 'local-small' ? `${LLM_MODELS.small.label} (${fmtMB(LLM_MODELS.small.sizeMB)}), sur le processeur. Expérimental : petit modèle, réponses parfois approximatives ; vérifie dans les sources. 20 s à 2 min par réponse.`
     : isClaude ? 'Les extraits utiles de tes réunions et ta question sont envoyés à Claude (Anthropic) via ta clé API. Facturé à l’usage sur ton compte Anthropic.'
@@ -3748,6 +3763,8 @@ function renderAssistantSettings() {
 function bindAssistantSettings() {
   const sel = $('#asst-engine');
   if (!sel) return;
+  // Ancien échec mémorisé sans détail (avant l'adaptation du modèle à la carte graphique) : on retente
+  if (lsGet('assistant.largeFailed', '') === '1') localStorage.removeItem('assistant.largeFailed');
   $('#asst-model').innerHTML = CLAUDE_MODELS.map((m) => `<option value="${m.id}">${esc(m.label)}</option>`).join('');
   sel.onchange = () => { lsSet('assistant.engine', sel.value); renderAssistantSettings(); };
   $('#asst-model').onchange = (e) => lsSet('assistant.model', e.target.value);
@@ -3759,6 +3776,7 @@ function bindAssistantSettings() {
     renderAssistantSettings();
     toast(v ? 'Clé API enregistrée dans ce navigateur.' : 'Clé API effacée.', 'ok', 3000);
   };
+  $('#asst-retry').onclick = () => { localStorage.removeItem('assistant.largeFailed'); renderAssistantSettings(); toast('C’est noté : pose ta question à l’assistant pour réessayer.', 'ok', 4000); };
   $('#asst-key-clear').onclick = () => { lsSet('assistant.key', ''); renderAssistantSettings(); toast('Clé API effacée.', 'ok', 2500); };
   renderAssistantSettings();
 }

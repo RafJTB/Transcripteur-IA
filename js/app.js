@@ -2137,13 +2137,55 @@ const tsOn = () => $('#toggle-ts').checked;
 async function writeClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
+    return true;
   } catch {
     const ta = Object.assign(document.createElement('textarea'), { value: text });
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
     document.body.appendChild(ta);
     ta.select();
-    document.execCommand('copy');
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
     ta.remove();
+    return ok;
   }
+}
+
+const CLAUDE_ICON = '<svg class="claude-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11.47 9.25 L10.79 1.07 L13.21 1.07 L12.53 9.25 L12.91 9.35 L15.70 3.58 L17.45 4.59 L13.84 9.89 L14.11 10.16 L20.86 5.49 L22.07 7.58 L14.65 11.09 L14.75 11.47 L21.14 10.99 L21.14 13.01 L14.75 12.53 L14.65 12.91 L22.07 16.42 L20.86 18.51 L14.11 13.84 L13.84 14.11 L17.45 19.41 L15.70 20.42 L12.91 14.65 L12.53 14.75 L13.21 22.93 L10.79 22.93 L11.47 14.75 L11.09 14.65 L8.30 20.42 L6.55 19.41 L10.16 14.11 L9.89 13.84 L3.14 18.51 L1.93 16.42 L9.35 12.91 L9.25 12.53 L2.86 13.01 L2.86 10.99 L9.25 11.47 L9.35 11.09 L1.93 7.58 L3.14 5.49 L9.89 10.16 L10.16 9.89 L6.55 4.59 L8.30 3.58 L11.09 9.35Z"/></svg>';
+
+/**
+ * Ouvre Claude avec une consigne. La consigne est copiée AVANT de quitter l'appli (le navigateur
+ * refuse la copie une fois l'onglet de Claude au premier plan). Trop longue pour le lien : une
+ * dernière étape explique de la coller, et un clic ouvre Claude.
+ */
+document.addEventListener('click', (e) => {
+  if (e.target.id !== 'cl-copy-again') return;
+  const ta = document.querySelector('.cl-raw');
+  ta.select();
+  const ok = document.execCommand('copy');
+  toast(ok ? 'Consigne copiée.' : 'Sélectionne le texte et fais Ctrl + C.', ok ? 'ok' : 'warn', 3000);
+});
+
+async function openInClaude(prompt) {
+  const url = claudeUrl(prompt);
+  const copied = await writeClipboard(prompt);
+  {
+    tool.open('Ouvrir dans Claude');
+    const go = await tool.show({
+      step: 'Dernière étape',
+      html: `<div class="cl-paste"><span class="cl-logo">${CLAUDE_ICON}</span><div>
+        <p><b>${copied ? 'Ta consigne est copiée' : 'Copie automatique impossible'}</b> (${prompt.length.toLocaleString('fr-FR')} caractères)${copied ? '.' : ' : le navigateur a bloqué le presse-papiers.'}</p>
+        <ol><li>${copied ? 'Clique sur « Ouvrir Claude ».' : 'Clique sur « Copier », puis sur « Ouvrir Claude ».'}</li><li>${url ? 'Si la consigne n’apparaît pas dans la zone de message, clique dedans' : 'Dans Claude, clique dans la zone de message'} et fais <kbd>Ctrl</kbd> + <kbd>V</kbd> (<kbd>⌘</kbd> + <kbd>V</kbd> sur Mac).</li><li>Appuie sur <kbd>Entrée</kbd>.</li></ol></div></div>
+        ${copied ? '' : `<textarea class="cl-raw" readonly rows="4">${esc(prompt.slice(0, 200000))}</textarea><button class="btn sm" type="button" id="cl-copy-again">Copier</button>`}`,
+      actions: [{ label: 'Annuler', value: null }, { label: 'Ouvrir Claude', value: true, primary: true }],
+    });
+    tool.close();
+    if (!go) return;
+  }
+  const win = window.open(url || CLAUDE_NEW, '_blank');
+  if (win) win.opener = null;
+  if (!win) toast('Le navigateur a bloqué l’ouverture de Claude : ouvre claude.ai et colle la consigne (Ctrl + V).', 'warn', 9000);
+  else if (url) toast('Claude s’ouvre avec ta consigne : vérifie et envoie. (Elle est aussi copiée, au cas où.)', 'ok', 6000);
+  else toast('Dans Claude : Ctrl + V puis Entrée.', 'ok', 8000);
 }
 
 async function copyText() {
@@ -2194,15 +2236,8 @@ async function sendToClaude(preset = null) {
     translatedFrom: currentView() !== 'orig' ? (langSummary(state.segments) || langName(state.doc?.translation?.from).toLowerCase()) : null,
     both: currentView() === 'both',
   });
-  const url = claudeUrl(prompt);
-  // Ouverture tout de suite (le navigateur bloque les fenêtres ouvertes trop tard après le clic)
-  const win = window.open(url || CLAUDE_NEW, '_blank');
-  if (win) win.opener = null;
-  await writeClipboard(prompt);
   tool.close();
-  if (!win) toast('Le navigateur a bloqué l’ouverture de Claude. La consigne est copiée : ouvre claude.ai et colle-la (Ctrl + V).', 'warn', 9000);
-  else if (url) toast('Claude s’ouvre avec ta transcription : vérifie et envoie. (Elle est aussi copiée, au cas où.)', 'ok', 7000);
-  else toast('Transcription longue : elle est copiée. Dans Claude, colle-la avec Ctrl + V puis envoie.', 'ok', 10000);
+  await openInClaude(prompt);
 }
 
 // ======================================================================
@@ -3790,7 +3825,7 @@ function keywordAnswer(q, sources, note = '') {
   const openOnly = /reste|à faire|a faire|en cours/i.test(q);
   if (openOnly) sources.forEach((s) => (s.items = s.items.filter((x) => !x.done)));
   const { intent, hits } = searchMeetings(q, sources, { limit: 6 });
-  const claudeBtn = '<button class="chat-claude" type="button" data-claude>Demander à Claude</button>';
+  const claudeBtn = '<button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>';
   if (!hits.length) return `<p>Je n’ai rien trouvé de net dans tes transcriptions. Essaie avec d’autres mots (un nom de projet, un lot, une personne).</p>${note}${claudeBtn}`;
   const lead = intent === 'decision' ? 'Voici les décisions trouvées' : intent === 'action' ? (openOnly ? 'Voici les actions encore à faire' : 'Voici les actions trouvées') : 'Voici les passages les plus proches';
   const li = hits.map((h) => `<li><button type="button" data-open="${esc(h.doc.id)}" data-i="${h.i}">${h.type === 'decision' ? '<i class="tag dec">Décision</i>' : h.type === 'action' ? `<i class="tag act">Action${h.who ? ` · ${esc(h.who)}` : ''}</i>` : ''}${esc(h.text.length > 150 ? h.text.slice(0, 149) + '…' : h.text)}<small>${esc(h.doc.title)} · ${relDay(h.doc.createdAt)} · ${fmtClock(h.start)}</small></button></li>`).join('');
@@ -3853,7 +3888,7 @@ async function askAssistant(q) {
     bubble.innerHTML = renderAnswer(text, refs)
       + (src.length ? `<ul class="chat-src">${src.map((r) => `<li><button type="button" data-open="${esc(r.doc.id)}" data-i="${r.i}"><b>${r.n}</b><span>« ${esc(r.text.length > 110 ? r.text.slice(0, 109) + '…' : r.text)} »<small>${esc(r.doc.title)} · ${relDay(r.doc.createdAt)} · ${fmtClock(r.start)}</small></span></button></li>`).join('')}</ul>` : '')
       + (note ? `<p class="chat-note warn">${esc(note)}</p>` : '')
-      + `<p class="chat-note">${esc(engineLabel)} · à vérifier dans les sources.${claude ? '' : ' <button class="chat-claude" type="button" data-claude>Demander à Claude</button>'}</p>`;
+      + `<p class="chat-note">${esc(engineLabel)} · à vérifier dans les sources.${claude ? '' : ' <button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>'}</p>`;
     lastExchange = { q, a: text };
     chatLog[chatLog.length - 1].html = bubble.innerHTML;
   } catch (e) {
@@ -3975,11 +4010,7 @@ async function askClaudeAbout(q) {
     parts.push(`<reunion titre="${d.title.replace(/"/g, "'")}" date="${new Date(d.createdAt).toLocaleDateString('fr-FR')}">\n${cut}\n</reunion>`);
   }
   const prompt = `Voici des transcriptions automatiques de mes réunions (elles peuvent contenir des erreurs de reconnaissance). Réponds à ma question en t’appuyant uniquement sur leur contenu, en citant la réunion et la date. Si l’information n’y est pas, dis-le.\n\nQuestion : ${q}\n\n${parts.join('\n\n')}`;
-  const url = claudeUrl(prompt);
-  const win = window.open(url || CLAUDE_NEW, '_blank');
-  if (win) win.opener = null;
-  await writeClipboard(prompt);
-  toast(url ? 'Claude s’ouvre avec ta question et les réunions utiles.' : 'Question et réunions copiées : colle-les dans Claude (Ctrl + V).', 'ok', 7000);
+  await openInClaude(prompt);
 }
 
 function bindDashboard() {
@@ -4067,7 +4098,7 @@ function openRecentMenu(btn, d) {
   const pop = document.createElement('div');
   pop.id = 'recent-pop';
   pop.className = 'recent-pop';
-  pop.innerHTML = `<button type="button" data-m="open">Ouvrir</button><button type="button" data-m="actions">Décisions et actions</button><button type="button" data-m="claude">Résumer avec Claude</button><button type="button" data-m="ask">Interroger l’assistant</button>`;
+  pop.innerHTML = `<button type="button" data-m="open">Ouvrir</button><button type="button" data-m="actions">Décisions et actions</button><button type="button" data-m="claude">${CLAUDE_ICON}Résumer avec Claude</button><button type="button" data-m="ask">Interroger l’assistant</button>`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect();
   pop.style.top = `${Math.min(innerHeight - 140, r.bottom + 6)}px`;

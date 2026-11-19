@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-2" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-2" />
+  <meta name="app-version" content="2026-11-22-3" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-3" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,7 +41,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-2', 'sw.js', 'js/app.js?v=2026-11-22-2', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-3', 'sw.js', 'js/app.js?v=2026-11-22-3', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -143,7 +143,7 @@
               <button type="button" role="menuitem" data-export="md"><b>Markdown</b><small>.md · titre, infos et texte</small></button>
               <button type="button" role="menuitem" data-export="srt"><b>Sous-titres</b><small>.srt · pour une vidéo</small></button>
               <button type="button" role="menuitem" id="btn-copy" disabled><b>Copier le texte</b><small>dans le presse-papiers</small></button>
-              <button type="button" role="menuitem" id="btn-claude" disabled><b>Résumer avec Claude</b><small>ouvre claude.ai avec la consigne</small></button>
+              <button type="button" role="menuitem" id="btn-claude" class="mi-claude" disabled><svg class="claude-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11.47 9.25 L10.79 1.07 L13.21 1.07 L12.53 9.25 L12.91 9.35 L15.70 3.58 L17.45 4.59 L13.84 9.89 L14.11 10.16 L20.86 5.49 L22.07 7.58 L14.65 11.09 L14.75 11.47 L21.14 10.99 L21.14 13.01 L14.75 12.53 L14.65 12.91 L22.07 16.42 L20.86 18.51 L14.11 13.84 L13.84 14.11 L17.45 19.41 L15.70 20.42 L12.91 14.65 L12.53 14.75 L13.21 22.93 L10.79 22.93 L11.47 14.75 L11.09 14.65 L8.30 20.42 L6.55 19.41 L10.16 14.11 L9.89 13.84 L3.14 18.51 L1.93 16.42 L9.35 12.91 L9.25 12.53 L2.86 13.01 L2.86 10.99 L9.25 11.47 L9.35 11.09 L1.93 7.58 L3.14 5.49 L9.89 10.16 L10.16 9.89 L6.55 4.59 L8.30 3.58 L11.09 9.35Z"/></svg><b>Résumer avec Claude</b><small>ouvre claude.ai avec la consigne</small></button>
             </div>
           </details>
         </div>
@@ -378,7 +378,7 @@
                   <div><b>Décisions et actions</b><p>Repérées automatiquement, sur ton PC. Coche ce qui est fait, retire ce qui n’en est pas.</p></div>
                   <div class="act-btns">
                     <button class="btn sm" id="act-copy" type="button" title="Copier le relevé (Markdown) pour un mail, Teams ou Notion"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copier</button>
-                    <button class="btn sm claude" id="act-claude" type="button">Affiner avec Claude</button>
+                    <button class="btn sm claude" id="act-claude" type="button"><svg class="claude-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11.47 9.25 L10.79 1.07 L13.21 1.07 L12.53 9.25 L12.91 9.35 L15.70 3.58 L17.45 4.59 L13.84 9.89 L14.11 10.16 L20.86 5.49 L22.07 7.58 L14.65 11.09 L14.75 11.47 L21.14 10.99 L21.14 13.01 L14.75 12.53 L14.65 12.91 L22.07 16.42 L20.86 18.51 L14.11 13.84 L13.84 14.11 L17.45 19.41 L15.70 20.42 L12.91 14.65 L12.53 14.75 L13.21 22.93 L10.79 22.93 L11.47 14.75 L11.09 14.65 L8.30 20.42 L6.55 19.41 L10.16 14.11 L9.89 13.84 L3.14 18.51 L1.93 16.42 L9.35 12.91 L9.25 12.53 L2.86 13.01 L2.86 10.99 L9.25 11.47 L9.35 11.09 L1.93 7.58 L3.14 5.49 L9.89 10.16 L10.16 9.89 L6.55 4.59 L8.30 3.58 L11.09 9.35Z"/></svg>Affiner avec Claude</button>
                   </div>
                 </div>
                 <div class="actions-list" id="actions"></div>
@@ -391,7 +391,7 @@
                 <div class="sum-intro">
                   <span class="sum-ico"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg></span>
                   <div><b>Résumé avec Claude</b><p>Choisis le type de résumé : la transcription s’ouvre dans Claude avec la consigne. Colle ensuite la réponse ici pour la garder avec la transcription.</p></div>
-                  <button class="btn sm claude" id="btn-claude-tab" type="button">Résumer avec Claude</button>
+                  <button class="btn sm claude" id="btn-claude-tab" type="button"><svg class="claude-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11.47 9.25 L10.79 1.07 L13.21 1.07 L12.53 9.25 L12.91 9.35 L15.70 3.58 L17.45 4.59 L13.84 9.89 L14.11 10.16 L20.86 5.49 L22.07 7.58 L14.65 11.09 L14.75 11.47 L21.14 10.99 L21.14 13.01 L14.75 12.53 L14.65 12.91 L22.07 16.42 L20.86 18.51 L14.11 13.84 L13.84 14.11 L17.45 19.41 L15.70 20.42 L12.91 14.65 L12.53 14.75 L13.21 22.93 L10.79 22.93 L11.47 14.75 L11.09 14.65 L8.30 20.42 L6.55 19.41 L10.16 14.11 L9.89 13.84 L3.14 18.51 L1.93 16.42 L9.35 12.91 L9.25 12.53 L2.86 13.01 L2.86 10.99 L9.25 11.47 L9.35 11.09 L1.93 7.58 L3.14 5.49 L9.89 10.16 L10.16 9.89 L6.55 4.59 L8.30 3.58 L11.09 9.35Z"/></svg>Résumer avec Claude</button>
                 </div>
                 <label class="label" for="summary-text">Résumé enregistré</label>
                 <textarea id="summary-text" class="summary-text" placeholder="Colle ici le résumé de Claude…" spellcheck="true"></textarea>
@@ -826,6 +826,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-2"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-3"></script>
 </body>
 </html>

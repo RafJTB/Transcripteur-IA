@@ -13,6 +13,8 @@ import { SUMMARY_TYPES, buildPrompt, claudeUrl, CLAUDE_NEW } from './claude-expo
 import { Player, segmentAt } from './player.js';
 import { describeEngine, createTranslator, localCached, localPlan, chromeAvailability } from './translate.js';
 import { guessLang } from './langid.js';
+import { VoiceBook, centroids, matchVoices, packEmb } from './voices.js';
+import { extractActions, actionsToMarkdown } from './actions.js';
 import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -30,6 +32,7 @@ const state = {
   modelId: MODELS.some((m) => m.id === store.get('model')) ? store.get('model') : DEFAULT_MODEL,
   language: store.get('lang', 'auto'),
   autoTr: store.get('autotr', '1') === '1', // traduire automatiquement en français
+  voiceId: store.get('voiceid', '1') === '1', // reconnaître les voix déjà nommées (carnet de voix)
   autoSpk: store.get('autospk', '1') === '1', // identifier qui parle après chaque transcription
   editMode: store.get('edit', '1') === '1', // texte modifiable directement
   autoTune: store.get('auto', '1') === '1', // réglage automatique (son + modèle) avant chaque enregistrement
@@ -2152,9 +2155,9 @@ const lsGet = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { r
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* stockage indisponible */ } };
 
 /** Résumer avec Claude : choix du type de résumé, puis ouverture de claude.ai avec la consigne. */
-async function sendToClaude() {
+async function sendToClaude(preset = null) {
   if (!state.segments.length) return;
-  const last = lsGet('claude.type', 'cr');
+  const last = typeof preset === 'string' ? preset : lsGet('claude.type', 'cr');
   const ts = lsGet('claude.ts', '1') === '1';
   tool.open('Résumer avec Claude');
   const go = await tool.show({
@@ -2327,10 +2330,11 @@ function identifySpeakers(doc, { k = doc?.speakerCount ?? null, manual = false }
       if (manual) toast('Aucune voix nette détectée dans cet audio.', 'warn', 5000);
       return;
     }
-    applySpeakers(doc, items, k);
+    const known = applySpeakers(doc, items, k);
     const n = doc.speakers.length;
-    spkStatus(n > 1 ? `${n} personnes reconnues` : 'Une seule voix reconnue', true);
-    if (n > 1) notify({ kind: 'ok', title: `${n} personnes reconnues`, text: `« ${doc.title} » : renomme-les dans l’onglet Transcription.`, docId: doc.id });
+    const kn = known.length ? ` · ${known.join(', ')} reconnu${known.length > 1 ? 's' : ''}` : '';
+    spkStatus((n > 1 ? `${n} personnes` : 'Une seule voix') + (kn || (n > 1 ? ' reconnues' : ' reconnue')), true);
+    if (n > 1) notify({ kind: 'ok', title: `${n} personnes reconnues`, text: known.length ? `« ${doc.title} » : ${known.join(', ')} reconnu${known.length > 1 ? 's' : ''} à la voix.` : `« ${doc.title} » : renomme-les dans l’onglet Transcription.`, docId: doc.id });
   })()
     .catch((e) => { spkStatus(''); toast(`Qui parle ? ${e.message}`, 'err', 8000); })
     .finally(() => { spkRun = null; });
@@ -2343,7 +2347,11 @@ function applySpeakers(doc, items, k) {
   const timeline = buildTimeline(items, labels);
   const base = doc.segments.map(({ spk, ...rest }) => rest);
   const names = (doc.speakers || []).map((p) => p.name);
-  const { segments, speakers } = orderSpeakers(assignSpeakers(base, timeline), names);
+  const { segments, speakers, order } = orderSpeakers(assignSpeakers(base, timeline), names);
+  // Empreinte de chaque personne (pour le carnet de voix), puis reconnaissance des voix connues
+  const cents = centroids(items, labels);
+  speakers.forEach((p, n) => { const c = cents.get(order[n]); if (c) p.emb = packEmb(c); });
+  const known = recognizeVoices(speakers);
   doc.segments = segments;
   doc.speakers = speakers;
   doc.speakerCount = k;
@@ -2354,6 +2362,74 @@ function applySpeakers(doc, items, k) {
     renderMeta();
   }
   persist(doc);
+  return known;
+}
+
+/**
+ * Donne leur nom aux voix déjà connues (carnet de voix). Renvoie les noms reconnus.
+ * Un nom du carnet n'est jamais donné à deux personnes à la fois.
+ */
+function recognizeVoices(speakers) {
+  if (!state.voiceId) return [];
+  const book = VoiceBook.load();
+  if (!book.length) return [];
+  const m = matchVoices(speakers.map((p) => p.emb || null), book);
+  const found = [];
+  speakers.forEach((p, n) => {
+    if (m[n].index < 0) { delete p.known; return; }
+    p.name = book[m[n].index].name;
+    p.known = Math.round(m[n].sim * 100) / 100;
+    p.learned = p.name;
+    found.push(p.name);
+  });
+  // Un autre intervenant ne garde pas un nom désormais porté par une voix reconnue
+  const taken = new Set(found.map((x) => x.toLowerCase()));
+  speakers.forEach((p, n) => { if (p.known == null && taken.has(p.name.toLowerCase())) p.name = defaultSpeakerName(n); });
+  return found;
+}
+
+/** Après un renommage : la voix est apprise (ou affinée) dans le carnet. */
+function learnSpeaker(n) {
+  const p = state.doc?.speakers?.[n];
+  if (!state.voiceId || !p?.emb || !p.name || /^Personne \d+$/.test(p.name) || p.learned === p.name) return;
+  const isNew = !VoiceBook.load().some((v) => v.name.toLowerCase() === p.name.toLowerCase());
+  VoiceBook.learn(p.name, p.emb);
+  p.learned = p.name;
+  saveDoc(0);
+  renderVoices();
+  toast(isNew ? `Voix de ${p.name} mémorisée : reconnaissance automatique aux prochaines réunions.` : `Voix de ${p.name} affinée.`, 'ok', 4000);
+}
+
+/** Paramètres : liste des voix connues. */
+function renderVoices() {
+  const box = $('#voice-list');
+  if (!box) return;
+  $('#toggle-voiceid').checked = state.voiceId;
+  const book = VoiceBook.load().sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  $('#voice-clear').hidden = !book.length;
+  box.innerHTML = book.length
+    ? book.map((v) => `<li><span class="v-av">${esc(v.name.slice(0, 1).toUpperCase())}</span><span class="v-name">${esc(v.name)}<small>appris sur ${v.n || 1} réunion${(v.n || 1) > 1 ? 's' : ''}</small></span><button class="icon-btn sm" type="button" data-forget="${esc(v.name)}" aria-label="Oublier la voix de ${esc(v.name)}" title="Oublier cette voix"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></li>`).join('')
+    : '<li class="none">Aucune voix pour l’instant. Renomme un intervenant (« Personne 1 » → « Julie ») : sa voix sera reconnue aux réunions suivantes.</li>';
+}
+
+function bindVoices() {
+  $('#toggle-voiceid').onchange = (e) => {
+    state.voiceId = e.target.checked;
+    store.set('voiceid', state.voiceId ? '1' : '0');
+  };
+  $('#voice-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-forget]');
+    if (!b) return;
+    VoiceBook.remove(b.dataset.forget);
+    renderVoices();
+    toast(`Voix de ${b.dataset.forget} oubliée.`, 'ok', 3000);
+  });
+  $('#voice-clear').onclick = async () => {
+    if (!(await ask('Oublier toutes les voix connues ?', 'Les intervenants ne seront plus reconnus automatiquement. Les transcriptions ne changent pas.', 'Tout oublier', { danger: true }))) return;
+    VoiceBook.clear();
+    renderVoices();
+  };
+  renderVoices();
 }
 
 /** Barre des intervenants : noms modifiables, temps de parole, nombre de personnes. */
@@ -2479,6 +2555,7 @@ function setDocTab(tab) {
   $$('[data-dpanel]').forEach((p) => (p.hidden = p.dataset.dpanel !== tab));
   if (tab === 'analysis') renderAnalysis();
   if (tab === 'summary') renderSummary();
+  if (tab === 'actions') renderActions();
 }
 
 const ICON_OK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.5L16 9.5"/></svg>';
@@ -2574,6 +2651,97 @@ function renderAnalysis() {
   box.innerHTML = html;
 }
 
+/** Décisions et actions repérées, avec l'état choisi par l'utilisateur (fait / retiré). */
+function docActions(d = state.doc) {
+  if (!d || !state.segments.length) return [];
+  const st = d.actionState || {};
+  return extractActions(state.segments, { speakers: d.speakers || [], meetingTime: d.createdAt })
+    .map((x) => ({ ...x, done: st[x.key] === 'done', hidden: st[x.key] === 'hidden' }));
+}
+
+const fmtDue = (date) => date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+
+/** Onglet Actions : relevé de décisions et d'actions (qui fait quoi, pour quand). */
+function renderActions() {
+  const box = $('#actions');
+  const d = state.doc;
+  if (!d || !state.segments.length) return (box.innerHTML = '<p class="a-empty">Pas encore de texte à analyser.</p>');
+  const all = docActions(d);
+  const shown = all.filter((x) => !x.hidden);
+  const hidden = all.length - shown.length;
+  const dec = shown.filter((x) => x.type === 'decision');
+  const act = shown.filter((x) => x.type === 'action');
+  const spkIdx = new Map((d.speakers || []).map((p, n) => [p.name, n]));
+  const time = (x) => `<button class="act-time" type="button" data-seek="${x.i}" title="Écouter ce passage">${fmtClock(x.start)}</button>`;
+  const del = (x) => `<button class="icon-btn sm act-del" type="button" data-hide="${esc(x.key)}" aria-label="Retirer" title="Ce n’en est pas une : retirer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
+  const who = (x) => {
+    const n = spkIdx.get(x.who);
+    return x.who
+      ? `<span class="act-who"${n != null ? ` style="--spk:${speakerColor(n)}"` : ''}><i class="dot"></i>${esc(x.who)}</span>`
+      : '<span class="act-who none">Qui ? À préciser</span>';
+  };
+  const due = (x) => x.due
+    ? `<span class="act-due" title="${x.date ? esc(x.date.toLocaleDateString('fr-FR', { dateStyle: 'full' })) : ''}"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>${esc(x.date ? fmtDue(x.date) : x.due)}</span>`
+    : '<span class="act-due none">Sans échéance</span>';
+  const doneN = act.filter((x) => x.done).length;
+  let html = `<div class="act-block"><h4><span class="act-ico dec"><svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg></span>Décisions <small>${dec.length}</small></h4>${dec.length
+    ? `<ul class="act-list">${dec.map((x) => `<li class="act-item dec">${time(x)}<div class="act-body"><p>${esc(x.text)}</p></div>${del(x)}</li>`).join('')}</ul>`
+    : '<p class="a-empty">Aucune décision repérée (« on valide », « on part sur », « c’est acté »…).</p>'}</div>`;
+  html += `<div class="act-block"><h4><span class="act-ico"><svg viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5 2.5-2.5M3.5 18l1.5 1.5 2.5-2.5"/></svg></span>Actions <small>${act.length ? `${doneN}/${act.length} faite${doneN > 1 ? 's' : ''}` : '0'}</small></h4>${act.length
+    ? `<ul class="act-list">${act.map((x) => `<li class="act-item${x.done ? ' done' : ''}"><label class="act-check" title="Marquer comme faite"><input type="checkbox" data-done="${esc(x.key)}"${x.done ? ' checked' : ''} /><span><svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg></span></label><div class="act-body"><p>${esc(x.text)}</p><div class="act-meta">${who(x)}${due(x)}${time(x)}</div></div>${del(x)}</li>`).join('')}</ul>`
+    : '<p class="a-empty">Aucune action repérée (« il faut », « tu peux… », « je m’en occupe », « je t’envoie »…).</p>'}</div>`;
+  if (hidden) html += `<p class="act-hidden">${hidden} élément${hidden > 1 ? 's' : ''} retiré${hidden > 1 ? 's' : ''} · <button class="link-btn" type="button" data-unhide>Tout réafficher</button></p>`;
+  box.innerHTML = html;
+  $('#act-copy').disabled = !shown.length;
+}
+
+function setActionState(key, value) {
+  const d = state.doc;
+  if (!d) return;
+  d.actionState = { ...(d.actionState || {}) };
+  if (value) d.actionState[key] = value;
+  else delete d.actionState[key];
+  saveDoc(0);
+  renderActions();
+}
+
+function bindActions() {
+  $('#actions').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-seek], [data-hide], [data-unhide]');
+    if (!t) return;
+    if (t.dataset.hide) return setActionState(t.dataset.hide, 'hidden');
+    if (t.hasAttribute('data-unhide')) {
+      const d = state.doc;
+      if (!d?.actionState) return;
+      d.actionState = Object.fromEntries(Object.entries(d.actionState).filter(([, v]) => v !== 'hidden'));
+      saveDoc(0);
+      return renderActions();
+    }
+    const i = Number(t.dataset.seek);
+    setDocTab('tr');
+    const row = $$('#transcript .segment')[i];
+    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row?.classList.toggle('flash', true);
+    setTimeout(() => row?.classList.toggle('flash', false), 1300);
+    if (state.audio && state.segments[i]) player.seek(state.segments[i].start, { play: true });
+  });
+  $('#actions').addEventListener('change', (e) => {
+    const k = e.target.dataset.done;
+    if (k) setActionState(k, e.target.checked ? 'done' : null);
+  });
+  $('#act-copy').onclick = async () => {
+    const items = docActions().filter((x) => !x.hidden);
+    const md = actionsToMarkdown(items, { title: $('#result-title').value.trim() || state.doc?.title || '', fmtDate: fmtDue });
+    try {
+      await navigator.clipboard.writeText(md);
+      toast('Relevé copié : colle-le dans un mail, Teams ou Notion.', 'ok', 3500);
+    } catch {
+      toast('Copie impossible (presse-papiers bloqué par le navigateur).', 'err', 4000);
+    }
+  };
+  $('#act-claude').onclick = () => sendToClaude('actions');
+}
+
 /** Onglet Résumé IA : résumé collé depuis Claude, gardé avec la transcription. */
 function renderSummary() {
   const ta = $('#summary-text');
@@ -2665,6 +2833,7 @@ function bindSpeakers() {
     saveDoc(600);
   });
   $('#spk-list').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+  $('#spk-list').addEventListener('change', (e) => { const n = Number(e.target.dataset.n); if (Number.isInteger(n)) learnSpeaker(n); });
   $('#spk-count').onchange = (e) => {
     const d = state.doc;
     if (!d) return;
@@ -2931,7 +3100,7 @@ function updateButtons() {
     loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
   }[state.phase] || 'Transcrire';
   $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
-  $$('[data-export], #btn-copy, #btn-relex, #btn-claude, #btn-claude-tab, #btn-translate, #btn-speakers').forEach((b) => (b.disabled = !has));
+  $$('[data-export], #btn-copy, #btn-relex, #btn-claude, #btn-claude-tab, #btn-translate, #btn-speakers, #act-copy, #act-claude').forEach((b) => (b.disabled = !has));
   $('#summary-text').disabled = !state.doc;
   $('#export-menu').classList.toggle('disabled', !has);
   if (!has) $('#export-menu').open = false;
@@ -3559,6 +3728,8 @@ function bind() {
     row.classList.toggle('flash', true);
   });
   bindSpeakers();
+  bindVoices();
+  bindActions();
   bindV3();
   $$('#view-switch [data-view]').forEach((b) => (b.onclick = () => {
     state.view = b.dataset.view;

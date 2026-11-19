@@ -254,7 +254,7 @@ function nearestTurn(timeline, t) {
 /**
  * Renumérote les personnes par ordre d'apparition (Personne 1 = la première qui parle)
  * et calcule leur temps de parole.
- * @returns {{segments: object[], speakers: {name: string, seconds: number}[]}}
+ * @returns {{segments: object[], speakers: {name: string, seconds: number}[], order: number[]}} order[n] = groupe d'origine de la personne n
  */
 export function orderSpeakers(segments, names = []) {
   const map = new Map();
@@ -266,7 +266,7 @@ export function orderSpeakers(segments, names = []) {
     speakers[n].seconds += Math.max(0, s.end - s.start);
     return { ...s, spk: n };
   });
-  return { segments: segs, speakers };
+  return { segments: segs, speakers, order: [...map.keys()] };
 }
 
 /** Recalcule le temps de parole (après une correction manuelle). */

@@ -19,6 +19,19 @@ export const SUMMARY_TYPES = [
 6. Points en suspens et questions ouvertes.`,
   },
   {
+    key: 'actions',
+    label: 'Relevé de décisions et d’actions',
+    short: 'Qui fait quoi, pour quand',
+    ask: `Établis le relevé de décisions et d'actions de cette réunion :
+1. Décisions prises : une par ligne, formulée clairement (ce qui a été validé, choisi, abandonné ou reporté).
+2. Actions à mener, sous forme de tableau : action | responsable | échéance | passage (horodatage, s'il est fourni).
+   – Une action = une tâche concrète, commençant par un verbe à l'infinitif (« Mettre à jour la maquette structure »).
+   – Responsable : la personne qui s'est engagée ou à qui on l'a demandé ; « à préciser » si ce n'est pas clair.
+   – Échéance : la date ou le délai dit dans l'échange ; « à préciser » sinon.
+3. Points en suspens : questions restées sans réponse ou sujets à reprendre.
+Ne retiens que ce qui est réellement décidé ou demandé : pas les simples idées ou hypothèses.`,
+  },
+  {
     key: 'court',
     label: 'Résumé court',
     short: 'L’essentiel en quelques lignes',

@@ -17,7 +17,7 @@ import { VoiceBook, centroids, matchVoices, packEmb } from './voices.js';
 import { extractActions, actionsToMarkdown } from './actions.js';
 import { dashStats, dailyMinutes, weeklyMinutes, speakerTotals, topicShares, periodStart, searchMeetings } from './insights.js';
 import { buildContext, buildMessages, renderAnswer, citedRefs } from './assistant.js';
-import { Spaces, spacesError } from './spaces.js';
+import { Spaces, spacesError, normalizeUrl } from './spaces.js';
 import { encodeOggOpus, canEncodeOpus } from './opus-ogg.js';
 import { ACCENTS, accentVars, BACKGROUNDS, DEFAULTS as PERSO_DEFAULTS, loadPerso, savePerso, applyPerso, customImage, shrinkImage, saveCustomImage } from './perso.js';
 import { DICTATION, LAPTOP_PRESET, CALIBRATION_CONFIGS, dictationScore, analyzeRoom } from './calibration.js';
@@ -4480,9 +4480,10 @@ async function openSpaceDoc(id) {
 function bindSpaces() {
   // Configuration
   $('#spc-save').onclick = () => {
-    const url = $('#spc-url').value.trim();
+    const url = normalizeUrl($('#spc-url').value);
+    $('#spc-url').value = url;
     const key = $('#spc-key').value.trim();
-    if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)\/?$/i.test(url)) return toast('Adresse attendue : https://xxxx.supabase.co', 'warn', 5000);
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(url)) return toast('Adresse attendue : https://xxxx.supabase.co', 'warn', 5000);
     if (!key.startsWith('•') && key.length < 20) return toast('Clé publique (anon / publishable) attendue.', 'warn', 5000);
     if (/service_role/i.test(key)) return toast('Ne mets jamais la clé « service_role » ici : utilise la clé « anon » / « publishable ».', 'err', 7000);
     Spaces.setConfig(url, key.startsWith('•') ? Spaces.key() : key);

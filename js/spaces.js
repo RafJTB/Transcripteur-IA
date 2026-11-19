@@ -10,12 +10,19 @@ const lsGet = (k, d = '') => { try { return localStorage.getItem(LS + k) ?? d; }
 const lsSet = (k, v) => { try { v ? localStorage.setItem(LS + k, v) : localStorage.removeItem(LS + k); } catch { /* ignore */ } };
 const BUCKET = 'space-audio';
 
+/** « https://xxx.supabase.co/rest/v1/ » (adresse de l'API copiée telle quelle) → « https://xxx.supabase.co ». */
+export const normalizeUrl = (u) => {
+  const t = String(u || '').trim();
+  const m = t.match(/^(https:\/\/[a-z0-9-]+\.supabase\.(?:co|in))(?:\/.*)?$/i);
+  return m ? m[1].toLowerCase() : t.replace(/\/+$/, '');
+};
+
 let client = null;
 let clientKey = '';
 
 export const Spaces = {
   /** Adresse et clé publique du projet : config.js, sinon réglées dans l'appli. */
-  url: () => (SUPABASE_URL || lsGet('url')).trim().replace(/\/+$/, ''),
+  url: () => normalizeUrl(SUPABASE_URL || lsGet('url')),
   key: () => (SUPABASE_ANON_KEY || lsGet('key')).trim(),
   configured: () => /^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(Spaces.url()) && Spaces.key().length > 20,
   fixed: () => !!(SUPABASE_URL && SUPABASE_ANON_KEY),

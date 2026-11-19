@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-6" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-6" />
+  <meta name="app-version" content="2026-11-22-7" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-7" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,7 +41,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-6', 'sw.js', 'js/app.js?v=2026-11-22-6', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-7', 'sw.js', 'js/app.js?v=2026-11-22-7', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -463,7 +463,7 @@
                 <li><b>Base de données</b> : SQL Editor → New query → colle le script, puis <b>Run</b>. <button class="btn xs" type="button" id="spc-copy-sql">Copier le script SQL</button></li>
                 <li><b>Connexion Google</b> : Authentication → Sign In / Providers → <b>Google</b> → active, puis colle l’<i>ID client</i> et le <i>code secret</i> de ton client OAuth Google Cloud. Dans Google Cloud, ajoute à ce client l’URI de redirection indiquée par Supabase (<code>https://xxxx.supabase.co/auth/v1/callback</code>).</li>
                 <li><b>Adresses autorisées</b> : Authentication → URL Configuration → <i>Site URL</i> et <i>Redirect URLs</i> : <code id="spc-redirect"></code> <button class="btn xs" type="button" id="spc-copy-redirect">Copier</button></li>
-                <li><b>Clés</b> : Project Settings → API → copie l’<i>URL du projet</i> et la clé <i>anon / publishable</i> ici (jamais la clé <i>service_role</i>).</li>
+                <li><b>Clés</b> : bouton vert <b>Connect</b> en haut de Supabase (ou Project Settings → API Keys) → copie l’<i>URL du projet</i> et la clé <i>anon</i> / <i>publishable</i> ici (jamais la clé <i>secret</i> / <i>service_role</i>). L’adresse peut être collée avec « /rest/v1/ », elle est corrigée toute seule.</li>
               </ol>
               <div class="spc-form">
                 <label class="label" for="spc-url">URL du projet</label>
@@ -843,6 +843,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-6"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-7"></script>
 </body>
 </html>

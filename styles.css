@@ -2039,3 +2039,13 @@ body[data-page='record'] .panel-dash, body[data-page='doc'] .panel-dash { displa
 #doc-video { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: #000; object-fit: contain; cursor: pointer; border: 1px solid var(--glass-line); }
 .dv-note { margin: 0; font-size: 11.5px; color: var(--text-3); }
 .pc-chips .vid { background: rgb(var(--accent-rgb) / 0.14); color: var(--accent-text); }
+
+/* Décalage du direct */
+.lag-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: help; font-variant-numeric: tabular-nums; transition: background 0.3s, color 0.3s; }
+.lag-chip svg { width: 14px; height: 14px; }
+.lag-chip.ok { background: rgb(var(--ok-rgb) / 0.16); color: var(--ok); }
+.lag-chip.warn { background: rgb(var(--warn-rgb) / 0.18); color: var(--warn); }
+.lag-chip.err { background: rgb(var(--err-rgb) / 0.16); color: var(--err); }
+.lag-chip.wait { background: rgb(var(--ov) / 0.08); color: var(--text-2); }
+.rec-info .lag-chip { margin-top: 6px; }
+.rec-bar .lag-chip { margin-left: 4px; }

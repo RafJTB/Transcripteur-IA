@@ -1305,7 +1305,9 @@ body { background: var(--bg); }
   background: var(--side-bg); color: var(--text-2); border-right: 1px solid var(--glass-line); padding: 24px 14px 14px;
 }
 .side-brand { gap: 12px; padding: 0 6px 26px; }
-.side-logo { width: 40px; height: 40px; display: grid; place-items: center; filter: drop-shadow(0 6px 18px rgb(var(--sel-a) / 0.55)); }
+.side-logo { width: 40px; height: 40px; display: grid; place-items: center; filter: drop-shadow(0 4px 14px rgb(var(--sel-a) / 0.6)); }
+/* T blanc : contour discret en mode clair pour rester visible sur fond pâle */
+:root[data-theme='light'] .side-logo svg path, :root[data-theme='light'] .m-brand svg path { stroke: rgb(var(--sel-b)); stroke-width: 1.4; paint-order: stroke; }
 .side-logo svg { width: 38px; height: 38px; stroke: none; }
 .side-name { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .side-name h1 { color: var(--text); font-size: 17px; }

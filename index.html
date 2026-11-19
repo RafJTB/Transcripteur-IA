@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-21-10" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-21-10" />
+  <meta name="app-version" content="2026-11-21-11" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-21-11" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,7 +41,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-10', 'sw.js', 'js/app.js?v=2026-11-21-10', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-21-11', 'sw.js', 'js/app.js?v=2026-11-21-11', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js'];
       var done = false;
       function refreshAll() {
@@ -86,7 +86,7 @@
     <!-- ================= BARRE LATÉRALE ================= -->
     <aside class="sidebar" aria-label="Navigation">
       <div class="side-brand">
-        <span class="side-logo"><svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c8bff"/><stop offset=".55" stop-color="#5b5bf0"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><path fill="url(#logo-grad)" d="M5.5 6h30.5l-1.6 7.6H23.3l-4.6 21.3c-.5 2.3-2.7 3.8-5 3.3-2.3-.5-3.8-2.7-3.3-5l4.2-19.6H3.9z"/></svg></span>
+        <span class="side-logo"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="#fff" d="M5.5 6h30.5l-1.6 7.6H23.3l-4.6 21.3c-.5 2.3-2.7 3.8-5 3.3-2.3-.5-3.8-2.7-3.3-5l4.2-19.6H3.9z"/></svg></span>
         <div class="side-name"><h1>Transcripteur IA</h1><span class="ver">v2.0</span></div>
       </div>
       <nav class="nav" id="nav">
@@ -117,7 +117,7 @@
     <!-- ================= ZONE PRINCIPALE ================= -->
     <div class="main">
       <header class="topbar">
-        <button type="button" class="m-brand" data-nav="home" aria-label="Accueil"><svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="logo-grad-m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c8bff"/><stop offset=".55" stop-color="#5b5bf0"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><path fill="url(#logo-grad-m)" d="M5.5 6h30.5l-1.6 7.6H23.3l-4.6 21.3c-.5 2.3-2.7 3.8-5 3.3-2.3-.5-3.8-2.7-3.3-5l4.2-19.6H3.9z"/></svg></button>
+        <button type="button" class="m-brand" data-nav="home" aria-label="Accueil"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="#fff" d="M5.5 6h30.5l-1.6 7.6H23.3l-4.6 21.3c-.5 2.3-2.7 3.8-5 3.3-2.3-.5-3.8-2.7-3.3-5l4.2-19.6H3.9z"/></svg></button>
         <label class="search top-search">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <input type="search" id="hist-search" placeholder="Rechercher une transcription, un projet…" aria-label="Rechercher dans les transcriptions" />
@@ -785,6 +785,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-21-10"></script>
+  <script type="module" src="js/app.js?v=2026-11-21-11"></script>
 </body>
 </html>

@@ -1557,6 +1557,59 @@ body[data-page='record'] .panel-dash, body[data-page='doc'] .panel-dash { displa
 .mc-tags .warn { background: rgb(var(--warn-rgb) / 0.15); color: var(--warn); }
 .model-card .btn { align-self: flex-start; }
 
+/* ---------- Mes projets / Historique ---------- */
+.view.hist-card { display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+.proj-head { margin: 0; align-items: center; }
+.proj-head > div { display: flex; flex-direction: column; gap: 4px; margin-right: auto; }
+.view.hist-card .proj-head h2 { margin: 0; font: 700 26px/1.15 var(--font-display); letter-spacing: -0.015em; }
+.proj-head .hist-count { margin: 0; font-size: 14px; color: var(--text-3); }
+.proj-head .icon-btn { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--glass-line); background: var(--card); }
+.folder-row { margin: 0; }
+.folder-bar { gap: 8px; }
+.fchip { height: 38px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--glass-line); background: var(--card); color: var(--text-2); font-size: 14px; box-shadow: var(--shadow); }
+.fchip small { font: 600 11.5px var(--font); background: rgb(var(--ov) / 0.1); color: var(--text-2); padding: 1px 8px; border-radius: 99px; }
+.fchip.active { color: #fff; border-color: rgb(255 255 255 / 0.22); background: linear-gradient(100deg, rgb(124 108 255 / 0.95), rgb(106 88 246 / 0.75)); box-shadow: 0 10px 24px -12px rgb(106 88 246 / 0.9); }
+.fchip.active small { background: rgb(255 255 255 / 0.22); color: #fff; }
+.fchip.add { border-style: dashed; background: none; box-shadow: none; }
+.folder-tools .icon-btn { border: 1px solid var(--glass-line); background: var(--card); width: 34px; height: 34px; border-radius: 10px; }
+.view.hist-card .hist-list { flex: none; overflow: visible; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin: 0; padding: 0 0 8px; align-content: start; }
+.view.hist-card .hist-item.proj-card {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border-radius: var(--radius); cursor: pointer;
+  background: var(--card); border: 1px solid var(--glass-line); box-shadow: var(--shadow); transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.view.hist-card .hist-item.proj-card:hover { transform: translateY(-2px); border-color: rgb(var(--accent-rgb) / 0.5); background: var(--card); }
+.view.hist-card .hist-item.proj-card.current { border-color: rgb(var(--accent-rgb) / 0.7); box-shadow: var(--shadow), 0 0 0 1px rgb(var(--accent-rgb) / 0.4); }
+.pc-top { display: flex; align-items: center; gap: 12px; }
+.pc-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.view.hist-card .pc-title strong { font-size: 15.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.view.hist-card .pc-title small { font-size: 12.5px; color: var(--text-3); }
+.view.hist-card .proj-card .pc-del { opacity: 0; width: 32px; height: 32px; }
+.view.hist-card .proj-card:hover .pc-del, .view.hist-card .proj-card:focus-within .pc-del { opacity: 1; }
+.pc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pc-chips span { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 99px; background: rgb(var(--ov) / 0.07); color: var(--text-2); font-size: 12px; }
+.pc-chips svg { width: 13px; height: 13px; }
+.pc-chips .warn { background: rgb(var(--warn-rgb) / 0.16); color: var(--warn); font-weight: 600; }
+.view.hist-card .proj-card p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.view.hist-card .proj-card p.empty { color: var(--text-3); font-style: italic; }
+.pc-foot { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
+.pc-folder { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 10px; border-radius: 99px; border: 1px solid var(--line-2); background: rgb(var(--ov) / 0.05); color: var(--text-2); cursor: pointer; min-width: 0; flex: 0 1 auto; }
+.pc-folder:hover { border-color: rgb(var(--accent-rgb) / 0.5); }
+.pc-folder svg { width: 14px; height: 14px; flex: none; }
+.view.hist-card .pc-folder .hist-move { all: unset; min-width: 0; max-width: 100%; padding-right: 22px; font-size: 12.5px; color: var(--text); cursor: pointer; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") right 4px center / 13px no-repeat; }
+.pc-folder .hist-move option { background: var(--card-solid); color: var(--text); }
+.pc-avatars { display: inline-flex; flex: none; }
+.pc-avatars i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; margin-left: -6px; font: 700 10px var(--font); font-style: normal; color: #fff; background: var(--spk); box-shadow: 0 0 0 2px rgb(var(--card-solid-rgb)); }
+.pc-avatars i:first-child { margin-left: 0; }
+.pc-avatars i.more { background: rgb(var(--ov) / 0.25); }
+.pc-open { margin-left: auto; flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; color: var(--accent-text); background: var(--accent-soft); opacity: 0; transform: translateX(-4px); transition: opacity 0.15s, transform 0.15s; }
+.pc-open svg { width: 15px; height: 15px; }
+.proj-card:hover .pc-open, .proj-card:focus-visible .pc-open { opacity: 1; transform: none; }
+.view.hist-card .hist-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; border-radius: var(--radius); border: 1.5px dashed var(--line-2); text-align: center; }
+.hist-empty b { font-size: 15px; color: var(--text); }
+.hist-empty small { font-size: 13px; color: var(--text-3); }
+@media (hover: none) { .view.hist-card .proj-card .pc-del, .pc-open { opacity: 1; } }
+
 /* ---------- Personnalisation ---------- */
 .bg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .bg-tile { display: flex; flex-direction: column; gap: 8px; padding: 0; border: 0; background: none; color: var(--text); cursor: pointer; text-align: left; font-size: 13px; font-weight: 500; }
@@ -1800,4 +1853,10 @@ body[data-page='record'] .panel-dash, body[data-page='doc'] .panel-dash { displa
   .assistant { min-height: 380px; }
   .dash-close { display: grid; }
   .panel-audio { padding: 0; border: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+@media (max-width: 760px) {
+  .view.hist-card .hist-list { grid-template-columns: minmax(0, 1fr); }
+  .view.hist-card .proj-head h2 { font-size: 23px; }
+  .view.hist-card .hist-item.proj-card { padding: 14px; }
 }

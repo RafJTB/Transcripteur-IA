@@ -1999,3 +1999,16 @@ body[data-page='record'] .panel-dash, body[data-page='doc'] .panel-dash { displa
   .spc-invite { flex-direction: column; }
   .spc-docs { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Accueil : tient dans la hauteur des panneaux de droite ; « Mes derniers projets » défile seul */
+@media (min-width: 1101px) and (min-height: 700px) {
+  .view-dash.active { overflow: hidden; padding-bottom: 0; }
+  .view-dash > .hero, .view-dash > .stat-row, .view-dash > .dash-card:not(.dash-recent-card) { flex: none; }
+  .view-dash > .dash-recent-card { flex: 1 1 auto; min-height: 150px; display: flex; flex-direction: column; overflow: hidden; }
+  .dash-recent-card .recent-list { flex: 1; min-height: 0; overflow-y: auto; margin-right: -10px; padding-right: 6px; scrollbar-gutter: stable; }
+}
+/* Barres de défilement fines, dans le ton de l'appli */
+.recent-list, .view-page, .view-dash, .panel, .chat, .sp-list, .hist-list { scrollbar-width: thin; scrollbar-color: rgb(var(--ov) / 0.25) transparent; }
+.recent-list::-webkit-scrollbar, .view-page::-webkit-scrollbar, .view-dash::-webkit-scrollbar, .panel::-webkit-scrollbar, .chat::-webkit-scrollbar { width: 8px; }
+.recent-list::-webkit-scrollbar-thumb, .view-page::-webkit-scrollbar-thumb, .view-dash::-webkit-scrollbar-thumb, .panel::-webkit-scrollbar-thumb, .chat::-webkit-scrollbar-thumb { background: rgb(var(--ov) / 0.22); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+.recent-list::-webkit-scrollbar-thumb:hover, .chat::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--accent-rgb) / 0.6); }

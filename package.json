@@ -1,0 +1,15 @@
+{
+  "name": "transcripteur-ia",
+  "private": true,
+  "type": "module",
+  "description": "Transcripteur IA : application web 100 % locale (pas de compilation). Ce fichier ne sert qu'aux tests.",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:e2e": "playwright test",
+    "serve": "python3 -m http.server 8083 --bind 127.0.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

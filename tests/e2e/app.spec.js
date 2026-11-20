@@ -34,11 +34,20 @@ test('téléphone : aucune page ne déborde en largeur', async ({ browser }) => 
   page.on('pageerror', (e) => errors.push(e.message));
   await boot(page);
   await seedMeetings(page);
-  for (const p of ['home', 'projects', 'settings', 'spaces', 'help']) {
-    await page.evaluate((n) => document.querySelector(`[data-nav="${n}"]`).click(), p);
-    await page.waitForTimeout(150);
-    const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect(over, `débordement sur « ${p} »`).toBeLessThanOrEqual(0);
+  // Police normale, puis police plus large (comme un téléphone avec un texte agrandi)
+  for (const font of [null, 'DejaVu Sans']) {
+    if (font) await page.addStyleTag({ content: `*{font-family:"${font}" !important}` });
+    for (const p of ['home', 'projects', 'settings', 'spaces', 'help']) {
+      await page.evaluate((n) => document.querySelector(`[data-nav="${n}"]`).click(), p);
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => {
+        const W = document.documentElement.clientWidth;
+        const out = [...document.querySelectorAll('body *')].filter((e) => e.getBoundingClientRect().right > W + 0.5 && e.offsetParent)
+          .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join('.')}`).slice(0, 5);
+        return { over: document.documentElement.scrollWidth - W, out };
+      });
+      expect(r.over, `débordement sur « ${p} »${font ? ` (police ${font})` : ''} : ${r.out.join(', ')}`).toBeLessThanOrEqual(0);
+    }
   }
   expect(errors).toEqual([]);
   await ctx.close();

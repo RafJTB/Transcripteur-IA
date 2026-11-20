@@ -2,7 +2,7 @@
 
 import { Spaces, spacesError } from '../spaces.js';
 import { speakerColor } from '../speakers.js';
-import { $, ask, esc, initials, lsGet, lsSet, state, toast } from './core.js';
+import { $, ask, esc, initials, lsGet, lsSet, state, toast, writeClipboard } from './core.js';
 import { notify } from './notifs.js';
 
 const SEEN = 'spaces.seen'; // dernier message lu, par espace
@@ -210,14 +210,35 @@ export async function mountChat(space, { docs = [], own = false, openDoc } = {})
   try {
     const rows = await Spaces.messages(space.id, { limit: 50 });
     if (chat.mounted?.space.id !== space.id) return;
+    $('#chat-compose')?.classList.remove('blocked');
     chat.mounted.messages = rows;
     chat.mounted.more = rows.length === 50;
     renderMessages();
     markRead();
   } catch (e) {
     const box = $('#chat-msgs');
-    if (box) box.innerHTML = `<p class="dash-empty sm">${esc(spacesError(e))}</p>`;
+    if (!box) return;
+    // Table absente : le projet Supabase n'a pas encore le script à jour → marche à suivre et copie en un clic
+    if (isMissingTable(e)) {
+      box.innerHTML = `<div class="chat-setup"><b>Une dernière étape dans Supabase</b>
+        <small>La conversation a besoin d’une nouvelle table. À faire une seule fois (tes espaces et réunions ne changent pas) :</small>
+        <ol><li><button class="btn primary sm" type="button" data-copy-sql>Copier le script SQL</button></li><li>Supabase → <b>SQL Editor</b> → <b>New query</b> → coller → <b>Run</b></li><li>Revenir ici : <button class="btn sm" type="button" data-retry-chat>Réessayer</button></li></ol></div>`;
+      $('#chat-compose')?.classList.add('blocked');
+      return;
+    }
+    box.innerHTML = `<p class="dash-empty sm">${esc(spacesError(e))}</p>`;
   }
+}
+const isMissingTable = (e) => /relation .* does not exist|schema cache|Could not find the table|42P01|PGRST205/i.test(`${e?.code || ''} ${e?.message || e || ''}`);
+
+/** Copie le script SQL du site (supabase/schema.sql). */
+async function copySql() {
+  try {
+    const sql = await (await fetch('supabase/schema.sql', { cache: 'no-cache' })).text();
+    if (!/create table/i.test(sql)) throw new Error('script introuvable');
+    const ok = await writeClipboard(sql);
+    toast(ok ? 'Script SQL copié : colle-le dans Supabase → SQL Editor → New query, puis « Run ».' : 'Copie refusée par le navigateur : ouvre supabase/schema.sql et copie-le à la main.', ok ? 'ok' : 'warn', 7000);
+  } catch { toast('Copie impossible : ouvre supabase/schema.sql sur le site ou sur GitHub.', 'err', 6000); }
 }
 export function unmountChat() { chat.mounted = null; }
 export const unreadOf = (id) => chat.unread[id] || 0;
@@ -239,6 +260,7 @@ async function send() {
     if (chat.mounted?.space.id === m.space.id && !m.messages.some((x) => x.id === row.id)) { m.messages.push(row); renderMessages({ stick: true }); }
     markRead();
   } catch (e) {
+    if (isMissingTable(e)) return mountChat(m.space, { docs: m.docs, own: m.own, openDoc: m.openDoc });
     toast(spacesError(e), 'err', 6000);
   } finally {
     chat.sending = false;
@@ -276,6 +298,8 @@ function bindCard() {
       try { await Spaces.deleteMessage(del.dataset.del); onDelete(del.dataset.del); } catch (err) { toast(spacesError(err), 'err', 5000); }
       return;
     }
+    if (e.target.closest('[data-copy-sql]')) return copySql();
+    if (e.target.closest('[data-retry-chat]')) { $('#chat-compose')?.classList.remove('blocked'); return mountChat(m.space, { docs: m.docs, own: m.own, openDoc: m.openDoc }); }
     const open = e.target.closest('[data-open-sdoc]');
     if (open) return m.openDoc?.(open.dataset.openSdoc);
     const msg = e.target.closest('.cm');

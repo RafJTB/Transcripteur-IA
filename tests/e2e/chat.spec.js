@@ -129,3 +129,26 @@ test('direct indisponible : statut affiché, les messages arrivent quand même',
   await raf.clock.runFor(25_000);
   await expect(raf.locator('.cm:not(.mine)')).toContainText('Tu me reçois ?');
 });
+
+test('table absente dans Supabase : marche à suivre, script copié, puis « Réessayer »', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await context.addInitScript(() => localStorage.setItem('mock.sb.nomsg', '1'));
+  await context.addInitScript(MOCK);
+  await as(page, RAF);
+  await boot(page);
+  await nav(page, 'spaces');
+  await page.locator('#spc-new').click();
+  await page.locator('.modal input.text-input').fill('MASTER M1 BIM');
+  await page.locator('.modal [data-ok]').click();
+  const help = page.locator('.chat-setup');
+  await expect(help).toContainText('Une dernière étape dans Supabase');
+  await expect(page.locator('#chat-compose')).toHaveClass(/blocked/);
+  await help.locator('[data-copy-sql]').click();
+  await expect(page.locator('body')).toContainText('Script SQL copié');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('create table if not exists public.space_messages');
+  // Script exécuté : la conversation fonctionne
+  await page.evaluate(() => localStorage.removeItem('mock.sb.nomsg'));
+  await help.locator('[data-retry-chat]').click();
+  await expect(page.locator('#chat-msgs')).toContainText('Aucun message');
+  await expect(page.locator('#chat-compose')).not.toHaveClass(/blocked/);
+});

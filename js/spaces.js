@@ -222,7 +222,7 @@ export function spacesError(e) {
   const t = String(e?.message || e || '');
   const detail = [e?.code, e?.message, e?.details, e?.hint].filter(Boolean).join(' · ').slice(0, 220);
   if (/permission denied for (table|schema|function|sequence)/i.test(t)) return `Droits manquants sur la base : exécute à nouveau le script SQL complet (onglet Espaces → Copier le script SQL). Détail : ${detail}`;
-  if (/relation .* does not exist|schema cache|Could not find the table/i.test(t)) return 'La base n’est pas encore prête : exécute le script SQL (Paramètres de l’espace collaboratif).';
+  if (/relation .* does not exist|schema cache|Could not find the table/i.test(t)) return 'La base n’est pas à jour : exécute le script SQL dans Supabase (SQL Editor → Run). Il est ré-exécutable sans danger.';
   if (/Bucket not found/i.test(t)) return 'Le stockage audio n’est pas prêt : exécute le script SQL complet.';
   // « duplicate key value violates unique constraint » : à tester avant « violates »
   if (/duplicate key/i.test(t)) return 'Cette personne est déjà membre.';

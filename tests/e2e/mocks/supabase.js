@@ -12,6 +12,7 @@
       const d = load();
       const u = me();
       if (!u) return { data: null, error: { message: 'not authenticated' } };
+      if (table === 'space_messages' && localStorage.getItem('mock.sb.nomsg')) return { data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.space_messages' in the schema cache" } };
       let rows = d[table];
       const visible = (r) => table === 'spaces' ? isMember(d, r.id) || r.owner === u.id : isMember(d, r.space_id);
       if (st.op === 'insert') {

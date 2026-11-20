@@ -129,6 +129,7 @@ export async function startTranscription() {
     durationS: a.durationS,
     status: 'running',
     job: { modelId: model.id, language: state.language, fromS: 0, baseSegments: [], seqs: [], total: null },
+    ...(a.event ? { event: a.event, title: a.event.title } : {}),
   });
   a.docId = doc.id;
   await persist(doc);

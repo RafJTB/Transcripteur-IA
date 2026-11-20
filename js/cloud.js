@@ -86,6 +86,7 @@ export const Auth = {
   async handleRedirect() {
     const h = location.hash.startsWith('#') ? new URLSearchParams(location.hash.slice(1)) : null;
     if (!h || (!h.has('access_token') && !h.has('error'))) return null;
+    if (String(h.get('state') || '').startsWith('ms-')) return null; // retour de Microsoft (calendrier)
     history.replaceState(null, '', location.pathname + location.search);
     const expected = ss.get('state');
     ss.del('state');

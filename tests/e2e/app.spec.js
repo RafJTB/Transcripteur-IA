@@ -1,7 +1,7 @@
 // Démarrage, navigation, téléphone, thème et personnalisation.
 import { test, expect, boot, nav, seedMeetings } from './helpers.js';
 
-const PAGES = ['home', 'projects', 'analytics', 'models', 'help', 'settings', 'custom', 'spaces'];
+const PAGES = ['home', 'projects', 'analytics', 'models', 'help', 'settings', 'custom', 'spaces', 'calendar'];
 
 test('l’appli démarre sur l’Accueil, sans erreur', async ({ page }) => {
   await boot(page);

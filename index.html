@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-13" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-13" />
+  <meta name="app-version" content="2026-11-22-15" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-15" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,8 +41,8 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-13', 'sw.js', 'js/app.js?v=2026-11-22-13', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
-        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js', 'js/report.js', 'js/ui/report-ui.js', 'js/ui/space-chat.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-15', 'sw.js', 'js/app.js?v=2026-11-22-15', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js', 'js/report.js', 'js/ui/report-ui.js', 'js/ui/space-chat.js', 'js/calendar.js', 'js/outlook.js', 'js/ui/calendar-ui.js',
         'js/ui/account.js', 'js/ui/assistant.js', 'js/ui/core.js', 'js/ui/dashboard.js', 'js/ui/diagnostic.js', 'js/ui/doc-tabs.js', 'js/ui/doc.js', 'js/ui/engine.js', 'js/ui/history.js', 'js/ui/notifs.js', 'js/ui/pages.js', 'js/ui/recording.js', 'js/ui/sound.js', 'js/ui/spaces.js', 'js/ui/speakers.js', 'js/ui/transcription.js', 'js/ui/translation.js', 'js/ui/views.js'];
       var done = false;
       function refreshAll() {
@@ -94,6 +94,7 @@
         <button type="button" data-nav="home" class="active"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Accueil</span></button>
         <button type="button" data-nav="projects"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Mes projets</span></button>
         <button type="button" data-nav="spaces" class="d-only"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg><span>Espaces</span></button>
+        <button type="button" data-nav="calendar" class="d-only"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Calendrier</span></button>
         <button type="button" data-nav="history"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Historique</span></button>
         <button type="button" data-nav="panel" class="m-only" aria-label="Analyse audio et réglages du son"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span>Analyse</span></button>
         <button type="button" data-nav="analytics" class="d-only"><svg viewBox="0 0 24 24"><path d="M5 20V11M10 20V5M15 20v-6M20 20V9"/></svg><span>Analyses</span></button>
@@ -169,6 +170,7 @@
                 <span class="hero-tile"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="#fff" d="M5.5 6h30.5l-1.6 7.6H23.3l-4.6 21.3c-.5 2.3-2.7 3.8-5 3.3-2.3-.5-3.8-2.7-3.3-5l4.2-19.6H3.9z"/></svg></span>
               </div>
             </section>
+            <section class="glass dash-next" id="dash-next" hidden></section>
             <div class="stat-row" id="dash-stats"></div>
             <section class="glass dash-card dash-recent-card">
               <header class="dash-head"><h3><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>Mes derniers projets</h3><button class="link-btn more-link" type="button" data-nav="projects">Voir tous<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></header>
@@ -187,6 +189,7 @@
               <h2>Nouvelle transcription</h2>
               <p>Enregistre ou importe un audio : tout est traité sur ton PC.</p>
             </div>
+            <div class="rec-event glass" id="rec-event" hidden></div>
             <div class="home-grid">
               <!-- 1. SOURCE -->
               <section class="card" id="step-source" aria-labelledby="h-source">
@@ -511,6 +514,12 @@
             </div>
           </section>
 
+          <!-- ===== CALENDRIER ===== -->
+          <section class="view view-page" data-page="calendar">
+            <div class="home-head"><h2>Calendrier</h2><p>Tes réunions de la semaine : un clic sur « Enregistrer » crée la transcription avec le titre et les participants.</p></div>
+            <div id="cal-page"></div>
+          </section>
+
           <!-- ===== MODÈLES ===== -->
           <section class="view view-page" data-page="models">
             <div class="home-head"><h2>Modèles</h2><p>Le modèle transforme la voix en texte, sur ton appareil. Plus il est gros, plus il est précis… et lent. Téléchargé une seule fois.</p></div>
@@ -563,6 +572,7 @@
           <section class="view view-settings" data-page="settings">
             <div class="home-head"><h2>Paramètres</h2><p>Compte, voix, moteur, lexique et stockage. Les réglages du micro sont sur la page « Nouvelle transcription », dans le panneau de droite.</p></div>
             <div class="m-links">
+              <button class="btn glass-btn" type="button" data-nav="calendar"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendrier</button>
               <button class="btn glass-btn" type="button" data-nav="spaces"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg>Espaces</button>
               <button class="btn glass-btn" type="button" data-nav="analytics"><svg viewBox="0 0 24 24"><path d="M5 20V11M10 20V5M15 20v-6M20 20V9"/></svg>Analyses</button>
               <button class="btn glass-btn" type="button" data-nav="models"><svg viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Modèles</button>
@@ -847,6 +857,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-13"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-15"></script>
 </body>
 </html>

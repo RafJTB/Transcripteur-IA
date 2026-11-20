@@ -38,6 +38,19 @@ create table if not exists public.space_docs (
 );
 create index if not exists space_docs_space on public.space_docs (space_id, created_at desc);
 
+-- Conversation de l'espace (messages entre membres, en direct)
+create table if not exists public.space_messages (
+  id uuid primary key default gen_random_uuid(),
+  space_id uuid not null references public.spaces on delete cascade,
+  author uuid not null default auth.uid() references auth.users on delete cascade,
+  author_name text,
+  author_email text,
+  body text not null check (char_length(body) between 1 and 4000),
+  doc_id uuid references public.space_docs on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists space_messages_space on public.space_messages (space_id, created_at desc);
+
 -- Adresse e-mail de la personne connectée (en minuscules)
 create or replace function public.my_email() returns text
 language sql stable as $$ select lower(coalesce(auth.jwt() ->> 'email', '')) $$;
@@ -68,13 +81,14 @@ create trigger spaces_add_owner after insert on public.spaces for each row execu
 -- Droits d'accès des utilisateurs connectés (les projets Supabase récents ne les donnent plus d'office
 -- aux tables créées par script). Les règles ci-dessous (RLS) restent le vrai contrôle.
 grant usage on schema public to authenticated;
-grant select, insert, update, delete on public.spaces, public.space_members, public.space_docs to authenticated;
+grant select, insert, update, delete on public.spaces, public.space_members, public.space_docs, public.space_messages to authenticated;
 grant execute on function public.my_email(), public.is_member(uuid), public.is_owner(uuid) to authenticated;
 
 -- Règles d'accès (Row Level Security)
 alter table public.spaces enable row level security;
 alter table public.space_members enable row level security;
 alter table public.space_docs enable row level security;
+alter table public.space_messages enable row level security;
 
 drop policy if exists "espaces : lecture membres" on public.spaces;
 create policy "espaces : lecture membres" on public.spaces for select using (public.is_member(id) or owner = auth.uid());
@@ -99,6 +113,22 @@ drop policy if exists "transcriptions : ajout membres" on public.space_docs;
 create policy "transcriptions : ajout membres" on public.space_docs for insert with check (public.is_member(space_id) and created_by = auth.uid());
 drop policy if exists "transcriptions : auteur ou propriétaire supprime" on public.space_docs;
 create policy "transcriptions : auteur ou propriétaire supprime" on public.space_docs for delete using (created_by = auth.uid() or public.is_owner(space_id));
+
+drop policy if exists "messages : lecture membres" on public.space_messages;
+create policy "messages : lecture membres" on public.space_messages for select using (public.is_member(space_id));
+drop policy if exists "messages : envoi membres" on public.space_messages;
+create policy "messages : envoi membres" on public.space_messages for insert with check (public.is_member(space_id) and author = auth.uid());
+drop policy if exists "messages : auteur ou propriétaire supprime" on public.space_messages;
+create policy "messages : auteur ou propriétaire supprime" on public.space_messages for delete using (author = auth.uid() or public.is_owner(space_id));
+
+-- Messages en direct (Realtime) : la table est ajoutée à la publication de Supabase si besoin
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'space_messages') then
+    alter publication supabase_realtime add table public.space_messages;
+  end if;
+end $$;
 
 -- Audio : seau privé « space-audio », un dossier par espace (space-audio/<id de l'espace>/…)
 insert into storage.buckets (id, name, public, file_size_limit)

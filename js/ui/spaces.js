@@ -13,6 +13,7 @@ import { tool } from './diagnostic.js';
 import { openDoc } from './history.js';
 import { getAudio, myDocs } from './transcription.js';
 import { setView } from './views.js';
+import { chatCardHtml, mountChat, refreshBadges, startChat, stopChat, unmountChat } from './space-chat.js';
 
 // ======================================================================
 // Espaces collaboratifs (Supabase)
@@ -27,10 +28,11 @@ export async function renderSpaces() {
   setup.hidden = login.hidden = main.hidden = true;
   if (!Spaces.configured() && !window.__spacesClient) { setup.hidden = false; renderSpacesSetup(); return; }
   try { spState.me = await Spaces.user(); } catch (e) { spState.me = null; spErr(e); }
-  if (!spState.me) { login.hidden = false; return; }
+  if (!spState.me) { stopChat(); login.hidden = false; return; }
   main.hidden = false;
   $('#spc-me').innerHTML = `${avatarHtml(spState.me)}<span><b>${esc(spState.me.name)}</b><small>${esc(spState.me.email)}</small></span>`;
   await loadSpaces();
+  startChat(spState.me, () => spState.spaces);
 }
 
 function renderSpacesSetup() {
@@ -52,12 +54,13 @@ function renderSpaceList() {
   list.innerHTML = spState.spaces.length
     ? spState.spaces.map((s) => `<button type="button" class="spc-item${s.id === spState.current ? ' active' : ''}" data-space="${esc(s.id)}"><span class="spc-ico">${SP_PEOPLE}</span><span class="spc-txt"><b>${esc(s.name)}</b><small>${s.members} membre${s.members > 1 ? 's' : ''} · ${s.docs} réunion${s.docs > 1 ? 's' : ''}</small></span>${s.owner === spState.me?.id ? '<i class="spc-own" title="Tu es propriétaire">Propriétaire</i>' : ''}</button>`).join('')
     : '<p class="dash-empty sm">Aucun espace pour l’instant. Crée le premier, ou demande à quelqu’un de t’inviter avec ton adresse.</p>';
+  refreshBadges();
 }
 
 async function loadSpace() {
   const box = $('#spc-content');
   const s = spState.spaces.find((x) => x.id === spState.current);
-  if (!s) { box.innerHTML = `<div class="glass dash-card spc-empty"><span class="r-ico violet">${SP_PEOPLE}</span><b>Crée ton premier espace</b><small>Un espace = un groupe de personnes qui partagent des réunions : un projet, une équipe, la famille…</small><button class="btn primary" type="button" data-spc="new">Nouvel espace</button></div>`; return; }
+  if (!s) { unmountChat(); box.innerHTML = `<div class="glass dash-card spc-empty"><span class="r-ico violet">${SP_PEOPLE}</span><b>Crée ton premier espace</b><small>Un espace = un groupe de personnes qui partagent des réunions : un projet, une équipe, la famille…</small><button class="btn primary" type="button" data-spc="new">Nouvel espace</button></div>`; return; }
   box.innerHTML = '<p class="dash-empty">Chargement…</p>';
   try { [spState.members, spState.docs] = await Promise.all([Spaces.members(s.id), Spaces.docs(s.id)]); } catch (e) { spErr(e); spState.members = []; spState.docs = []; }
   if (spState.current !== s.id) return;
@@ -72,12 +75,22 @@ async function loadSpace() {
         : '<button class="btn sm ghost" type="button" data-spc="leave">Quitter l’espace</button>'}
       </div>
     </section>
+    <div class="spc-body"><div class="spc-left">
     <section class="glass dash-card">
       <header class="dash-head"><h3>${SP_PEOPLE}Membres <small class="dash-sub">${spState.members.length}</small></h3></header>
       <div class="spc-members">${spState.members.map((m) => `<span class="spc-member"><i style="--spk:${speakerColor([...m.email].reduce((a, c) => a + c.charCodeAt(0), 0))}">${esc(initials(m.email.split('@')[0]))}</i><span>${esc(m.email)}${m.email === spState.me?.email ? ' (toi)' : ''}</span>${m.role === 'owner' ? '<b>propriétaire</b>' : own ? `<button type="button" class="spc-x" data-remove="${esc(m.email)}" title="Retirer" aria-label="Retirer ${esc(m.email)}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>` : ''}</span>`).join('')}</div>
       ${own ? `<form class="spc-invite" id="spc-invite"><input type="email" class="text-input" id="spc-email" placeholder="adresse@gmail.com" required autocomplete="off" /><button class="btn sm" type="submit">Inviter</button></form><p class="an-note">La personne voit l’espace dès qu’elle se connecte ici avec cette adresse Google. Aucun e-mail n’est envoyé : préviens-la avec « Copier l’invitation ».</p>` : ''}
     </section>
-    <section class="spc-docs">${spState.docs.length ? spState.docs.map((d) => spaceDocCard(d, own)).join('') : '<div class="hist-empty"><span class="r-ico violet">' + STAT_ICONS.docs + '</span><b>Aucune réunion partagée</b><small>« Partager une transcription » envoie le texte et, si tu veux, l’audio compressé.</small></div>'}</section>`;
+    <section class="spc-docs">${spState.docs.length ? spState.docs.map((d) => spaceDocCard(d, own)).join('') : '<div class="hist-empty"><span class="r-ico violet">' + STAT_ICONS.docs + '</span><b>Aucune réunion partagée</b><small>« Partager une transcription » envoie le texte et, si tu veux, l’audio compressé.</small></div>'}</section>
+    </div>${chatCardHtml(s, spState.members)}</div>`;
+  mountChat(s, { docs: spState.docs, own, openDoc: openSpaceDoc });
+}
+
+/** Ouvre un espace précis (par exemple depuis une notification de message). */
+export function openSpace(id) {
+  spState.current = id;
+  lsSet('spaces.current', id);
+  setView('spaces');
 }
 
 function spaceDocCard(d, own) {
@@ -183,7 +196,7 @@ function bindSpaces() {
   };
   $('#spc-copy-redirect').onclick = () => writeClipboard($('#spc-redirect').textContent).then(() => toast('Adresse copiée.', 'ok', 2000));
   $('#spc-signin').onclick = () => Spaces.signIn(Auth.user()?.email || '').catch(spErr);
-  $('#spc-signout').onclick = async () => { await Spaces.signOut().catch(() => {}); spState.me = null; renderSpaces(); };
+  $('#spc-signout').onclick = async () => { await Spaces.signOut().catch(() => {}); spState.me = null; stopChat(); renderSpaces(); };
   $('#spc-new').onclick = () => newSpace();
   $('#spc-list').addEventListener('click', (e) => {
     const b = e.target.closest('[data-space]');
@@ -271,5 +284,15 @@ export async function initSpaces() {
   }
   if (Spaces.configured() && Spaces.isAuthReturn()) {
     try { await Spaces.finishSignIn(); setView('spaces'); toast('Connecté à l’espace collaboratif.', 'ok', 3000); } catch (e) { spErr(e); }
+    return;
+  }
+  if ((Spaces.configured() || window.__spacesClient) && Spaces.hasSession()) {
+    try {
+      const me = await Spaces.user();
+      if (!me) return;
+      spState.me = me;
+      if (!spState.spaces.length) spState.spaces = await Spaces.list();
+      startChat(me, () => spState.spaces);
+    } catch (e) { console.warn('espaces au démarrage', e); }
   }
 }

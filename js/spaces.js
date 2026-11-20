@@ -9,6 +9,7 @@ const LS = 'transcripteur.spaces.';
 const lsGet = (k, d = '') => { try { return localStorage.getItem(LS + k) ?? d; } catch { return d; } };
 const lsSet = (k, v) => { try { v ? localStorage.setItem(LS + k, v) : localStorage.removeItem(LS + k); } catch { /* ignore */ } };
 const BUCKET = 'space-audio';
+const MSG_COLS = 'id, space_id, author, author_name, author_email, body, doc_id, created_at';
 
 let client = null;
 let clientKey = '';
@@ -164,6 +165,50 @@ export const Spaces = {
     const { error } = await c.from('space_docs').delete().eq('id', row.id);
     if (error) throw error;
   },
+  // ---------- Conversation ----------
+  /** Messages d'un espace, du plus ancien au plus récent (les `limit` derniers, ou ceux avant `before`). */
+  async messages(spaceId, { before = null, limit = 50 } = {}) {
+    const c = await Spaces.client();
+    let q = c.from('space_messages').select(MSG_COLS).eq('space_id', spaceId);
+    if (before) q = q.lt('created_at', before);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(limit);
+    if (error) throw error;
+    return (data || []).reverse();
+  },
+  /** Messages des autres membres depuis une date (pour les non-lus), tous espaces confondus. */
+  async messagesSince(iso, me) {
+    const c = await Spaces.client();
+    const { data, error } = await c.from('space_messages').select('id, space_id, author, created_at').gt('created_at', iso).neq('author', me).order('created_at', { ascending: false }).limit(500);
+    if (error) throw error;
+    return data || [];
+  },
+  async sendMessage(spaceId, body, me, docId = null) {
+    const c = await Spaces.client();
+    const text = String(body).trim().slice(0, 4000);
+    const { data, error } = await c.from('space_messages').insert({ space_id: spaceId, body: text, doc_id: docId, author_name: me?.name || null, author_email: me?.email || null }).select(MSG_COLS).single();
+    if (error) throw error;
+    return data;
+  },
+  async deleteMessage(id) {
+    const c = await Spaces.client();
+    const { error } = await c.from('space_messages').delete().eq('id', id);
+    if (error) throw error;
+  },
+  /**
+   * Messages en direct de tous mes espaces (les règles d'accès filtrent côté serveur).
+   * @returns {Promise<() => void>} arrêt de l'écoute
+   */
+  async listenMessages({ onInsert, onDelete, onStatus }) {
+    const c = await Spaces.client();
+    const ch = c.channel(`space-messages-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'space_messages' }, (p) => onInsert?.(p.new))
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'space_messages' }, (p) => onDelete?.(p.old?.id))
+      .subscribe((status) => onStatus?.(status));
+    return () => { try { c.removeChannel(ch); } catch { /* ignore */ } };
+  },
+  /** Session déjà ouverte dans ce navigateur (sans charger la bibliothèque) ? */
+  hasSession: () => { try { return !!localStorage.getItem('transcripteur.spaces.auth') || !!window.__spacesClient; } catch { return false; } },
+
   async audio(path) {
     const c = await Spaces.client();
     const { data, error } = await c.storage.from(BUCKET).download(path);

@@ -131,3 +131,7 @@ export const LLM_MODELS = {
  */
 export const SUPABASE_URL = 'https://qcrtmhghjaetfxnwsqto.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_ChGBljQJ7O0ks4eNnsn4Zw_hbJnlu7c';
+
+// Calendrier Outlook : identifiant (client) de l'appli inscrite dans le portail Microsoft (Entra ID).
+// Public par nature (pas un secret). Vide : à renseigner dans l'onglet Calendrier.
+export const OUTLOOK_CLIENT_ID = '';

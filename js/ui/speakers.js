@@ -9,6 +9,7 @@ import { notify } from './notifs.js';
 import { loadDocAudio } from './recording.js';
 import { persist } from './transcription.js';
 import { autoRun } from './translation.js';
+import { personName } from '../calendar.js';
 
 // ======================================================================
 // Qui parle ? (pyannote + WeSpeaker, dans un worker ; ~33 Mo téléchargés une fois)
@@ -235,6 +236,12 @@ export function renderSpeakers() {
     $('small', item).textContent = `${Math.round((t[n] / tot) * 100)} %`;
     return item;
   }));
+  // Participants de la réunion (calendrier) proposés comme noms
+  const names = [...new Set((d.event?.attendees || []).concat(d.event?.organizer ? [d.event.organizer] : []).map(personName).filter(Boolean))];
+  let dl = $('#spk-names');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'spk-names'; document.body.append(dl); }
+  dl.innerHTML = names.map((n) => `<option value="${n.replace(/"/g, '&quot;')}"></option>`).join('');
+  for (const inp of list.querySelectorAll('input.spk-name')) if (names.length) inp.setAttribute('list', 'spk-names'); else inp.removeAttribute('list');
   if (focused != null) $(`#spk-list input[data-n="${focused}"]`)?.focus();
   $('#spk-count').value = d.speakerCount ? String(d.speakerCount) : '';
 }

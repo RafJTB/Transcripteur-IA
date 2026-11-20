@@ -41,6 +41,7 @@ js/assistant.js     Assistant : type de demande, choix des extraits, messages (f
 js/insights.js      Tableau de bord et recherche dans les réunions (fonctions pures)
 js/actions.js       Relevé de décisions et d'actions (fonctions pures)
 js/report.js        Compte rendu : contenu, page PDF, fichier Word (fonctions pures)
+js/calendar.js      Calendrier : fichiers .ics, événements Microsoft Graph (fonctions pures) ; js/outlook.js : connexion Microsoft
 js/spaces.js        Espaces collaboratifs (Supabase) ; js/cloud.js : compte Google et Drive
 tests/unit/         Tests des fonctions pures (node:test)
 tests/e2e/          Tests dans un vrai navigateur (Playwright), avec faux Claude, Drive et Supabase
@@ -390,6 +391,23 @@ Chaque espace a sa **Conversation** (à droite des membres et des réunions, ou 
 - l'auteur d'un message, ou la propriétaire de l'espace, peut le supprimer (il disparaît pour tout le monde).
 
 **Mise à jour du projet Supabase** : la conversation utilise une nouvelle table. Recopie le script (onglet Espaces → *Copier le script SQL*, ou `supabase/schema.sql`) dans **SQL Editor → Run** : il est ré-exécutable sans danger, il ajoute la table `space_messages`, ses règles d'accès (seuls les membres lisent et écrivent) et l'active pour le direct.
+
+## Calendrier (Outlook ou fichier .ics)
+
+L'onglet **Calendrier** affiche tes réunions de la semaine (navigation semaine par semaine). Sur chaque réunion :
+- **Enregistrer** : ouvre « Nouvelle transcription » avec la réunion reliée (bandeau « Réunion du calendrier », croix pour ne pas relier) ; la transcription prend le **titre** de la réunion et garde ses horaires, participants et lien de visio ;
+- **Rejoindre** : ouvre le lien Teams, Meet ou Zoom ;
+- **Transcription** : ouvre celle déjà faite pour cette réunion.
+
+Aussi :
+- un enregistrement lancé **pendant** une réunion du calendrier (ou 10 min avant) s'y relie tout seul ;
+- l'**Accueil** affiche la **prochaine réunion** (Rejoindre, Enregistrer) ;
+- **rappel** 2 minutes avant chaque réunion (notification, appli ouverte), désactivable ;
+- dans **Qui parle ?**, les participants de la réunion sont proposés comme noms.
+
+Deux sources :
+- **Outlook / Microsoft 365** (mis à jour tout seul, relu au démarrage s'il date de plus de 30 min, bouton Actualiser) : connexion Microsoft en **lecture seule** (`Calendars.Read`, `User.Read`), OAuth « code + PKCE » directement depuis le navigateur, sans serveur ni secret. À faire une fois : inscrire l'appli dans [Microsoft Entra → Inscriptions d'applications](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) (gratuit) : comptes « annuaire organisationnel **et** comptes Microsoft personnels », URI de redirection de type **Application monopage (SPA)** = l'adresse du site (`https://rafjtb.github.io/Transcripteur-IA/`), puis coller l'**ID d'application (client)** dans l'onglet Calendrier (ou dans `OUTLOOK_CLIENT_ID` de `js/config.js`). Un compte professionnel ou d'école peut exiger l'**accord de l'administrateur** : l'appli l'explique et propose le fichier .ics. La session Microsoft d'une appli web dure 24 h, ensuite « Se reconnecter » ; l'agenda déjà lu reste affiché.
+- **Fichier .ics** (export Outlook, Google Agenda…) : lecture des fuseaux horaires (y compris les noms Windows d'Outlook), des réunions répétées (quotidiennes, hebdomadaires, mensuelles « 2e mardi »…), des exceptions et occurrences déplacées, des annulations. Pas de mise à jour automatique.
 
 ## Compte Google, dossiers et synchronisation (facultatif)
 

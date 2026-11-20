@@ -33,7 +33,16 @@ styles.css          Design sombre
 sw.js               Service worker : en-têtes COOP/COEP → WASM multithread sur GitHub Pages
 js/config.js        Modèles, variantes WebGPU/WASM, langues, découpage, réglages V2
 js/asr-worker.js    Web Worker : chargement Whisper, découpage 30 s / chevauchement 5 s, fusion, progression
-js/app.js           Orchestration UI ↔ worker, reprise et repli automatiques, exports, historique
+js/app.js           Point d'entrée : branche l'interface et démarre l'appli (init)
+js/ui/*.js          L'interface, par thème : core (outils communs, état), engine (worker), recording,
+                    transcription, doc, doc-tabs, views, sound, diagnostic, notifs, speakers,
+                    translation, history, dashboard, assistant, spaces, pages, account
+js/assistant.js     Assistant : type de demande, choix des extraits, messages (fonctions pures)
+js/insights.js      Tableau de bord et recherche dans les réunions (fonctions pures)
+js/actions.js       Relevé de décisions et d'actions (fonctions pures)
+js/spaces.js        Espaces collaboratifs (Supabase) ; js/cloud.js : compte Google et Drive
+tests/unit/         Tests des fonctions pures (node:test)
+tests/e2e/          Tests dans un vrai navigateur (Playwright), avec faux Claude, Drive et Supabase
 js/monitor.js       Graphique volume / compréhension en temps réel
 js/calibration.js   Diagnostic de la pièce et score de dictée (fonctions pures)
 js/live.js          Transcription en direct (Whisper par fenêtres, Voxtral en flux continu)
@@ -57,6 +66,26 @@ js/history.js       Stockage local (IndexedDB) : transcriptions, audios, morceau
 | Temps réel | `onnx-community/Voxtral-Mini-4B-Realtime-2602-ONNX` (Mistral, Apache 2.0) | 2,83 Go (3,18 Go sans fp16) | indisponible |
 
 Les modèles sont téléchargés une seule fois puis gardés dans le cache du navigateur (Cache API).
+
+## Tests automatiques
+
+L'appli n'a besoin d'aucune compilation ; `package.json` ne sert qu'aux tests.
+
+```bash
+npm install
+```
+
+```bash
+npx playwright install chromium
+```
+
+```bash
+npm test
+```
+
+- `npm run test:unit` : fonctions pures (recherche, assistant, relevé d'actions, exports, lexique, voix, couleurs…), en une seconde.
+- `npm run test:e2e` : l'appli dans Chromium : démarrage et navigation, téléphone (aucun débordement), réunion (onglets, actions, export), assistant (recherche simple, Claude simulé en quiz sur deux tours, périmètre), espaces (faux Supabase : création, invitation, partage, droits), Google Drive (faux Drive : envoi puis récupération sur un autre appareil), micro (faux micro) et import de fichier. Aucun vrai compte ni clé n'est utilisé.
+- Sur GitHub, les tests tournent à chaque pull request (onglet **Actions**, workflow « Tests ») : une PR rouge signale une régression avant la fusion.
 
 ## Transcription en direct
 

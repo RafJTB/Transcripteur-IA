@@ -120,6 +120,7 @@ export const SAMPLE_RATE = 16000;
  */
 export const LLM_MODELS = {
   large: { repo: 'onnx-community/Qwen3-1.7B-ONNX', device: 'webgpu', dtype: 'q4f16', sizeMB: 1430, label: 'Qwen3 1,7B' },
+  xl: { repo: 'onnx-community/Qwen3-4B-ONNX', device: 'webgpu', dtype: 'q4f16', sizeMB: 2830, label: 'Qwen3 4B' },
   small: { repo: 'onnx-community/Qwen3-0.6B-ONNX', device: 'wasm', dtype: 'q8', sizeMB: 620, label: 'Qwen3 0,6B' },
 };
 

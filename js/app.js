@@ -4003,9 +4003,8 @@ function keywordAnswer(q, sources, note = '') {
   if (openOnly) sources.forEach((s) => (s.items = s.items.filter((x) => !x.done)));
   const { intent, hits } = searchMeetings(q, sources, { limit: 6 });
   const task = taskOf(q);
-  if (!hits.length && task !== 'qa' && task !== 'list') {
-    const items = sources.flatMap((s) => s.items.map((x) => ({ doc: s.doc, ...x }))).sort((a, b) => b.doc.createdAt - a.doc.createdAt).slice(0, 6);
-    hits.push(...items);
+  if (task !== 'qa' && task !== 'list') {
+    if (!hits.length) hits.push(...sources.flatMap((s) => s.items.map((x) => ({ doc: s.doc, ...x }))).sort((a, b) => b.doc.createdAt - a.doc.createdAt).slice(0, 6));
     note = `<p class="chat-note">${task === 'quiz' ? 'Un quiz' : task === 'draft' ? 'Une rédaction' : 'Une synthèse'} demande un modèle de langage (Claude, ou un modèle local qui a pu démarrer). En attendant, voici les décisions et actions récentes.</p>${note}`;
   }
   const claudeBtn = `<button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>`;

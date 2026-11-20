@@ -179,8 +179,9 @@ export function spacesError(e) {
   if (/permission denied for (table|schema|function|sequence)/i.test(t)) return `Droits manquants sur la base : exécute à nouveau le script SQL complet (onglet Espaces → Copier le script SQL). Détail : ${detail}`;
   if (/relation .* does not exist|schema cache|Could not find the table/i.test(t)) return 'La base n’est pas encore prête : exécute le script SQL (Paramètres de l’espace collaboratif).';
   if (/Bucket not found/i.test(t)) return 'Le stockage audio n’est pas prêt : exécute le script SQL complet.';
-  if (/row-level security|violates/i.test(t)) return `Action refusée par les règles d’accès de l’espace. Détail : ${detail}`;
+  // « duplicate key value violates unique constraint » : à tester avant « violates »
   if (/duplicate key/i.test(t)) return 'Cette personne est déjà membre.';
+  if (/row-level security|violates/i.test(t)) return `Action refusée par les règles d’accès de l’espace. Détail : ${detail}`;
   if (/Failed to fetch|NetworkError|network/i.test(t)) return 'Impossible de joindre le serveur de l’espace collaboratif (connexion ?).';
   if (/exceeded|too large|Payload/i.test(t)) return 'Fichier trop lourd pour l’espace (limite 50 Mo).';
   if (/provider is not enabled|Unsupported provider/i.test(t)) return 'La connexion Google n’est pas activée dans Supabase (Authentication → Providers → Google).';

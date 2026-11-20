@@ -133,6 +133,7 @@ const STOP = new Set(fold('le la les un une des de du d l à au aux et ou en dan
 /** Mots utiles d'une question (sans les mots vides). */
 export function keywords(q) {
   return [...new Set((String(q).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').match(/[a-z0-9œæ-]{2,}/g) || [])
+    .map((w) => w.replace(/-(?:moi|toi|nous|vous|le|la|les|lui|leur|en|y|t-il|t-elle|t-on|il|elle|on)$/, ''))
     .filter((w) => !STOP.has(w) && w.length > 2))];
 }
 

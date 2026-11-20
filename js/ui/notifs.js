@@ -5,6 +5,7 @@ import { $, esc2, store, toast } from './core.js';
 import { openDoc } from './history.js';
 import { isMine } from './transcription.js';
 import { setView } from './views.js';
+import { openSpace } from './spaces.js';
 
 // ======================================================================
 // Centre de notifications (cloche) : événements importants, notifications Windows en option
@@ -58,6 +59,7 @@ function renderBell() {
 async function openNotif(n) {
   $('#notif-panel').hidden = true;
   if (n.action === 'account') return setView('settings');
+  if (typeof n.action === 'string' && n.action.startsWith('space:')) return openSpace(n.action.slice(6));
   if (!n.docId) return;
   const d = await History.get(n.docId).catch(() => null);
   if (!d || !isMine(d)) return toast('Cette transcription n’existe plus.', 'warn', 3000);

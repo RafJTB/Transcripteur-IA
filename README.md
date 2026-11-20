@@ -380,6 +380,17 @@ Supabase configuré. Les règles d'accès (`supabase/schema.sql`) limitent la le
 Palier gratuit Supabase : 500 Mo de base, 1 Go de fichiers (≈ 90 h d'audio compressé), 50 Mo par fichier ;
 le projet se met en pause après 7 jours sans activité (réactivation d'un clic dans le tableau de bord).
 
+### Conversation d'un espace
+
+Chaque espace a sa **Conversation** (à droite des membres et des réunions, ou au-dessus quand la place manque) :
+- messages entre les membres, qui arrivent **en direct** (Supabase Realtime, inclus dans l'offre gratuite) ; si le direct est coupé, les messages sont relus toutes les 20 secondes (« reconnexion… ») ;
+- **Entrée** envoie, **Maj + Entrée** va à la ligne ; les liens sont cliquables ;
+- trombone : **joindre une réunion** partagée de l'espace (un clic l'ouvre) ;
+- **non-lus** : pastille sur l'espace et sur « Espaces » dans le menu, notification dans la cloche (et notification du système si elle est activée) ; comptés aussi à l'ouverture de l'appli ;
+- l'auteur d'un message, ou la propriétaire de l'espace, peut le supprimer (il disparaît pour tout le monde).
+
+**Mise à jour du projet Supabase** : la conversation utilise une nouvelle table. Recopie le script (onglet Espaces → *Copier le script SQL*, ou `supabase/schema.sql`) dans **SQL Editor → Run** : il est ré-exécutable sans danger, il ajoute la table `space_messages`, ses règles d'accès (seuls les membres lisent et écrivent) et l'active pour le direct.
+
 ## Compte Google, dossiers et synchronisation (facultatif)
 
 Sans compte, tout reste dans le navigateur, comme avant. Avec un compte Google :

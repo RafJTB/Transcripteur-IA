@@ -106,7 +106,7 @@ export function renderAnalysis() {
 }
 
 /** Décisions et actions repérées, avec l'état choisi par l'utilisateur (fait / retiré). */
-function docActions(d = state.doc) {
+export function docActions(d = state.doc) {
   if (!d || !state.segments.length) return [];
   const st = d.actionState || {};
   return extractActions(state.segments, { speakers: d.speakers || [], meetingTime: d.createdAt })

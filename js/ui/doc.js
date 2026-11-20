@@ -474,7 +474,7 @@ export function updateButtons() {
     loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
   }[state.phase] || 'Transcrire';
   $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
-  $$('[data-export], #btn-copy, #btn-relex, #btn-claude, #btn-claude-tab, #btn-translate, #btn-speakers, #act-copy, #act-claude').forEach((b) => (b.disabled = !has));
+  $$('[data-export], #btn-report, #act-report, #btn-copy, #btn-relex, #btn-claude, #btn-claude-tab, #btn-translate, #btn-speakers, #act-copy, #act-claude').forEach((b) => (b.disabled = !has));
   $('#summary-text').disabled = !state.doc;
   $('#export-menu').classList.toggle('disabled', !has);
   if (!has) $('#export-menu').open = false;

@@ -26,6 +26,7 @@ import { applySpeakers, bindVoices, identifySpeakers, openSpeakerMenu, spkCache 
 import { cancel, hideResume, isMine, persist, renderResume, startTranscription } from './ui/transcription.js';
 import { autoTranslate, translateDoc } from './ui/translation.js';
 import { closeDrawers, openDrawer } from './ui/views.js';
+import { bindReport } from './ui/report-ui.js';
 
 // ======================================================================
 // Récupération après fermeture ou plantage de l'onglet
@@ -301,6 +302,7 @@ async function init() {
   bind();
   bindAccount(authResult);
   bindInstall();
+  bindReport();
   bindBell();
   $('#toggle-auto').onchange = (e) => setAutoTune(e.target.checked, e.target.checked ? 'Réglage automatique activé : le son et le modèle seront réglés avant chaque enregistrement.' : '');
   $('#auto-redo').onclick = async () => {

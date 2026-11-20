@@ -40,6 +40,7 @@ js/ui/*.js          L'interface, par thème : core (outils communs, état), engi
 js/assistant.js     Assistant : type de demande, choix des extraits, messages (fonctions pures)
 js/insights.js      Tableau de bord et recherche dans les réunions (fonctions pures)
 js/actions.js       Relevé de décisions et d'actions (fonctions pures)
+js/report.js        Compte rendu : contenu, page PDF, fichier Word (fonctions pures)
 js/spaces.js        Espaces collaboratifs (Supabase) ; js/cloud.js : compte Google et Drive
 tests/unit/         Tests des fonctions pures (node:test)
 tests/e2e/          Tests dans un vrai navigateur (Playwright), avec faux Claude, Drive et Supabase
@@ -427,6 +428,20 @@ fenêtre surgissante, incompatible avec l'isolation COOP/COEP qui permet le calc
 En mode Test, seuls les comptes ajoutés à l'étape 3 peuvent se connecter. Google peut aussi demander
 de se reconnecter plus souvent : l'appli le fait automatiquement au démarrage quand c'est possible,
 sinon elle affiche « Reconnexion nécessaire ».
+
+## Compte rendu (Word ou PDF)
+
+**Exporter → Compte rendu** (ou le bouton **Compte rendu** de l'onglet Actions) fabrique un document propre à envoyer après la réunion, sur l'appareil :
+- en-tête : titre, date et heure, durée, participants (noms de « Qui parle ? »), projet (dossier) ;
+- **Résumé** : le texte de l'onglet Résumé IA (le Markdown collé depuis Claude est mis en forme : titres, puces, gras) ;
+- **Décisions** et tableau des **Actions** (responsable, échéance, fait / à faire), repris de l'onglet Actions : ce qui y est retiré n'apparaît pas, ce qui est coché est barré ;
+- **Transcription en annexe** (facultatif, avec ou sans les heures), sur une nouvelle page.
+
+Formats :
+- **Word (.docx)** : modifiable, avec numéros de page. L'outil de mise en page (bibliothèque `docx`, ≈ 300 Ko) est téléchargé au premier export ;
+- **PDF** : la page s'ouvre dans la fenêtre d'impression du navigateur ; choisir « Enregistrer au format PDF ». Fonctionne sans connexion.
+
+Les options cochées sont gardées pour la fois suivante. La couleur des titres suit la couleur d'accent de la Personnalisation.
 
 ## Résumer avec Claude
 

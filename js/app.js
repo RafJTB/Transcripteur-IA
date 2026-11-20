@@ -4002,7 +4002,13 @@ function keywordAnswer(q, sources, note = '') {
   const openOnly = /reste|à faire|a faire|en cours/i.test(q);
   if (openOnly) sources.forEach((s) => (s.items = s.items.filter((x) => !x.done)));
   const { intent, hits } = searchMeetings(q, sources, { limit: 6 });
-  const claudeBtn = '<button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>';
+  const task = taskOf(q);
+  if (!hits.length && task !== 'qa' && task !== 'list') {
+    const items = sources.flatMap((s) => s.items.map((x) => ({ doc: s.doc, ...x }))).sort((a, b) => b.doc.createdAt - a.doc.createdAt).slice(0, 6);
+    hits.push(...items);
+    note = `<p class="chat-note">${task === 'quiz' ? 'Un quiz' : task === 'draft' ? 'Une rédaction' : 'Une synthèse'} demande un modèle de langage (Claude, ou un modèle local qui a pu démarrer). En attendant, voici les décisions et actions récentes.</p>${note}`;
+  }
+  const claudeBtn = `<button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>`;
   if (!hits.length) return `<p>Je n’ai rien trouvé de net dans tes transcriptions. Essaie avec d’autres mots (un nom de projet, un lot, une personne).</p>${note}${claudeBtn}`;
   const lead = intent === 'decision' ? 'Voici les décisions trouvées' : intent === 'action' ? (openOnly ? 'Voici les actions encore à faire' : 'Voici les actions trouvées') : 'Voici les passages les plus proches';
   const li = hits.map((h) => `<li><button type="button" data-open="${esc(h.doc.id)}" data-i="${h.i}">${h.type === 'decision' ? '<i class="tag dec">Décision</i>' : h.type === 'action' ? `<i class="tag act">Action${h.who ? ` · ${esc(h.who)}` : ''}</i>` : ''}${esc(h.text.length > 150 ? h.text.slice(0, 149) + '…' : h.text)}<small>${esc(h.doc.title)} · ${relDay(h.doc.createdAt)} · ${fmtClock(h.start)}</small></button></li>`).join('');
@@ -4084,7 +4090,7 @@ async function askAssistant(q) {
     bubble.innerHTML = renderAnswer(text, refs)
       + (src.length ? `<ul class="chat-src">${src.map((r) => `<li><button type="button" data-open="${esc(r.doc.id)}" data-i="${r.i}"><b>${r.n}</b><span>« ${esc(r.text.length > 110 ? r.text.slice(0, 109) + '…' : r.text)} »<small>${esc(r.doc.title)} · ${relDay(r.doc.createdAt)} · ${fmtClock(r.start)}</small></span></button></li>`).join('')}</ul>` : '')
       + (note ? `<p class="chat-note warn">${esc(note)}</p>` : '')
-      + `<p class="chat-note">${esc(engineLabel)} · à vérifier dans les sources.${claude ? '' : ' <button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>'}</p>`;
+      + `<p class="chat-note">${esc(engineLabel)} · à vérifier dans les sources.${claude ? '' : ` <button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>`}</p>`;
     conv.turns.push({ q, a: text });
     conv.task = task;
     chatLog[chatLog.length - 1].html = bubble.innerHTML;

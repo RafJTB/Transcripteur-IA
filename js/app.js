@@ -4082,6 +4082,7 @@ async function askAssistant(q) {
     const out = claude ? await answerClaude(messages, { onToken, onStatus }) : await answerLocal(messages, { onToken, onStatus, onNote, max });
     if (out == null) { bubble.innerHTML = keywordAnswer(q, sources, '<p class="chat-note">Assistant IA non activé : voici une recherche par mots-clés.</p>'); return; }
     text = out || text;
+    if (!claude && localLlm().light && task !== 'qa' && task !== 'list' && !note) note = `Le modèle léger (0,6B) n’est pas assez puissant pour ${task === 'quiz' ? 'un quiz' : task === 'draft' ? 'rédiger un texte' : 'une synthèse'} : le résultat est souvent confus. Choisis Claude (le plus fiable) ou un modèle local plus gros dans Paramètres → Assistant IA.`;
     if (!text.trim()) text = 'Je n’ai pas pu formuler de réponse. Reformule ta question, ou demande à Claude.';
     status.textContent = '';
     // Quiz : pas de sources « par défaut » sous une question, elles donneraient la réponse

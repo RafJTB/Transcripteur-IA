@@ -16,7 +16,7 @@ import { guessLang } from './langid.js';
 import { VoiceBook, centroids, matchVoices, packEmb } from './voices.js';
 import { extractActions, actionsToMarkdown } from './actions.js';
 import { dashStats, dailyMinutes, weeklyMinutes, speakerTotals, topicShares, periodStart, searchMeetings } from './insights.js';
-import { buildContext, buildMessages, renderAnswer, citedRefs } from './assistant.js';
+import { buildContext, buildMessages, renderAnswer, citedRefs, taskOf, isFollowUp } from './assistant.js';
 import { Spaces, spacesError } from './spaces.js';
 import { encodeOggOpus, canEncodeOpus } from './opus-ogg.js';
 import { ACCENTS, accentVars, BACKGROUNDS, DEFAULTS as PERSO_DEFAULTS, loadPerso, savePerso, applyPerso, customImage, shrinkImage, saveCustomImage } from './perso.js';
@@ -3731,7 +3731,7 @@ function renderScopeChip() {
 function setScope(sc, { quiet = false } = {}) {
   asstScope = sc.type === 'all' ? { type: 'all' } : sc;
   lsSet('assistant.scope', JSON.stringify(asstScope));
-  lastExchange = null;
+  conv = null;
   renderScopeChip();
   if (!quiet) {
     chatAdd('sys', asstScope.type === 'all' ? 'Je réponds maintenant sur <b>toutes tes réunions</b>.' : `Je réponds maintenant sur <b>${esc(asstScope.label)}</b>${asstScope.type === 'folder' ? ` (${asstScope.n || 0} réunion${(asstScope.n || 0) > 1 ? 's' : ''})` : ''}.`);
@@ -3803,7 +3803,7 @@ function renderChat() {
   const box = $('#chat');
   if (!chatLog.length) {
     box.innerHTML = `<div class="chat-hello"><span class="bot-ico">${'<svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>'}</span><div><p>Pose une question sur tes réunions : je lis tes transcriptions et je te réponds en citant mes sources.</p>
-      <div class="chat-sugg"><button type="button" data-q="Quelles décisions cette semaine ?">Décisions de la semaine</button><button type="button" data-q="Quelles actions restent à faire ?">Actions à faire</button></div></div></div>`;
+      <div class="chat-sugg"><button type="button" data-q="Quelles décisions cette semaine ?">Décisions de la semaine</button><button type="button" data-q="Quelles actions restent à faire ?">Actions à faire</button><button type="button" data-q="Questionne-moi sur ces réunions">Me questionner</button></div></div></div>`;
     return;
   }
   box.innerHTML = chatLog.map((m) => m.role === 'sys' ? `<p class="msg-sys">${m.html}</p>` : `<div class="msg ${m.role}">${m.role === 'bot' ? '<span class="bot-ico"><svg viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span>' : ''}<div class="bubble">${m.html}</div></div>`).join('');
@@ -3811,7 +3811,8 @@ function renderChat() {
 }
 
 let lastQuestion = '';
-let lastExchange = null;
+/** Conversation en cours : extraits utilisés, type de demande et échanges (remise à zéro au changement de périmètre). */
+let conv = null;
 
 // ---------- Moteurs de l'assistant ----------
 const CLAUDE_SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.5.0/+esm';
@@ -3834,8 +3835,10 @@ function localCandidates() {
   const big = { ...LLM_MODELS.large, dtype: f16 ? 'q4f16' : 'q4', sizeMB: f16 ? 1430 : 2150, key: `large-${f16 ? 'q4f16' : 'q4'}` };
   const smallGpu = { ...LLM_MODELS.small, device: 'webgpu', dtype: f16 ? 'q4f16' : 'q4', sizeMB: f16 ? 570 : 920, key: `small-gpu-${f16 ? 'q4f16' : 'q4'}`, light: true };
   const smallCpu = { ...LLM_MODELS.small, key: 'small-cpu', light: true };
+  const xl = { ...LLM_MODELS.xl, key: 'xl-q4f16' };
   let list;
-  if (e === 'local-large') list = gpu ? [big, smallGpu, smallCpu] : [smallCpu];
+  if (e === 'local-xl') list = gpu && f16 ? [xl, big, smallGpu] : gpu ? [big, smallGpu] : [smallCpu];
+  else if (e === 'local-large') list = gpu ? [big, smallGpu, smallCpu] : [smallCpu];
   else if (e === 'local-small') list = gpu ? [smallGpu, smallCpu] : [smallCpu];
   else list = gpu ? [big, smallGpu] : [];
   const ok = list.filter((m) => !failed(m.key));
@@ -3931,7 +3934,7 @@ async function answerLocal(messages, opts) {
   throw err;
 }
 
-async function answerLocalWith(m, messages, { onToken, onStatus }, consented = false) {
+async function answerLocalWith(m, messages, { onToken, onStatus, max = 450 }, consented = false) {
   const spec = { repo: m.repo, device: m.device, dtype: m.dtype };
   const { cached } = await llmCall({ type: 'cache-status', ...spec });
   if (!cached && !consented && lsGet('assistant.consent', '') !== `${m.repo}|${m.dtype}`) {
@@ -3942,7 +3945,7 @@ async function answerLocalWith(m, messages, { onToken, onStatus }, consented = f
   onStatus(cached ? `Chargement de ${m.label} et lecture de tes réunions…` : `Téléchargement de ${m.label}…`);
   asstAbort = () => llm?.postMessage({ type: 'stop' });
   let first = true;
-  const r = await llmCall({ type: 'chat', ...spec, messages, max: 450 }, {
+  const r = await llmCall({ type: 'chat', ...spec, messages, max }, {
     onProgress: (p) => onStatus(p.value >= 0.999 && p.total > 50e6 ? `${m.label} prêt : lecture de tes réunions…` : `Téléchargement de ${m.label}… ${Math.round(p.value * 100)} % (${fmtMB(p.loaded / 1e6)} / ${fmtMB(p.total / 1e6)})`),
     onToken: (t) => { if (first) { first = false; onStatus(''); } onToken(t); },
   });
@@ -3959,10 +3962,13 @@ async function answerClaude(messages, { onToken, onStatus }) {
   const [sys, ...rest] = messages;
   const params = {
     model: model.id,
-    max_tokens: 4000,
+    max_tokens: 16000,
     system: sys.content,
     messages: rest,
-    output_config: { effort: 'low' },
+    // Réflexion moyenne : nettement plus pertinent que « low » pour relier des réunions, corriger un quiz…
+    output_config: { effort: 'medium' },
+    // Les extraits (dans la consigne système) et la conversation sont mis en cache : les questions suivantes coûtent ~10 fois moins
+    cache_control: { type: 'ephemeral' },
   };
   // Si le modèle décline une demande, l'API la relance sur un autre modèle (activé par défaut)
   if (model.fallbacks) Object.assign(params, { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' });
@@ -3996,7 +4002,13 @@ function keywordAnswer(q, sources, note = '') {
   const openOnly = /reste|à faire|a faire|en cours/i.test(q);
   if (openOnly) sources.forEach((s) => (s.items = s.items.filter((x) => !x.done)));
   const { intent, hits } = searchMeetings(q, sources, { limit: 6 });
-  const claudeBtn = '<button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>';
+  const task = taskOf(q);
+  if (!hits.length && task !== 'qa' && task !== 'list') {
+    const items = sources.flatMap((s) => s.items.map((x) => ({ doc: s.doc, ...x }))).sort((a, b) => b.doc.createdAt - a.doc.createdAt).slice(0, 6);
+    hits.push(...items);
+    note = `<p class="chat-note">${task === 'quiz' ? 'Un quiz' : task === 'draft' ? 'Une rédaction' : 'Une synthèse'} demande un modèle de langage (Claude, ou un modèle local qui a pu démarrer). En attendant, voici les décisions et actions récentes.</p>${note}`;
+  }
+  const claudeBtn = `<button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>`;
   if (!hits.length) return `<p>Je n’ai rien trouvé de net dans tes transcriptions. Essaie avec d’autres mots (un nom de projet, un lot, une personne).</p>${note}${claudeBtn}`;
   const lead = intent === 'decision' ? 'Voici les décisions trouvées' : intent === 'action' ? (openOnly ? 'Voici les actions encore à faire' : 'Voici les actions trouvées') : 'Voici les passages les plus proches';
   const li = hits.map((h) => `<li><button type="button" data-open="${esc(h.doc.id)}" data-i="${h.i}">${h.type === 'decision' ? '<i class="tag dec">Décision</i>' : h.type === 'action' ? `<i class="tag act">Action${h.who ? ` · ${esc(h.who)}` : ''}</i>` : ''}${esc(h.text.length > 150 ? h.text.slice(0, 149) + '…' : h.text)}<small>${esc(h.doc.title)} · ${relDay(h.doc.createdAt)} · ${fmtClock(h.start)}</small></button></li>`).join('');
@@ -4027,9 +4039,26 @@ async function askAssistant(q) {
     return chatAdd('bot', keywordAnswer(q, sources, '<p class="chat-note">Sans carte graphique compatible, je fais une recherche dans tes réunions. Pour des réponses rédigées : Claude (clé API) ou le modèle léger, dans Paramètres → Assistant IA.</p>'));
   const claude = engine === 'claude';
   const local = !claude && localLlm();
-  const { refs, context } = buildContext(q, sources, { budget: claude ? 14000 : local.light ? 3000 : 5000, fill: asstScope.type !== 'all' && docs.length <= 3 });
-  // L'échange précédent aide aux questions de suivi, mais embrouille les petits modèles locaux
-  const messages = buildMessages(q, context, claude || !local.light ? lastExchange : null);
+  const scopeKey = JSON.stringify(asstScope);
+  const scoped = asstScope.type !== 'all';
+  const budget = claude ? 60000 : local.light ? 3000 : (local.key || '').startsWith('xl') ? 7000 : 5000;
+  // Suite de la conversation (réponse à un quiz, « développe », « et pour le lot 3 ? ») : mêmes extraits
+  let task = taskOf(q);
+  const same = conv && conv.scopeKey === scopeKey && conv.engine === engine;
+  let follow = same && isFollowUp(q, conv.task, task);
+  let built = follow ? null : buildContext(q, sources, { budget, task, scoped, scopeLabel: asstScope.label });
+  if (!follow && same && task === 'qa' && !built.hits && conv.task !== 'qa') { follow = true; built = null; }
+  if (follow) task = conv.task === 'quiz' ? 'quiz' : task;
+  const { refs, context } = built || conv;
+  if (!follow) conv = { scopeKey, engine, task, refs, context, turns: [] };
+  // Historique : complet pour Claude, court pour les modèles locaux (un petit modèle s'y perd)
+  const messages = buildMessages(q, context, conv.turns, {
+    task,
+    contextInSystem: claude,
+    keepRefs: true,
+    maxTurns: claude ? 12 : local.light ? 1 : 3,
+    maxChars: claude ? 4000 : local.light ? 400 : 900,
+  });
   // Bulle de réponse mise à jour au fil de l'eau
   chatAdd('bot', '<p class="typing"><i></i><i></i><i></i></p>');
   const bubble = $$('#chat .msg.bot .bubble').pop();
@@ -4049,18 +4078,22 @@ async function askAssistant(q) {
   const onNote = (n) => { note = n; };
   setChatBusy(true);
   try {
-    const out = claude ? await answerClaude(messages, { onToken, onStatus }) : await answerLocal(messages, { onToken, onStatus, onNote });
+    const max = task === 'summary' || task === 'draft' ? 800 : 500;
+    const out = claude ? await answerClaude(messages, { onToken, onStatus }) : await answerLocal(messages, { onToken, onStatus, onNote, max });
     if (out == null) { bubble.innerHTML = keywordAnswer(q, sources, '<p class="chat-note">Assistant IA non activé : voici une recherche par mots-clés.</p>'); return; }
     text = out || text;
+    if (!claude && localLlm().light && task !== 'qa' && task !== 'list' && !note) note = `Le modèle léger (0,6B) n’est pas assez puissant pour ${task === 'quiz' ? 'un quiz' : task === 'draft' ? 'rédiger un texte' : 'une synthèse'} : le résultat est souvent confus. Choisis Claude (le plus fiable) ou un modèle local plus gros dans Paramètres → Assistant IA.`;
     if (!text.trim()) text = 'Je n’ai pas pu formuler de réponse. Reformule ta question, ou demande à Claude.';
     status.textContent = '';
-    const src = citedRefs(text, refs);
+    // Quiz : pas de sources « par défaut » sous une question, elles donneraient la réponse
+    const src = citedRefs(text, refs, 4, task === 'qa' || task === 'list' || task === 'summary');
     const engineLabel = claude ? (CLAUDE_MODELS.find((x) => x.id === lsGet('assistant.model', CLAUDE_MODELS[0].id)) || CLAUDE_MODELS[0]).label.replace(/ \(.*/, '') : `${localLlm().label}, sur ton appareil`;
     bubble.innerHTML = renderAnswer(text, refs)
       + (src.length ? `<ul class="chat-src">${src.map((r) => `<li><button type="button" data-open="${esc(r.doc.id)}" data-i="${r.i}"><b>${r.n}</b><span>« ${esc(r.text.length > 110 ? r.text.slice(0, 109) + '…' : r.text)} »<small>${esc(r.doc.title)} · ${relDay(r.doc.createdAt)} · ${fmtClock(r.start)}</small></span></button></li>`).join('')}</ul>` : '')
       + (note ? `<p class="chat-note warn">${esc(note)}</p>` : '')
-      + `<p class="chat-note">${esc(engineLabel)} · à vérifier dans les sources.${claude ? '' : ' <button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>'}</p>`;
-    lastExchange = { q, a: text };
+      + `<p class="chat-note">${esc(engineLabel)} · à vérifier dans les sources.${claude ? '' : ` <button class="chat-claude" type="button" data-claude>${CLAUDE_ICON}Demander à Claude</button>`}</p>`;
+    conv.turns.push({ q, a: text });
+    conv.task = task;
     chatLog[chatLog.length - 1].html = bubble.innerHTML;
   } catch (e) {
     console.warn(e);
@@ -4133,8 +4166,10 @@ function renderAssistantSettings() {
     : sel.value === 'auto' && caps().webgpu && !localCandidates().length ? 'Aucun modèle local n’a pu démarrer sur cette carte graphique : recherche dans tes réunions, sans réponse rédigée. Lance le test pour voir pourquoi, ou choisis Claude.'
     : sel.value === 'auto' && failed && m.light ? `${m.label} sur la carte graphique (le modèle plus précis n’a pas pu démarrer). Réponses plus approximatives ; réessaie ou choisis Claude.`
     : sel.value === 'auto' && noGpu ? 'Pas de carte graphique compatible détectée : recherche dans tes réunions, sans réponse rédigée. Pour des réponses rédigées, choisis Claude (le plus fiable) ou le modèle local léger (expérimental, réponses approximatives).'
+    : sel.value === 'local-xl' && !(caps().webgpu && caps().f16) ? 'Qwen3 4B demande une carte graphique récente (WebGPU avec demi-précision) : elle n’est pas disponible ici, le modèle 1,7B sera utilisé à la place.'
+    : sel.value === 'local-xl' ? `${m.label} (${fmtMB(m.sizeMB)}), sur la carte graphique. Le plus intelligent des modèles locaux (raisonne mieux, suit mieux les consignes), mais il demande environ 4 Go de mémoire graphique et met plus de temps à répondre. Rien ne quitte ton appareil.`
     : sel.value === 'local-small' ? `${m.label} (${fmtMB(m.sizeMB)}), sur ${m.device === 'webgpu' ? 'la carte graphique' : 'le processeur'}. Expérimental : petit modèle, réponses parfois approximatives ; vérifie dans les sources.${m.device === 'wasm' ? ' 20 s à 2 min par réponse.' : ''}`
-    : isClaude ? 'Les extraits utiles de tes réunions et ta question sont envoyés à Claude (Anthropic) via ta clé API. Facturé à l’usage sur ton compte Anthropic.'
+    : isClaude ? 'Le plus intelligent : comprend les demandes complexes, relie plusieurs réunions, te fait réviser un dossier… Les extraits utiles de tes réunions (jusqu’à environ 60 000 caractères) et ta question sont envoyés à Claude (Anthropic) via ta clé API. Facturé à l’usage : de l’ordre de quelques centimes par question avec Opus, moins pour les questions suivantes d’une même conversation.'
     : `${m.label} (${fmtMB(m.sizeMB)}), sur ${m.device === 'webgpu' ? 'la carte graphique' : 'le processeur'}. Rien ne quitte ton appareil.${m.device === 'wasm' ? ' Sans carte graphique, une réponse prend de 20 s à 1 min.' : ''}`;
 }
 

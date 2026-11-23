@@ -473,16 +473,14 @@ Formats :
 
 Les options cochées sont gardées pour la fois suivante. La couleur des titres suit la couleur d'accent de la Personnalisation.
 
-## Résumer avec Claude
+## Résumer avec une IA (Claude ou Copilot)
 
-Le bouton **Résumer avec Claude** (barre du résultat) ouvre claude.ai avec la transcription et une consigne prête :
-compte rendu de réunion (décisions, actions avec responsable et échéance, points en suspens), résumé court,
-points clés ou résumé détaillé, plus des consignes libres. Il n'y a plus qu'à envoyer.
+**Exporter → Résumer avec une IA** (ou le bouton de l'onglet Résumé IA) : choisis l'IA, le type de résumé (compte rendu, décisions et actions, résumé court, points clés, détaillé) et d'éventuelles consignes ; la consigne et la transcription sont **copiées**, l'IA s'ouvre, il n'y a plus qu'à coller (Ctrl + V) et envoyer.
+- **Claude** (claude.ai) : consigne pré-remplie dans le lien quand elle est courte ;
+- **Copilot Microsoft 365** (m365.cloud.microsoft, compte pro ou d'école : le texte reste dans le périmètre de l'organisation si la protection des données entreprise est activée) ;
+- **Copilot** grand public (copilot.microsoft.com, compte perso : à éviter pour des réunions confidentielles).
 
-- Transcription courte : le message est pré-rempli dans Claude.
-- Transcription longue (lien trop long) : Claude s'ouvre et la consigne est copiée, il suffit de coller (Ctrl + V).
-- Dans tous les cas la consigne est aussi copiée dans le presse-papiers.
-- Confidentialité : c'est le seul moment où du texte quitte le PC (vers ton compte claude.ai). L'audio reste local.
+Microsoft ne propose pas de lien fiable pour pré-remplir Copilot : la consigne est toujours collée. Si la transcription est trop longue pour la zone de message de Copilot (≈ 10 à 12 000 caractères, limite approximative), elle est **téléchargée en .txt** à joindre (trombone), et seule la consigne est copiée. Le choix de l'IA est mémorisé ; le résultat se colle dans l'onglet Résumé IA (repris dans le compte rendu Word / PDF).
 
 ## Vérification (seconde écoute)
 

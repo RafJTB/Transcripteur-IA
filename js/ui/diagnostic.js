@@ -29,11 +29,12 @@ export const tool = {
     this._resolve = null;
   },
   /** Affiche une étape. `timeout` (s) : valide automatiquement le dernier bouton à la fin du délai. */
-  show({ step = '', html, actions = [], meter = false, timeout = 0 }) {
+  show({ step = '', html, actions = [], meter = false, timeout = 0, onRender = null }) {
     if (this.cancelled) return Promise.resolve(null);
     clearInterval(this._timer);
     $('#tool-step').textContent = step;
     $('#tool-body').innerHTML = html;
+    onRender?.();
     this.meter = meter;
     $('#tool-meter').hidden = !meter;
     $('#tool-timer').textContent = '';

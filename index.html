@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-17" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-17" />
+  <meta name="app-version" content="2026-11-22-19" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-19" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,7 +41,7 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-17', 'sw.js', 'js/app.js?v=2026-11-22-17', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-19', 'sw.js', 'js/app.js?v=2026-11-22-19', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
         'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js', 'js/report.js', 'js/ui/report-ui.js', 'js/ui/space-chat.js', 'js/calendar.js', 'js/outlook.js', 'js/ui/calendar-ui.js', 'js/verify.js', 'js/ui/verify-ui.js',
         'js/ui/account.js', 'js/ui/assistant.js', 'js/ui/core.js', 'js/ui/dashboard.js', 'js/ui/diagnostic.js', 'js/ui/doc-tabs.js', 'js/ui/doc.js', 'js/ui/engine.js', 'js/ui/history.js', 'js/ui/notifs.js', 'js/ui/pages.js', 'js/ui/recording.js', 'js/ui/sound.js', 'js/ui/spaces.js', 'js/ui/speakers.js', 'js/ui/transcription.js', 'js/ui/translation.js', 'js/ui/views.js'];
       var done = false;
@@ -146,7 +146,7 @@
               <button type="button" role="menuitem" data-export="md"><b>Markdown</b><small>.md · titre, infos et texte</small></button>
               <button type="button" role="menuitem" data-export="srt"><b>Sous-titres</b><small>.srt · pour une vidéo</small></button>
               <button type="button" role="menuitem" id="btn-copy" disabled><b>Copier le texte</b><small>dans le presse-papiers</small></button>
-              <button type="button" role="menuitem" id="btn-claude" class="mi-claude" disabled><svg class="claude-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11.47 9.25 L10.79 1.07 L13.21 1.07 L12.53 9.25 L12.91 9.35 L15.70 3.58 L17.45 4.59 L13.84 9.89 L14.11 10.16 L20.86 5.49 L22.07 7.58 L14.65 11.09 L14.75 11.47 L21.14 10.99 L21.14 13.01 L14.75 12.53 L14.65 12.91 L22.07 16.42 L20.86 18.51 L14.11 13.84 L13.84 14.11 L17.45 19.41 L15.70 20.42 L12.91 14.65 L12.53 14.75 L13.21 22.93 L10.79 22.93 L11.47 14.75 L11.09 14.65 L8.30 20.42 L6.55 19.41 L10.16 14.11 L9.89 13.84 L3.14 18.51 L1.93 16.42 L9.35 12.91 L9.25 12.53 L2.86 13.01 L2.86 10.99 L9.25 11.47 L9.35 11.09 L1.93 7.58 L3.14 5.49 L9.89 10.16 L10.16 9.89 L6.55 4.59 L8.30 3.58 L11.09 9.35Z"/></svg><b>Résumer avec Claude</b><small>ouvre claude.ai avec la consigne</small></button>
+              <button type="button" role="menuitem" id="btn-claude" class="mi-claude" disabled><svg class="claude-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11.47 9.25 L10.79 1.07 L13.21 1.07 L12.53 9.25 L12.91 9.35 L15.70 3.58 L17.45 4.59 L13.84 9.89 L14.11 10.16 L20.86 5.49 L22.07 7.58 L14.65 11.09 L14.75 11.47 L21.14 10.99 L21.14 13.01 L14.75 12.53 L14.65 12.91 L22.07 16.42 L20.86 18.51 L14.11 13.84 L13.84 14.11 L17.45 19.41 L15.70 20.42 L12.91 14.65 L12.53 14.75 L13.21 22.93 L10.79 22.93 L11.47 14.75 L11.09 14.65 L8.30 20.42 L6.55 19.41 L10.16 14.11 L9.89 13.84 L3.14 18.51 L1.93 16.42 L9.35 12.91 L9.25 12.53 L2.86 13.01 L2.86 10.99 L9.25 11.47 L9.35 11.09 L1.93 7.58 L3.14 5.49 L9.89 10.16 L10.16 9.89 L6.55 4.59 L8.30 3.58 L11.09 9.35Z"/></svg><b>Résumer avec une IA</b><small>Claude ou Copilot, consigne prête</small></button>
             </div>
           </details>
         </div>
@@ -402,7 +402,7 @@
                 <div class="sum-intro">
                   <span class="sum-ico"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg></span>
                   <div><b>Résumé avec Claude</b><p>Choisis le type de résumé : la transcription s’ouvre dans Claude avec la consigne. Colle ensuite la réponse ici pour la garder avec la transcription.</p></div>
-                  <button class="btn sm claude" id="btn-claude-tab" type="button"><svg class="claude-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11.47 9.25 L10.79 1.07 L13.21 1.07 L12.53 9.25 L12.91 9.35 L15.70 3.58 L17.45 4.59 L13.84 9.89 L14.11 10.16 L20.86 5.49 L22.07 7.58 L14.65 11.09 L14.75 11.47 L21.14 10.99 L21.14 13.01 L14.75 12.53 L14.65 12.91 L22.07 16.42 L20.86 18.51 L14.11 13.84 L13.84 14.11 L17.45 19.41 L15.70 20.42 L12.91 14.65 L12.53 14.75 L13.21 22.93 L10.79 22.93 L11.47 14.75 L11.09 14.65 L8.30 20.42 L6.55 19.41 L10.16 14.11 L9.89 13.84 L3.14 18.51 L1.93 16.42 L9.35 12.91 L9.25 12.53 L2.86 13.01 L2.86 10.99 L9.25 11.47 L9.35 11.09 L1.93 7.58 L3.14 5.49 L9.89 10.16 L10.16 9.89 L6.55 4.59 L8.30 3.58 L11.09 9.35Z"/></svg>Résumer avec Claude</button>
+                  <button class="btn sm claude" id="btn-claude-tab" type="button"><svg class="claude-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M11.47 9.25 L10.79 1.07 L13.21 1.07 L12.53 9.25 L12.91 9.35 L15.70 3.58 L17.45 4.59 L13.84 9.89 L14.11 10.16 L20.86 5.49 L22.07 7.58 L14.65 11.09 L14.75 11.47 L21.14 10.99 L21.14 13.01 L14.75 12.53 L14.65 12.91 L22.07 16.42 L20.86 18.51 L14.11 13.84 L13.84 14.11 L17.45 19.41 L15.70 20.42 L12.91 14.65 L12.53 14.75 L13.21 22.93 L10.79 22.93 L11.47 14.75 L11.09 14.65 L8.30 20.42 L6.55 19.41 L10.16 14.11 L9.89 13.84 L3.14 18.51 L1.93 16.42 L9.35 12.91 L9.25 12.53 L2.86 13.01 L2.86 10.99 L9.25 11.47 L9.35 11.09 L1.93 7.58 L3.14 5.49 L9.89 10.16 L10.16 9.89 L6.55 4.59 L8.30 3.58 L11.09 9.35Z"/></svg>Résumer avec une IA</button>
                 </div>
                 <label class="label" for="summary-text">Résumé enregistré</label>
                 <textarea id="summary-text" class="summary-text" placeholder="Colle ici le résumé de Claude…" spellcheck="true"></textarea>
@@ -562,7 +562,7 @@
               <details class="glass help-item"><summary>Quel modèle choisir ?</summary><p>Laisse le <b>réglage automatique</b> : il choisit selon ton PC. Sans carte graphique, « Rapide » ou « Équilibré » ; avec une carte graphique, « Précis ». Détails dans la page <b>Modèles</b>.</p></details>
               <details class="glass help-item"><summary>Comment savoir qui parle ?</summary><p>Après la transcription, les voix sont comparées et chaque phrase reçoit une couleur. Clique sur « Personne 1 » pour la renommer : sa voix est alors mémorisée et elle sera reconnue toute seule aux réunions suivantes (Paramètres → Voix connues).</p></details>
               <details class="glass help-item"><summary>À quoi sert l’onglet Actions ?</summary><p>Il relève les décisions (« on valide », « on part sur ») et les actions (« tu peux… », « je m’en occupe »), avec le responsable et l’échéance. Coche ce qui est fait ; pour un relevé reformulé, « Affiner avec Claude ».</p></details>
-              <details class="glass help-item"><summary>Mes données sont-elles envoyées quelque part ?</summary><p>Non : l’audio et la transcription restent sur ton appareil. Deux exceptions, seulement si tu le demandes : la sauvegarde dans <b>ton</b> Google Drive (compte Google) et l’envoi du texte à Claude (« Résumer avec Claude »). <a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></p></details>
+              <details class="glass help-item"><summary>Mes données sont-elles envoyées quelque part ?</summary><p>Non : l’audio et la transcription restent sur ton appareil. Deux exceptions, seulement si tu le demandes : la sauvegarde dans <b>ton</b> Google Drive (compte Google) et l’envoi du texte à l’IA que tu choisis, Claude ou Copilot (« Résumer avec une IA »). <a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></p></details>
               <details class="glass help-item"><summary>Comment marche l’assistant ?</summary><p>Il cherche d’abord les passages utiles dans tes réunions (décisions, actions, extraits), puis un modèle de langage rédige la réponse en citant ses sources (les petits numéros, cliquables). Par défaut, ce modèle tourne <b>sur ton appareil</b> (Qwen3, téléchargé une fois) : rien n’est envoyé. Sans carte graphique, une réponse prend de 20 s à 1 min. Pour des réponses plus fines, choisis Claude avec ta clé API dans Paramètres → Assistant IA.</p></details>
               <details class="glass help-item"><summary>Changer le fond d’écran ?</summary><p>Page <b>Personnalisation</b> : choisis un fond ou importe ta propre image, puis règle le flou, l’assombrissement et l’opacité des panneaux.</p></details>
               <details class="glass help-item"><summary>Installer l’appli sur l’ordinateur ou le téléphone ?</summary><p>Ordinateur (Chrome, Edge) : bouton « Installer l’appli » en haut. Android : menu ⋮ → « Installer l’application ». iPhone (Safari) : Partager → « Sur l’écran d’accueil ».</p></details>
@@ -859,6 +859,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-17"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-19"></script>
 </body>
 </html>

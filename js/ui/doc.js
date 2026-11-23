@@ -1,7 +1,7 @@
 // Réunion ouverte : affichage, phrases, recherche, enregistrement, Claude, vues, export.
 
 import { Audios, History } from '../history.js';
-import { CLAUDE_NEW, SUMMARY_TYPES, buildPrompt, claudeUrl } from '../claude-export.js';
+import { AI_TARGETS, CLAUDE_NEW, SUMMARY_TYPES, aiTarget, buildPrompt, claudeUrl } from '../claude-export.js';
 import { CONF } from '../monitor.js';
 import { LANGUAGES } from '../config.js';
 import { Sync } from '../cloud.js';
@@ -353,27 +353,41 @@ document.addEventListener('click', (e) => {
   toast(ok ? 'Consigne copiée.' : 'Sélectionne le texte et fais Ctrl + C.', ok ? 'ok' : 'warn', 3000);
 });
 
-export async function openInClaude(prompt) {
-  const url = claudeUrl(prompt);
+export const COPILOT_ICON = '<svg class="copilot-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M12 2.5c.5 4.6 2.9 7 7.5 7.5-4.6.5-7 2.9-7.5 7.5-.5-4.6-2.9-7-7.5-7.5 4.6-.5 7-2.9 7.5-7.5z"/><path fill="currentColor" stroke="none" opacity=".75" d="M18.5 15c.2 1.9 1.1 2.8 3 3-1.9.2-2.8 1.1-3 3-.2-1.9-1.1-2.8-3-3 1.9-.2 2.8-1.1 3-3z"/></svg>';
+const aiIcon = (key) => (key === 'claude' ? CLAUDE_ICON : COPILOT_ICON);
+
+/** Claude (pour l'assistant et les anciens appels). */
+export const openInClaude = (prompt) => openInAI(prompt, 'claude');
+
+/**
+ * Ouvre une IA (Claude ou Copilot) avec la consigne : elle est copiée, puis collée par l'utilisateur.
+ * @param {string} prompt consigne
+ * @param {string} key cible (AI_TARGETS)
+ * @param {{file?: string}} o fichier téléchargé à joindre (transcription trop longue)
+ */
+export async function openInAI(prompt, key = 'claude', { file = '' } = {}) {
+  const t = aiTarget(key);
+  const url = t.key === 'claude' ? claudeUrl(prompt) : null;
   const copied = await writeClipboard(prompt);
-  {
-    tool.open('Ouvrir dans Claude');
-    const go = await tool.show({
-      step: 'Dernière étape',
-      html: `<div class="cl-paste"><span class="cl-logo">${CLAUDE_ICON}</span><div>
-        <p><b>${copied ? 'Ta consigne est copiée' : 'Copie automatique impossible'}</b> (${prompt.length.toLocaleString('fr-FR')} caractères)${copied ? '.' : ' : le navigateur a bloqué le presse-papiers.'}</p>
-        <ol><li>${copied ? 'Clique sur « Ouvrir Claude ».' : 'Clique sur « Copier », puis sur « Ouvrir Claude ».'}</li><li>${url ? 'Si la consigne n’apparaît pas dans la zone de message, clique dedans' : 'Dans Claude, clique dans la zone de message'} et fais <kbd>Ctrl</kbd> + <kbd>V</kbd> (<kbd>⌘</kbd> + <kbd>V</kbd> sur Mac).</li><li>Appuie sur <kbd>Entrée</kbd>.</li></ol></div></div>
-        ${copied ? '' : `<textarea class="cl-raw" readonly rows="4">${esc(prompt.slice(0, 200000))}</textarea><button class="btn sm" type="button" id="cl-copy-again">Copier</button>`}`,
-      actions: [{ label: 'Annuler', value: null }, { label: 'Ouvrir Claude', value: true, primary: true }],
-    });
-    tool.close();
-    if (!go) return;
-  }
-  const win = window.open(url || CLAUDE_NEW, '_blank');
+  tool.open(`Ouvrir dans ${t.label}`);
+  const go = await tool.show({
+    step: 'Dernière étape',
+    html: `<div class="cl-paste"><span class="cl-logo ${t.key === 'claude' ? '' : 'copilot'}">${aiIcon(t.key)}</span><div>
+      <p><b>${copied ? 'Ta consigne est copiée' : 'Copie automatique impossible'}</b> (${prompt.length.toLocaleString('fr-FR')} caractères)${copied ? '.' : ' : le navigateur a bloqué le presse-papiers.'}</p>
+      ${file ? `<p class="cl-file">La transcription était trop longue pour la zone de message de ${esc(t.label)} : elle a été <b>téléchargée</b> dans le fichier « ${esc(file)} ».</p>` : ''}
+      <ol><li>${copied ? `Clique sur « Ouvrir ${esc(t.label)} »${t.key === 'claude' ? '' : ' (connecte-toi si besoin)'}.` : `Clique sur « Copier », puis sur « Ouvrir ${esc(t.label)} ».`}</li>
+        ${file ? `<li>Joins le fichier « ${esc(file)} » (bouton <b>+</b> ou trombone, ou glisse-le dans la conversation).</li>` : ''}
+        <li>${url ? 'Si la consigne n’apparaît pas dans la zone de message, clique dedans' : 'Clique dans la zone de message'} et fais <kbd>Ctrl</kbd> + <kbd>V</kbd> (<kbd>⌘</kbd> + <kbd>V</kbd> sur Mac).</li><li>Appuie sur <kbd>Entrée</kbd>.</li></ol></div></div>
+      ${copied ? '' : `<textarea class="cl-raw" readonly rows="4">${esc(prompt.slice(0, 200000))}</textarea><button class="btn sm" type="button" id="cl-copy-again">Copier</button>`}`,
+    actions: [{ label: 'Annuler', value: null }, { label: `Ouvrir ${t.label}`, value: true, primary: true }],
+  });
+  tool.close();
+  if (!go) return;
+  const win = window.open(url || t.url, '_blank');
   if (win) win.opener = null;
-  if (!win) toast('Le navigateur a bloqué l’ouverture de Claude : ouvre claude.ai et colle la consigne (Ctrl + V).', 'warn', 9000);
+  if (!win) toast(`Le navigateur a bloqué l’ouverture de ${t.label} : ouvre ${t.url.replace(/^https:\/\//, '').replace(/\/$/, '')} et colle la consigne (Ctrl + V).`, 'warn', 9000);
   else if (url) toast('Claude s’ouvre avec ta consigne : vérifie et envoie. (Elle est aussi copiée, au cas où.)', 'ok', 6000);
-  else toast('Dans Claude : Ctrl + V puis Entrée.', 'ok', 8000);
+  else toast(`Dans ${t.label} : ${file ? 'joins le fichier, puis ' : ''}Ctrl + V et Entrée.`, 'ok', 8000);
 }
 
 export async function copyText() {
@@ -392,19 +406,27 @@ export async function sendToClaude(preset = null) {
   if (!state.segments.length) return;
   const last = typeof preset === 'string' ? preset : lsGet('claude.type', 'cr');
   const ts = lsGet('claude.ts', '1') === '1';
-  tool.open('Résumer avec Claude');
+  const target = lsGet('summary.target', 'claude');
+  tool.open('Résumer avec une IA');
   const go = await tool.show({
-    step: 'Export vers Claude',
-    html: `<p>Choisis le type de résumé. La transcription et la consigne s’ouvrent dans Claude, il n’y a plus qu’à envoyer.</p>
+    step: 'Résumé',
+    html: `<p>Choisis l’IA et le type de résumé : la consigne et la transcription sont préparées, il n’y a plus qu’à coller et envoyer.</p>
+      <div class="ai-pick" role="radiogroup" aria-label="IA">${AI_TARGETS.map((t) => `<label class="ai-opt"><input type="radio" name="ai-target" value="${t.key}"${t.key === aiTarget(target).key ? ' checked' : ''} /><span class="ai-ico ${t.key === 'claude' ? '' : 'copilot'}">${aiIcon(t.key)}</span><span><strong>${esc(t.label)}</strong><small>${esc(t.sub)}</small></span></label>`).join('')}</div>
       <div class="cl-types">${SUMMARY_TYPES.map((t) => `<label class="cl-type"><input type="radio" name="cl-type" value="${t.key}"${t.key === last ? ' checked' : ''} />
         <span><strong>${esc(t.label)}</strong><small>${esc(t.short)}</small></span></label>`).join('')}</div>
       <label class="cl-field"><span>Consignes en plus <em>(facultatif)</em></span>
         <textarea id="cl-extra" rows="2" placeholder="Ex. : réunion de synthèse BIM, mets en avant les conflits entre lots">${esc(lsGet('claude.extra', ''))}</textarea></label>
-      <label class="modal-check"><input type="checkbox" id="cl-ts"${ts ? ' checked' : ''} /><span>Inclure les horodatages (Claude pourra citer les moments)</span></label>
-      <p class="cl-note">Confidentialité : jusqu’ici tout restait sur ton PC. À partir de ce clic, le texte est envoyé à Claude (ton compte claude.ai). L’audio, lui, ne quitte pas ton PC.</p>`,
-    actions: [{ label: 'Annuler', value: null }, { label: 'Ouvrir dans Claude', value: true, primary: true }],
+      <label class="modal-check"><input type="checkbox" id="cl-ts"${ts ? ' checked' : ''} /><span>Inclure les horodatages (l’IA pourra citer les moments)</span></label>
+      <p class="cl-note" id="ai-privacy">Confidentialité : jusqu’ici tout restait sur ton PC. ${esc(aiTarget(target).privacy)} L’audio, lui, ne quitte pas ton PC.</p>`,
+    actions: [{ label: 'Annuler', value: null }, { label: 'Continuer', value: true, primary: true }],
+    onRender: () => document.querySelectorAll('input[name="ai-target"]').forEach((r) => r.addEventListener('change', () => {
+      const n = $('#ai-privacy');
+      if (n) n.textContent = `Confidentialité : jusqu’ici tout restait sur ton PC. ${aiTarget(r.value).privacy} L’audio, lui, ne quitte pas ton PC.`;
+    })),
   });
   if (!go) return;
+  const key = document.querySelector('input[name="ai-target"]:checked')?.value || 'claude';
+  lsSet('summary.target', key);
   const type = document.querySelector('input[name="cl-type"]:checked')?.value || 'cr';
   const extra = $('#cl-extra').value;
   const withTs = $('#cl-ts').checked;
@@ -422,7 +444,22 @@ export async function sendToClaude(preset = null) {
     both: currentView() === 'both',
   });
   tool.close();
-  await openInClaude(prompt);
+  // Trop long pour la zone de message de Copilot : transcription téléchargée en fichier, consigne seule copiée
+  const t = aiTarget(key);
+  if (prompt.length > t.max) {
+    const title = $('#result-title').value.trim() || state.doc?.title || 'Transcription';
+    const file = `${safeFilename(title)}.txt`;
+    const head = [`Titre : ${title}`, `Infos : ${docMeta()}`, ''].join('\n');
+    download(file, head + toTxt(shownSegments(), { timestamps: withTs, speakers: speakerNames() }), 'text/plain');
+    const short = buildPrompt({
+      type, extra, title, meta: docMeta(), transcript: '', speakers: speakerNames(), attached: file,
+      language: langName(state.doc?.language || 'fr').toLowerCase(),
+      translatedFrom: currentView() !== 'orig' ? (langSummary(state.segments) || langName(state.doc?.translation?.from).toLowerCase()) : null,
+      both: currentView() === 'both',
+    });
+    return openInAI(short, key, { file });
+  }
+  await openInAI(prompt, key);
 }
 
 // ======================================================================

@@ -41,6 +41,7 @@ js/assistant.js     Assistant : type de demande, choix des extraits, messages (f
 js/insights.js      Tableau de bord et recherche dans les réunions (fonctions pures)
 js/actions.js       Relevé de décisions et d'actions (fonctions pures)
 js/report.js        Compte rendu : contenu, page PDF, fichier Word (fonctions pures)
+js/verify.js        Vérification : passages à réécouter, comparaison des deux écoutes (fonctions pures)
 js/calendar.js      Calendrier : fichiers .ics, événements Microsoft Graph (fonctions pures) ; js/outlook.js : connexion Microsoft
 js/spaces.js        Espaces collaboratifs (Supabase) ; js/cloud.js : compte Google et Drive
 tests/unit/         Tests des fonctions pures (node:test)
@@ -482,6 +483,21 @@ points clés ou résumé détaillé, plus des consignes libres. Il n'y a plus qu
 - Transcription longue (lien trop long) : Claude s'ouvre et la consigne est copiée, il suffit de coller (Ctrl + V).
 - Dans tous les cas la consigne est aussi copiée dans le presse-papiers.
 - Confidentialité : c'est le seul moment où du texte quitte le PC (vers ton compte claude.ai). L'audio reste local.
+
+## Vérification (seconde écoute)
+
+Après l'arrêt d'un enregistrement (ou la fin d'une transcription), un **modèle plus précis réécoute l'audio** et compare avec le texte :
+- **rapide** (automatique, interrupteur « Vérifier (seconde écoute) » sous le choix du modèle) : seulement les **passages douteux** (confiance < 60 %), élargis aux phrases voisines pour faire au moins 4 s ; quelques secondes à une minute ;
+- **Tout réécouter** (bandeau au-dessus du texte) : tout le texte, par passages de 25 s.
+
+Résultat de la comparaison, phrase par phrase :
+- **mêmes mots** : validée ;
+- **seulement des écarts d'orthographe** (« revite » / « Revit », « valider » / « validé ») : la version la plus sûre d'elle est gardée ;
+- **mots différents** (« mardi » / « jeudi ») : **corrigée** si la seconde écoute est nettement plus sûre d'elle (au moins +8 points et 60 %), sinon **à vérifier**.
+
+Dans le texte, les phrases corrigées sont surlignées en vert (« corrigé » : avant / après, confiance, **Annuler la correction**), celles à vérifier en orange (« à vérifier » : les deux versions, **Écouter**, **Prendre la seconde écoute**, **Garder**). Le bandeau donne le bilan et passe d'une différence à l'autre. Les phrases **corrigées à la main ne sont jamais touchées**.
+
+Modèle de seconde écoute : le plus précis disponible sur l'appareil (Whisper Turbo sur carte graphique, Small sur le processeur), plus précis que celui de la transcription si possible. La vérification automatique ne se lance que s'il est **déjà téléchargé** (sinon, le bouton « Vérifier » propose de le télécharger). Lancer un enregistrement arrête une vérification en cours. Limite : si l'audio est mauvais, les deux écoutes peuvent se tromper de la même façon ; la vérification réduit les erreurs sans les supprimer.
 
 ## Reprise automatique
 

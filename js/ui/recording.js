@@ -14,6 +14,7 @@ import { autoSetup, refreshDevices, renderSound, startAutoGain, stopMicTest } fr
 import { confirmBigDownload, ensureLoaded, finalizeDoc, getAudio, hideResume, newDoc, persist, runJob, skipLeadingSilence } from './transcription.js';
 import { carryTranslations, liveTranslate } from './translation.js';
 import { takeRecordingEvent } from './calendar-ui.js';
+import { stopVerify } from './verify-ui.js';
 
 // ======================================================================
 // Source audio
@@ -161,6 +162,11 @@ export async function recToggle() {
 }
 
 async function recStart() {
+  if (state.phase === 'verifying') {
+    stopVerify();
+    toast('Vérification arrêtée pour enregistrer.', 'info', 3000);
+    for (let k = 0; k < 120 && state.phase === 'verifying'; k++) await new Promise((r) => setTimeout(r, 250));
+  }
   if (state.phase !== 'idle') return toast('Attends la fin de la transcription en cours.', 'warn');
   if (state.autoTune && !(await autoSetup())) return;
   const live = !!state.caps; // la transcription en direct est toujours active

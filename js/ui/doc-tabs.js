@@ -58,7 +58,7 @@ export function renderInsights() {
   $('#q-fill').classList.remove('empty');
   $('#q-fill').style.strokeDasharray = `${(pct / 100) * 100.5} 101`;
   $('#q-val').textContent = `${pct} %`;
-  const low = withC.filter((x) => x.conf < CONF.fair).length;
+  const low = withC.filter((x) => x.conf < CONF.fair && !x.vok && !x.vfix).length + segs.filter((x) => x.vcheck && (x.conf == null || x.conf >= CONF.fair)).length;
   const edited = segs.filter((x) => x.edited).length;
   const items = [
     [level, level === 'ok' ? 'Bonne compréhension' : level === 'warn' ? 'Compréhension moyenne' : 'Compréhension faible'],
@@ -98,7 +98,7 @@ export function renderAnalysis() {
       sp.map((p, n) => `<tr style="--spk:${speakerColor(n)}"><td><i class="dot"></i>${esc(p.name)}</td><td>${fmtClock(t[n])}</td><td>${w[n]}</td><td><div class="bar-in"><i style="width:${Math.round((t[n] / tot) * 100)}%"></i></div></td></tr>`).join('')
     }</tbody></table></div>`;
   }
-  const low = segs.map((s, i) => ({ s, i })).filter(({ s }) => s.conf != null && s.conf < CONF.fair);
+  const low = segs.map((s, i) => ({ s, i })).filter(({ s }) => s.vcheck || (s.conf != null && s.conf < CONF.fair && !s.vok && !s.vfix));
   html += `<div class="a-block"><h4>Passages à vérifier</h4>${low.length
     ? `<div class="check-list">${low.map(({ s, i }) => `<button type="button" data-i="${i}"><time>${fmtClock(s.start)}</time><span>${esc(s.text.length > 140 ? s.text.slice(0, 139) + '…' : s.text)}</span></button>`).join('')}</div>`
     : '<p class="a-empty">Aucun : le modèle était sûr de lui sur tout le texte.</p>'}</div>`;

@@ -18,6 +18,7 @@ import { clearAudio, loadDocVideo, micBusy, monitor, player, recorder } from './
 import { renderSpeakers, speakerNames } from './speakers.js';
 import { hideResume, persist } from './transcription.js';
 import { setView } from './views.js';
+import { renderBar } from './verify-ui.js';
 
 // ======================================================================
 // Résultat
@@ -36,6 +37,7 @@ export function showDoc(doc, { editable = true } = {}) {
   renderSummary();
   renderDocFolder();
   setView('doc');
+  renderBar();
 }
 
 export function clearResult() {
@@ -98,7 +100,7 @@ export function renderMeta() {
     const avg = withC.reduce((a, x) => a + x.conf, 0) / withC.length;
     const level = avg >= CONF.good ? 'ok' : avg >= CONF.fair ? 'warn' : 'err';
     chips.push(`<span class="mchip conf conf-${level}" title="Confiance moyenne du modèle dans ce qu’il a écrit" style="--p:${Math.round(avg * 100)}%"><svg viewBox="0 0 24 24">${META_ICONS.conf}</svg>Confiance ${Math.round(avg * 100)} %<i class="meter"></i></span>`);
-    const low = withC.filter((x) => x.conf < CONF.fair).length;
+    const low = withC.filter((x) => x.conf < CONF.fair && !x.vok && !x.vfix).length + state.segments.filter((x) => x.vcheck && (x.conf == null || x.conf >= CONF.fair)).length;
     if (low) chips.push(metaChip('check', `${low} à vérifier`, { cls: 'tocheck', title: 'Aller au passage suivant à vérifier (souligné dans le texte)' }));
   }
   el.innerHTML = chips.join('');
@@ -164,14 +166,22 @@ export function renderSegments(segs, { editable = true } = {}) {
     if (!row) {
       row = document.createElement('div');
       row.className = 'segment';
-      row.innerHTML = '<button class="spk" type="button" title="Changer l’intervenant de ce passage"></button><button class="ts" type="button"></button><div class="txt" spellcheck="true"></div><div class="tr" spellcheck="true" lang="fr"></div><span class="turn-range"></span>';
+      row.innerHTML = '<button class="spk" type="button" title="Changer l’intervenant de ce passage"></button><button class="ts" type="button"></button><div class="txt" spellcheck="true"></div><div class="tr" spellcheck="true" lang="fr"></div><button class="vmark" type="button" hidden></button><span class="turn-range"></span>';
       t.insertBefore(row, typing || null);
     }
     row.classList.toggle('partial', !editable);
     row.classList.toggle('tentative', !!s.tentative);
     row.classList.toggle('gap', i > 0 && s.start - segs[i - 1].end > 2);
     const low = !s.tentative && s.conf != null && s.conf < CONF.fair;
-    row.classList.toggle('low-conf', low);
+    row.classList.toggle('low-conf', low && !s.vok && !s.vfix);
+    // Vérification : phrase corrigée par la seconde écoute, ou désaccord entre les deux écoutes
+    row.classList.toggle('vfix', !!s.vfix);
+    row.classList.toggle('vcheck', !!s.vcheck);
+    row.classList.toggle('vok', !!s.vok);
+    const vm = $('.vmark', row);
+    const vFirst = (s.vfix || s.vcheck) && (i === 0 || (segs[i - 1].vfix || segs[i - 1].vcheck) !== (s.vfix || s.vcheck));
+    vm.hidden = !vFirst || !editable;
+    if (vFirst) { vm.dataset.i = i; vm.textContent = s.vfix ? 'corrigé' : 'à vérifier'; vm.title = s.vfix ? 'Corrigé par la seconde écoute : voir l’avant / après' : 'Les deux écoutes ne sont pas d’accord : choisir'; }
     const ts = $('.ts', row);
     ts.textContent = fmtClock(s.start);
     if (s.lang && s.lang !== 'fr') ts.dataset.lang = s.lang.toUpperCase();
@@ -473,7 +483,7 @@ export function updateButtons() {
   $('span', btn).textContent = {
     loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
   }[state.phase] || 'Transcrire';
-  $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing');
+  $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing' || state.phase === 'verifying');
   $$('[data-export], #btn-report, #act-report, #btn-copy, #btn-relex, #btn-claude, #btn-claude-tab, #btn-translate, #btn-speakers, #act-copy, #act-claude').forEach((b) => (b.disabled = !has));
   $('#summary-text').disabled = !state.doc;
   $('#export-menu').classList.toggle('disabled', !has);

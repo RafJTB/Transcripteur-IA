@@ -139,7 +139,8 @@ function namedIn(s, known) {
  * Repère les décisions et les actions d'une transcription.
  * @param {{text: string, start: number, spk?: number}[]} segments
  * @param {{speakers?: {name: string}[], meetingTime?: number}} o
- * @returns {{type: 'decision'|'action', text: string, who: string|null, due: string|null, date: Date|null, i: number, start: number, key: string}[]}
+ * @returns {{type: 'decision'|'action', text: string, who: string|null, by: string|null, due: string|null, date: Date|null, i: number, start: number, key: string}[]}
+ *   who : responsable (cité ou déduit) ; by : personne qui a prononcé la phrase (si « Qui parle ? » l'a nommée)
  */
 export function extractActions(segments, { speakers = [], meetingTime = null } = {}) {
   const names = speakers.map((p) => p?.name).filter((n) => n && !/^Personne \d+$/.test(n));
@@ -181,6 +182,7 @@ export function extractActions(segments, { speakers = [], meetingTime = null } =
         type: isDecision && !isAction ? 'decision' : isAction ? 'action' : 'decision',
         text,
         who,
+        by: (() => { const n = nameOf(seg.spk); return n && !/^Personne \d+$/.test(n) ? n : null; })(),
         due: isAction ? due : null,
         date: isAction ? dueDate(due, meetingTime) : null,
         i,

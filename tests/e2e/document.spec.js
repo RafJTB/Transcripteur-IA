@@ -69,8 +69,7 @@ test('onglet Actions : « dit par », choix du responsable gardé', async ({ pag
   await page.locator('#who-pop input').press('Enter');
   await expect(item.locator('.act-who')).toHaveText('Bureau de contrôle');
   // Gardé avec la réunion
-  const d = await page.evaluate(() => window.__app.History.get('d2'));
-  expect(Object.values(d.actionWho)).toEqual(['Bureau de contrôle']);
+  await expect.poll(() => page.evaluate(() => window.__app.History.get('d2').then((d) => Object.values(d.actionWho || {})))).toEqual(['Bureau de contrôle']);
   // Retour à la détection automatique
   await item.locator('.act-who').click();
   await page.locator('#who-pop [data-auto]').click();

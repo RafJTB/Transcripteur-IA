@@ -48,3 +48,31 @@ test('export texte et sous-titres', async ({ page }) => {
   }
   expect(await page.evaluate(() => window.__names)).toEqual(['Point_équipe_projet_Ledona.txt', 'Point_équipe_projet_Ledona.srt']);
 });
+
+test('onglet Actions : « dit par », choix du responsable gardé', async ({ page }) => {
+  await boot(page);
+  await seedMeetings(page);
+  await page.evaluate(() => window.__app.History.get('d2').then((d) => window.__app.showDoc(d)));
+  await page.locator('[data-dtab="actions"]').click();
+  const item = page.locator('.act-item', { hasText: 'livraison de la grue' });
+  await expect(item.locator('.act-who')).toHaveText('Qui ? À préciser');
+  await expect(item.locator('.act-by')).toHaveText('dit par Marc');
+  await item.locator('.act-who').click();
+  const pop = page.locator('#who-pop');
+  await expect(pop.locator('[data-pick]').first()).toContainText('Marc');
+  await expect(pop).toContainText('l’a dit');
+  await pop.locator('[data-pick="Marc"]').click();
+  await expect(item.locator('.act-who')).toHaveText('Marc');
+  // Nom libre
+  await item.locator('.act-who').click();
+  await page.locator('#who-pop input').fill('Bureau de contrôle');
+  await page.locator('#who-pop input').press('Enter');
+  await expect(item.locator('.act-who')).toHaveText('Bureau de contrôle');
+  // Gardé avec la réunion
+  const d = await page.evaluate(() => window.__app.History.get('d2'));
+  expect(Object.values(d.actionWho)).toEqual(['Bureau de contrôle']);
+  // Retour à la détection automatique
+  await item.locator('.act-who').click();
+  await page.locator('#who-pop [data-auto]').click();
+  await expect(item.locator('.act-who')).toHaveText('Qui ? À préciser');
+});

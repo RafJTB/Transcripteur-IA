@@ -122,7 +122,7 @@ export function actionSources(docs) {
     const st = d.actionState || {};
     const items = extractActions(d.segments || [], { speakers: d.speakers || [], meetingTime: d.createdAt })
       .filter((x) => st[x.key] !== 'hidden')
-      .map((x) => ({ ...x, done: st[x.key] === 'done' }));
+      .map((x) => ({ ...x, done: st[x.key] === 'done', ...(d.actionWho && x.key in d.actionWho ? { who: d.actionWho[x.key] || null } : {}) }));
     return { doc: d, items };
   });
 }

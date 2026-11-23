@@ -10,6 +10,7 @@ import { fmtLag, player } from './recording.js';
 import { applySpeakers, closeSpeakerMenu, identifySpeakers, learnSpeaker, renderSpeakers, spkCache } from './speakers.js';
 import { persist } from './transcription.js';
 import { setDocTab, setView, toggleSheet } from './views.js';
+import { personName } from '../calendar.js';
 
 const ICON_OK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.5L16 9.5"/></svg>';
 const ICON_WARN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16h.01"/></svg>';
@@ -110,7 +111,7 @@ export function docActions(d = state.doc) {
   if (!d || !state.segments.length) return [];
   const st = d.actionState || {};
   return extractActions(state.segments, { speakers: d.speakers || [], meetingTime: d.createdAt })
-    .map((x) => ({ ...x, done: st[x.key] === 'done', hidden: st[x.key] === 'hidden' }));
+    .map((x) => ({ ...x, done: st[x.key] === 'done', hidden: st[x.key] === 'hidden', ...(d.actionWho && x.key in d.actionWho ? { who: d.actionWho[x.key] || null, whoSet: true } : {}) }));
 }
 
 const fmtDue = (date) => date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -128,11 +129,13 @@ export function renderActions() {
   const spkIdx = new Map((d.speakers || []).map((p, n) => [p.name, n]));
   const time = (x) => `<button class="act-time" type="button" data-seek="${x.i}" title="Écouter ce passage">${fmtClock(x.start)}</button>`;
   const del = (x) => `<button class="icon-btn sm act-del" type="button" data-hide="${esc(x.key)}" aria-label="Retirer" title="Ce n’en est pas une : retirer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>`;
+  // Responsable : cliquable pour le choisir ou le changer ; « dit par » quand on sait qui a parlé
   const who = (x) => {
     const n = spkIdx.get(x.who);
+    const by = x.by && x.by !== x.who ? `<span class="act-by" title="Personne qui a prononcé la phrase">dit par ${esc(x.by)}</span>` : '';
     return x.who
-      ? `<span class="act-who"${n != null ? ` style="--spk:${speakerColor(n)}"` : ''}><i class="dot"></i>${esc(x.who)}</span>`
-      : '<span class="act-who none">Qui ? À préciser</span>';
+      ? `<button type="button" class="act-who" data-who="${esc(x.key)}" title="Changer le responsable"${n != null ? ` style="--spk:${speakerColor(n)}"` : ''}><i class="dot"></i>${esc(x.who)}</button>${by}`
+      : `<button type="button" class="act-who none" data-who="${esc(x.key)}" title="Choisir le responsable">Qui ? À préciser</button>${by}`;
   };
   const due = (x) => x.due
     ? `<span class="act-due" title="${x.date ? esc(x.date.toLocaleDateString('fr-FR', { dateStyle: 'full' })) : ''}"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>${esc(x.date ? fmtDue(x.date) : x.due)}</span>`
@@ -161,6 +164,8 @@ function setActionState(key, value) {
 
 export function bindActions() {
   $('#actions').addEventListener('click', (e) => {
+    const w = e.target.closest('[data-who]');
+    if (w) return openWhoMenu(w);
     const t = e.target.closest('[data-seek], [data-hide], [data-unhide]');
     if (!t) return;
     if (t.dataset.hide) return setActionState(t.dataset.hide, 'hidden');
@@ -194,6 +199,44 @@ export function bindActions() {
     }
   };
   $('#act-claude').onclick = () => sendToClaude('actions');
+}
+
+/** Choix du responsable d'une action : intervenants, participants de la réunion, personne qui l'a dit, ou un nom libre. */
+function openWhoMenu(btn) {
+  const d = state.doc;
+  const key = btn.dataset.who;
+  const x = docActions(d).find((a) => a.key === key);
+  if (!d || !x) return;
+  document.getElementById('who-pop')?.remove();
+  const real = (n) => n && !/^Personne \d+$/.test(n);
+  const names = [...new Set([x.by, ...(d.speakers || []).map((p) => p.name), ...(d.event?.attendees || []).concat(d.event?.organizer ? [d.event.organizer] : []).map(personName)].filter(real))];
+  const pop = document.createElement('div');
+  pop.id = 'who-pop';
+  pop.className = 'who-pop';
+  pop.innerHTML = `<p>Qui s’en occupe ?</p>${names.map((n) => `<button type="button" data-pick="${esc(n)}"${n === x.who ? ' class="on"' : ''}>${esc(n)}${n === x.by ? ' <small>(l’a dit)</small>' : ''}</button>`).join('')}
+    <form class="who-other"><input class="text-input" maxlength="40" placeholder="Autre nom…" aria-label="Autre nom" /><button class="btn xs" type="submit">OK</button></form>
+    ${x.who ? '<button type="button" class="who-clear" data-pick="">Personne (à préciser)</button>' : ''}${x.whoSet ? '<button type="button" class="who-clear" data-auto>Revenir à la détection automatique</button>' : ''}`;
+  document.body.append(pop);
+  const r = btn.getBoundingClientRect();
+  pop.style.left = `${Math.max(12, Math.min(r.left, innerWidth - pop.offsetWidth - 12))}px`;
+  pop.style.top = `${r.bottom + pop.offsetHeight + 8 > innerHeight ? r.top - pop.offsetHeight - 6 : r.bottom + 6}px`;
+  const set = (v) => {
+    d.actionWho = { ...(d.actionWho || {}) };
+    if (v === undefined) delete d.actionWho[key];
+    else d.actionWho[key] = v;
+    pop.remove();
+    saveDoc(0);
+    renderActions();
+  };
+  pop.addEventListener('click', (e) => {
+    const p = e.target.closest('[data-pick]');
+    if (p) return set(p.dataset.pick);
+    if (e.target.closest('[data-auto]')) return set(undefined);
+  });
+  pop.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); const v = e.target.querySelector('input').value.trim(); if (v) set(v); });
+  const close = (e) => { if (!pop.contains(e.target) && e.target !== btn) { pop.remove(); document.removeEventListener('pointerdown', close, true); } };
+  document.addEventListener('pointerdown', close, true);
+  (pop.querySelector('button.on') || pop.querySelector('[data-pick]') || pop.querySelector('input'))?.focus();
 }
 
 /** Onglet Résumé IA : résumé collé depuis Claude, gardé avec la transcription. */

@@ -473,14 +473,15 @@ Formats :
 
 Les options cochées sont gardées pour la fois suivante. La couleur des titres suit la couleur d'accent de la Personnalisation.
 
-## Résumer avec une IA (Claude ou Copilot)
+## Résumer avec une IA (Claude, Copilot, ChatGPT ou Gemini)
 
 **Exporter → Résumer avec une IA** (ou le bouton de l'onglet Résumé IA) : choisis l'IA, le type de résumé (compte rendu, décisions et actions, résumé court, points clés, détaillé) et d'éventuelles consignes ; la consigne et la transcription sont **copiées**, l'IA s'ouvre, il n'y a plus qu'à coller (Ctrl + V) et envoyer.
 - **Claude** (claude.ai) : consigne pré-remplie dans le lien quand elle est courte ;
 - **Copilot Microsoft 365** (m365.cloud.microsoft, compte pro ou d'école : le texte reste dans le périmètre de l'organisation si la protection des données entreprise est activée) ;
-- **Copilot** grand public (copilot.microsoft.com, compte perso : à éviter pour des réunions confidentielles).
+- **ChatGPT** (chatgpt.com, OpenAI) ;
+- **Gemini** (gemini.google.com, Google).
 
-Microsoft ne propose pas de lien fiable pour pré-remplir Copilot : la consigne est toujours collée. Si la transcription est trop longue pour la zone de message de Copilot (≈ 10 à 12 000 caractères, limite approximative), elle est **téléchargée en .txt** à joindre (trombone), et seule la consigne est copiée. Le choix de l'IA est mémorisé ; le résultat se colle dans l'onglet Résumé IA (repris dans le compte rendu Word / PDF).
+Seul Claude accepte de manière fiable une consigne (courte) dans le lien : pour les autres, la consigne est collée. Si la transcription est trop longue pour la zone de message (≈ 12 000 caractères pour Copilot Microsoft 365, 60 000 pour ChatGPT et Gemini : limites approximatives), elle est **téléchargée en .txt** à joindre (trombone), et seule la consigne est copiée. Les boutons n'affichent plus de logo de marque (icône neutre). Le choix de l'IA est mémorisé ; le résultat se colle dans l'onglet Résumé IA (repris dans le compte rendu Word / PDF).
 
 ## Vérification (seconde écoute)
 

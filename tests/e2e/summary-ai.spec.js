@@ -35,9 +35,9 @@ test('Copilot Microsoft 365 : consigne copiée, Copilot ouvert, choix mémorisé
   await expect(page.locator('.ai-opt input[value="m365"]')).toBeChecked();
 });
 
-test('transcription trop longue pour Copilot : fichier téléchargé, consigne seule copiée', async ({ page }) => {
+test('transcription trop longue pour Copilot Microsoft 365 : fichier téléchargé, consigne seule copiée', async ({ page }) => {
   await open(page, true);
-  await page.locator('.ai-opt', { hasText: 'copilot.microsoft.com' }).click();
+  await page.locator('.ai-opt', { hasText: 'Copilot Microsoft 365' }).click();
   await page.evaluate(() => {
     window.__names = [];
     const click = HTMLAnchorElement.prototype.click;
@@ -53,7 +53,7 @@ test('transcription trop longue pour Copilot : fichier téléchargé, consigne s
   expect(clip).not.toContain('<transcription>');
   expect(clip.length).toBeLessThan(3000);
   await page.locator('#tool-actions button.primary').click();
-  expect(await page.evaluate(() => window.__opened)).toEqual(['https://copilot.microsoft.com/']);
+  expect(await page.evaluate(() => window.__opened)).toEqual(['https://m365.cloud.microsoft/chat']);
 });
 
 test('Claude reste disponible (lien pré-rempli si la consigne est courte)', async ({ page }) => {
@@ -63,4 +63,23 @@ test('Claude reste disponible (lien pré-rempli si la consigne est courte)', asy
   await page.locator('#tool-actions button.primary').click();
   const [u] = await page.evaluate(() => window.__opened);
   expect(u).toMatch(/^https:\/\/claude\.ai\/new\?q=/);
+});
+
+test('ChatGPT et Gemini : consigne complète copiée, bonne adresse ; plus de Copilot perso ni de logo de marque', async ({ page }) => {
+  await open(page);
+  await expect(page.locator('.ai-opt')).toHaveText([/Claude/, /Copilot Microsoft 365/, /ChatGPT/, /Gemini/]);
+  await expect(page.locator('.ai-pick')).not.toContainText('copilot.microsoft.com');
+  await expect(page.locator('.ai-pick svg')).toHaveCount(0);
+  for (const [name, url] of [['ChatGPT', 'https://chatgpt.com/'], ['Gemini', 'https://gemini.google.com/app']]) {
+    if (name === 'Gemini') { await page.locator('#export-btn').click(); await page.locator('#btn-claude').click(); }
+    await page.locator('.ai-opt', { hasText: name }).click();
+    await expect(page.locator('#ai-privacy')).toContainText(name === 'ChatGPT' ? 'OpenAI' : 'Google');
+    await page.locator('#tool-actions button.primary').click();
+    await page.locator('#tool-actions button.primary').click();
+    expect((await page.evaluate(() => window.__opened)).at(-1)).toBe(url);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('<transcription>');
+  }
+  // Aucun logo Claude dans les menus et boutons
+  expect(await page.evaluate(() => document.body.innerHTML.includes('M11.47 9.25'))).toBe(false);
+  await expect(page.locator('#act-claude')).toContainText('Affiner avec une IA');
 });

@@ -80,14 +80,15 @@ export function buildPrompt({ type, extra = '', title = '', meta = '', transcrip
 }
 
 /**
- * IA vers lesquelles envoyer la consigne. Aucune n'accepte de manière fiable une consigne dans l'adresse (sauf Claude, si courte) :
+ * IA vers lesquelles envoyer la consigne. Seul Claude accepte de manière fiable une consigne courte dans l'adresse :
  * la consigne est copiée et collée. `max` : longueur au-delà de laquelle la transcription est jointe en fichier
  * (limites de la zone de message, approximatives et susceptibles de changer).
  */
 export const AI_TARGETS = [
-  { key: 'claude', label: 'Claude', sub: 'claude.ai · ton compte Claude', url: CLAUDE_NEW, max: Infinity, privacy: 'Le texte est envoyé à Anthropic (ton compte claude.ai).' },
+  { key: 'claude', label: 'Claude', sub: 'claude.ai', url: CLAUDE_NEW, max: Infinity, privacy: 'Le texte est envoyé à Anthropic (ton compte claude.ai).' },
   { key: 'm365', label: 'Copilot Microsoft 365', sub: 'compte pro ou d’école', url: 'https://m365.cloud.microsoft/chat', max: 12000, privacy: 'Le texte est envoyé à Microsoft 365 Copilot. Avec un compte pro ou d’école, il reste dans le périmètre de ton organisation (protection des données entreprise, si elle est activée chez toi).' },
-  { key: 'copilot', label: 'Copilot', sub: 'copilot.microsoft.com · compte perso', url: 'https://copilot.microsoft.com/', max: 10000, privacy: 'Le texte est envoyé à Microsoft Copilot (grand public), selon les conditions de ton compte Microsoft personnel. À éviter pour des réunions confidentielles.' },
+  { key: 'chatgpt', label: 'ChatGPT', sub: 'chatgpt.com', url: 'https://chatgpt.com/', max: 60000, privacy: 'Le texte est envoyé à OpenAI (ton compte ChatGPT). Avec un compte personnel, il peut servir à améliorer leurs modèles, sauf si tu l’as désactivé (Paramètres → Gestion des données).' },
+  { key: 'gemini', label: 'Gemini', sub: 'gemini.google.com', url: 'https://gemini.google.com/app', max: 60000, privacy: 'Le texte est envoyé à Google (Gemini). Avec un compte personnel, les conversations peuvent être relues et servir à améliorer le service, selon ton réglage « Activité dans les applis Gemini ». Avec un compte Google Workspace pro, ce sont les règles de ton organisation.' },
 ];
 export const aiTarget = (key) => AI_TARGETS.find((t) => t.key === key) || AI_TARGETS[0];
 

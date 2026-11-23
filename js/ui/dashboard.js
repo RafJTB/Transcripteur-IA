@@ -280,7 +280,7 @@ function openRecentMenu(btn, d) {
   const pop = document.createElement('div');
   pop.id = 'recent-pop';
   pop.className = 'recent-pop';
-  pop.innerHTML = `<button type="button" data-m="open">Ouvrir</button><button type="button" data-m="actions">Décisions et actions</button><button type="button" data-m="claude">${CLAUDE_ICON}Résumer avec Claude</button><button type="button" data-m="ask">Interroger l’assistant</button>`;
+  pop.innerHTML = `<button type="button" data-m="open">Ouvrir</button><button type="button" data-m="actions">Décisions et actions</button><button type="button" data-m="claude">${CLAUDE_ICON}Résumer avec une IA</button><button type="button" data-m="ask">Interroger l’assistant</button>`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect();
   pop.style.top = `${Math.min(innerHeight - 140, r.bottom + 6)}px`;

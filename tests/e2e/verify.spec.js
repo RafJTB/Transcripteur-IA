@@ -119,6 +119,8 @@ test('tout réécouter, phrases corrigées à la main intouchables, arrêt possi
 test('vérification automatique à la fin d’une transcription (modèle déjà téléchargé)', async ({ page }) => {
   await boot(page);
   await expect(page.locator('#toggle-verify')).toBeChecked();
+  // Le choix du modèle de vérification dépend du matériel détecté (plus lent sur les serveurs d'intégration)
+  await page.waitForFunction(() => window.__app.state.caps, null, { timeout: 60_000 });
   await seed(page, { status: 'running', job: { modelId: 'base', language: 'fr', fromS: 0, baseSegments: [], seqs: [], total: null } });
   await fakeSecondListen(page);
   await page.evaluate(async () => {

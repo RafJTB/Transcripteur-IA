@@ -353,8 +353,7 @@ document.addEventListener('click', (e) => {
   toast(ok ? 'Consigne copiée.' : 'Sélectionne le texte et fais Ctrl + C.', ok ? 'ok' : 'warn', 3000);
 });
 
-export const COPILOT_ICON = '<svg class="copilot-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" stroke="none" d="M12 2.5c.5 4.6 2.9 7 7.5 7.5-4.6.5-7 2.9-7.5 7.5-.5-4.6-2.9-7-7.5-7.5 4.6-.5 7-2.9 7.5-7.5z"/><path fill="currentColor" stroke="none" opacity=".75" d="M18.5 15c.2 1.9 1.1 2.8 3 3-1.9.2-2.8 1.1-3 3-.2-1.9-1.1-2.8-3-3 1.9-.2 2.8-1.1 3-3z"/></svg>';
-const aiIcon = (key) => (key === 'claude' ? CLAUDE_ICON : COPILOT_ICON);
+const aiIcon = () => CLAUDE_ICON; // icône neutre, quelle que soit l'IA
 
 /** Claude (pour l'assistant et les anciens appels). */
 export const openInClaude = (prompt) => openInAI(prompt, 'claude');
@@ -372,7 +371,7 @@ export async function openInAI(prompt, key = 'claude', { file = '' } = {}) {
   tool.open(`Ouvrir dans ${t.label}`);
   const go = await tool.show({
     step: 'Dernière étape',
-    html: `<div class="cl-paste"><span class="cl-logo ${t.key === 'claude' ? '' : 'copilot'}">${aiIcon(t.key)}</span><div>
+    html: `<div class="cl-paste"><span class="cl-logo">${aiIcon(t.key)}</span><div>
       <p><b>${copied ? 'Ta consigne est copiée' : 'Copie automatique impossible'}</b> (${prompt.length.toLocaleString('fr-FR')} caractères)${copied ? '.' : ' : le navigateur a bloqué le presse-papiers.'}</p>
       ${file ? `<p class="cl-file">La transcription était trop longue pour la zone de message de ${esc(t.label)} : elle a été <b>téléchargée</b> dans le fichier « ${esc(file)} ».</p>` : ''}
       <ol><li>${copied ? `Clique sur « Ouvrir ${esc(t.label)} »${t.key === 'claude' ? '' : ' (connecte-toi si besoin)'}.` : `Clique sur « Copier », puis sur « Ouvrir ${esc(t.label)} ».`}</li>
@@ -411,7 +410,7 @@ export async function sendToClaude(preset = null) {
   const go = await tool.show({
     step: 'Résumé',
     html: `<p>Choisis l’IA et le type de résumé : la consigne et la transcription sont préparées, il n’y a plus qu’à coller et envoyer.</p>
-      <div class="ai-pick" role="radiogroup" aria-label="IA">${AI_TARGETS.map((t) => `<label class="ai-opt"><input type="radio" name="ai-target" value="${t.key}"${t.key === aiTarget(target).key ? ' checked' : ''} /><span class="ai-ico ${t.key === 'claude' ? '' : 'copilot'}">${aiIcon(t.key)}</span><span><strong>${esc(t.label)}</strong><small>${esc(t.sub)}</small></span></label>`).join('')}</div>
+      <div class="ai-pick" role="radiogroup" aria-label="IA">${AI_TARGETS.map((t) => `<label class="ai-opt"><input type="radio" name="ai-target" value="${t.key}"${t.key === aiTarget(target).key ? ' checked' : ''} /><span><strong>${esc(t.label)}</strong><small>${esc(t.sub)}</small></span></label>`).join('')}</div>
       <div class="cl-types">${SUMMARY_TYPES.map((t) => `<label class="cl-type"><input type="radio" name="cl-type" value="${t.key}"${t.key === last ? ' checked' : ''} />
         <span><strong>${esc(t.label)}</strong><small>${esc(t.short)}</small></span></label>`).join('')}</div>
       <label class="cl-field"><span>Consignes en plus <em>(facultatif)</em></span>

@@ -27,6 +27,7 @@ import { cancel, hideResume, isMine, persist, renderResume, startTranscription }
 import { autoTranslate, translateDoc } from './ui/translation.js';
 import { closeDrawers, openDrawer } from './ui/views.js';
 import { bindReport } from './ui/report-ui.js';
+import { handleCalendarReturn, initCalendar } from './ui/calendar-ui.js';
 
 // ======================================================================
 // Récupération après fermeture ou plantage de l'onglet
@@ -276,6 +277,7 @@ function bind() {
 async function init() {
   // Retour de la page de connexion Google (ou reconnexion silencieuse si l'autorisation a expiré)
   let authResult = null;
+  try { await handleCalendarReturn(); } catch (e) { console.warn(e); }
   try { authResult = await Auth.handleRedirect(); } catch (e) { authResult = { ok: false, error: e.message }; }
   if (!authResult && Auth.maybeSilentRefresh()) return;
   // Détection automatique de la langue par défaut (une seule fois, l'utilisateur peut revenir au français)
@@ -303,6 +305,7 @@ async function init() {
   bindAccount(authResult);
   bindInstall();
   bindReport();
+  initCalendar();
   bindBell();
   $('#toggle-auto').onchange = (e) => setAutoTune(e.target.checked, e.target.checked ? 'Réglage automatique activé : le son et le modèle seront réglés avant chaque enregistrement.' : '');
   $('#auto-redo').onclick = async () => {

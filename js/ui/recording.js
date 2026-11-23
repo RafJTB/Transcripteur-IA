@@ -13,6 +13,7 @@ import { renderStorage, request, worker } from './engine.js';
 import { autoSetup, refreshDevices, renderSound, startAutoGain, stopMicTest } from './sound.js';
 import { confirmBigDownload, ensureLoaded, finalizeDoc, getAudio, hideResume, newDoc, persist, runJob, skipLeadingSilence } from './transcription.js';
 import { carryTranslations, liveTranslate } from './translation.js';
+import { takeRecordingEvent } from './calendar-ui.js';
 
 // ======================================================================
 // Source audio
@@ -178,7 +179,7 @@ async function recStart() {
     if (recorder.recordingVideo) toast('Vidéo de l’écran enregistrée en même temps (qualité réunion, ≈ 150 Mo par heure). Pense à prévenir les participants.', 'info', 6000);
     else toast('Vidéo de l’écran indisponible : seul le son est enregistré.', 'warn', 6000);
   }
-  const rec = { id: newId(), live, mime: recorder.mimeType, video: recorder.recordingVideo, startedAt: Date.now(), pending: Promise.resolve() };
+  const rec = { id: newId(), live, mime: recorder.mimeType, video: recorder.recordingVideo, startedAt: Date.now(), pending: Promise.resolve(), event: takeRecordingEvent() };
   state.rec = rec;
   monitor?.start();
   refreshDevices();
@@ -195,7 +196,7 @@ async function recStart() {
 
 function startLive(rec) {
   const model = modelById(state.modelId);
-  const doc = newDoc({ id: rec.id, title: recName(), source: 'Micro (direct)', modelId: model.id, model: model.name, status: 'live', liveP: 0 });
+  const doc = newDoc({ id: rec.id, title: rec.event?.title || recName(), source: 'Micro (direct)', modelId: model.id, model: model.name, status: 'live', liveP: 0, ...(rec.event ? { event: rec.event } : {}) });
   showDoc(doc, { editable: false });
   persist(doc);
 
@@ -275,7 +276,7 @@ export async function recStop() {
   renderRec();
   if (!r || !rec) return;
   await rec.pending; // derniers morceaux écrits
-  const name = recName(new Date(rec.startedAt));
+  const name = rec.event?.title || recName(new Date(rec.startedAt));
   let audioId = rec.id;
   try {
     await Audios.put({ id: audioId, blob: r.blob, name, durationS: r.seconds, createdAt: Date.now() });
@@ -324,6 +325,7 @@ export async function recStop() {
     await runJob(doc);
   } else {
     await setAudioFromBlob(r.blob, name, { audioId });
+    if (rec.event && state.audio) state.audio.event = rec.event;
   }
 }
 

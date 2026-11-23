@@ -149,6 +149,9 @@ export const Spaces = {
     // On ne partage que ce qui sert : pas l'état interne ni les empreintes de voix
     const { job, owner, remoteSeen, audioId, folderId, actionState, ...rest } = doc;
     const clean = { ...rest, speakers: (doc.speakers || []).map(({ emb, learned, known, ...p }) => p) };
+    // Réunion du calendrier : seulement le titre et l'horaire (ni adresses e-mail des participants, ni lien de visio)
+    if (doc.event) clean.event = { title: doc.event.title, start: doc.event.start, end: doc.event.end };
+    else delete clean.event;
     const { data, error } = await c.from('space_docs').insert({
       space_id: spaceId, title: doc.title, doc: clean, duration_s: doc.durationS || null,
       audio_path, audio_bytes: audioBlob?.size || null, author_name: me?.name || null, author_email: me?.email || null,

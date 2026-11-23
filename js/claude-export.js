@@ -55,7 +55,7 @@ Ne retiens que ce qui est réellement décidé ou demandé : pas les simples id�
  * Consigne complète à donner à Claude.
  * @param {{type: string, extra?: string, title?: string, meta?: string, transcript: string}} o
  */
-export function buildPrompt({ type, extra = '', title = '', meta = '', transcript, language = 'français', translatedFrom = null, both = false, speakers = null }) {
+export function buildPrompt({ type, extra = '', title = '', meta = '', transcript, language = 'français', translatedFrom = null, both = false, speakers = null, attached = '' }) {
   const t = SUMMARY_TYPES.find((x) => x.key === type) || SUMMARY_TYPES[0];
   const intro = translatedFrom
     ? both
@@ -73,9 +73,23 @@ export function buildPrompt({ type, extra = '', title = '', meta = '', transcrip
   if (extra.trim()) lines.push('', `Consignes supplémentaires : ${extra.trim()}`);
   lines.push('', 'Réponds en français, avec des titres et une mise en forme claire.', '');
   const head = [title && `Titre : ${title}`, meta && `Infos : ${meta}`].filter(Boolean).join('\n');
-  lines.push('<transcription>', ...(head ? [head, ''] : []), transcript.trim(), '</transcription>');
+  // Transcription trop longue pour la zone de message : elle est jointe en fichier
+  if (attached) lines.push(`La transcription complète est dans le fichier joint « ${attached} ».`, ...(head ? ['', head] : []));
+  else lines.push('<transcription>', ...(head ? [head, ''] : []), transcript.trim(), '</transcription>');
   return lines.join('\n');
 }
+
+/**
+ * IA vers lesquelles envoyer la consigne. Aucune n'accepte de manière fiable une consigne dans l'adresse (sauf Claude, si courte) :
+ * la consigne est copiée et collée. `max` : longueur au-delà de laquelle la transcription est jointe en fichier
+ * (limites de la zone de message, approximatives et susceptibles de changer).
+ */
+export const AI_TARGETS = [
+  { key: 'claude', label: 'Claude', sub: 'claude.ai · ton compte Claude', url: CLAUDE_NEW, max: Infinity, privacy: 'Le texte est envoyé à Anthropic (ton compte claude.ai).' },
+  { key: 'm365', label: 'Copilot Microsoft 365', sub: 'compte pro ou d’école', url: 'https://m365.cloud.microsoft/chat', max: 12000, privacy: 'Le texte est envoyé à Microsoft 365 Copilot. Avec un compte pro ou d’école, il reste dans le périmètre de ton organisation (protection des données entreprise, si elle est activée chez toi).' },
+  { key: 'copilot', label: 'Copilot', sub: 'copilot.microsoft.com · compte perso', url: 'https://copilot.microsoft.com/', max: 10000, privacy: 'Le texte est envoyé à Microsoft Copilot (grand public), selon les conditions de ton compte Microsoft personnel. À éviter pour des réunions confidentielles.' },
+];
+export const aiTarget = (key) => AI_TARGETS.find((t) => t.key === key) || AI_TARGETS[0];
 
 /** Lien claude.ai pré-rempli, ou null si la consigne est trop longue pour un lien. */
 export function claudeUrl(prompt) {

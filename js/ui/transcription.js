@@ -13,6 +13,7 @@ import { notify } from './notifs.js';
 import { ensureAudioStored, loadDocAudio, micBusy } from './recording.js';
 import { identifySpeakers } from './speakers.js';
 import { autoTranslate } from './translation.js';
+import { shouldAutoVerify, stopVerify, verifyDoc } from './verify-ui.js';
 
 // ======================================================================
 // Transcription (reprise + repli automatiques)
@@ -271,8 +272,9 @@ export function finalizeDoc(doc, newSegments) {
   showDoc(doc);
   if (matchMedia('(max-width: 980px)').matches) $('#step-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (!doc.segments.length) status('Aucune parole détectée dans cet audio.', 'warn');
-  autoTranslate(doc);
-  if (state.autoSpk && doc.segments.length) identifySpeakers(doc);
+  const next = () => { autoTranslate(doc); if (state.autoSpk && doc.segments.length) identifySpeakers(doc); };
+  if (shouldAutoVerify(doc)) verifyDoc(doc, { mode: 'quick', auto: true }).finally(next);
+  else next();
   if (doc.segments.length) notify({ kind: 'ok', title: 'Transcription terminée', text: `« ${doc.title} »${doc.durationS ? ` · ${fmtClock(doc.durationS)}` : ''}`, docId: doc.id, system: true });
 }
 
@@ -289,6 +291,7 @@ function fallbackFor(err, model) {
 }
 
 export function cancel() {
+  if (state.phase === 'verifying') return stopVerify();
   if (state.phase === 'transcribing') {
     worker.postMessage({ type: 'cancel' });
     progress.show('Arrêt…', { sub: 'Fin du bloc en cours' });

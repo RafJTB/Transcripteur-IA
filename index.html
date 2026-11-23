@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-15" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-15" />
+  <meta name="app-version" content="2026-11-22-16" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-16" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,8 +41,8 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-15', 'sw.js', 'js/app.js?v=2026-11-22-15', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
-        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js', 'js/report.js', 'js/ui/report-ui.js', 'js/ui/space-chat.js', 'js/calendar.js', 'js/outlook.js', 'js/ui/calendar-ui.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-16', 'sw.js', 'js/app.js?v=2026-11-22-16', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js', 'js/report.js', 'js/ui/report-ui.js', 'js/ui/space-chat.js', 'js/calendar.js', 'js/outlook.js', 'js/ui/calendar-ui.js', 'js/verify.js', 'js/ui/verify-ui.js',
         'js/ui/account.js', 'js/ui/assistant.js', 'js/ui/core.js', 'js/ui/dashboard.js', 'js/ui/diagnostic.js', 'js/ui/doc-tabs.js', 'js/ui/doc.js', 'js/ui/engine.js', 'js/ui/history.js', 'js/ui/notifs.js', 'js/ui/pages.js', 'js/ui/recording.js', 'js/ui/sound.js', 'js/ui/spaces.js', 'js/ui/speakers.js', 'js/ui/transcription.js', 'js/ui/translation.js', 'js/ui/views.js'];
       var done = false;
       function refreshAll() {
@@ -274,6 +274,7 @@
                   <p class="field-hint" id="lang-hint" hidden>Voxtral détecte la langue tout seul.</p>
                   <label class="switch autotr" title="Si une autre langue que le français est parlée, chaque phrase est traduite en français automatiquement (traduction locale)."><input type="checkbox" id="toggle-autotr" /><span class="track"></span>Traduire en français automatiquement</label>
                   <label class="switch autotr" title="Après chaque transcription, les voix sont comparées pour indiquer qui parle (analyse locale, module de 33 Mo téléchargé une fois)."><input type="checkbox" id="toggle-autospk" /><span class="track"></span>Reconnaître qui parle</label>
+                  <label class="switch autotr" title="À la fin de chaque transcription, un modèle plus précis réécoute les passages douteux et corrige ce qu’il entend mieux (s’il est déjà téléchargé)."><input type="checkbox" id="toggle-verify" /><span class="track"></span>Vérifier (seconde écoute)</label>
                 </div>
 
                 <div class="actions">
@@ -368,6 +369,7 @@
                 <button class="btn sm spk-run" id="btn-speakers" type="button" title="Reconnaître les intervenants à leur voix (local)" disabled><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 18.5"/></svg><span class="lbl">Qui parle ?</span></button>
               </aside>
               <div class="transcript" id="transcript" data-ts="on">
+                <div class="verify-bar" id="verify-bar" hidden></div>
                 <div class="empty" id="empty-state">
                   <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h7"/></svg>
                   <p>Le texte apparaîtra ici.</p>
@@ -857,6 +859,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-15"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-16"></script>
 </body>
 </html>

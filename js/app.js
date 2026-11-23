@@ -28,6 +28,8 @@ import { autoTranslate, translateDoc } from './ui/translation.js';
 import { closeDrawers, openDrawer } from './ui/views.js';
 import { bindReport } from './ui/report-ui.js';
 import { handleCalendarReturn, initCalendar } from './ui/calendar-ui.js';
+import { bindVerify, verifyDoc } from './ui/verify-ui.js';
+import { finalizeDoc } from './ui/transcription.js';
 
 // ======================================================================
 // Récupération après fermeture ou plantage de l'onglet
@@ -306,6 +308,7 @@ async function init() {
   bindInstall();
   bindReport();
   initCalendar();
+  bindVerify();
   bindBell();
   $('#toggle-auto').onchange = (e) => setAutoTune(e.target.checked, e.target.checked ? 'Réglage automatique activé : le son et le modèle seront réglés avant chaque enregistrement.' : '');
   $('#auto-redo').onclick = async () => {
@@ -348,7 +351,7 @@ init();
 
 // Accès de débogage / tests automatisés
 window.__app = {
-  notify, notifs,
+  notify, notifs, verifyDoc, finalizeDoc,
   Auth, Sync, Folders, syncNow, isMine,
   recorder, monitor: () => monitor, renderMeta, identifySpeakers, applySpeakers, spkCache,
   state, exportAs, sendToClaude, translateDoc, shownSegments, autoTranslate, guessLang, buildPrompt, showDoc, find, player: () => player, toTxt, toSrt, toMarkdown, signalCrash, History, Audios, RecChunks,

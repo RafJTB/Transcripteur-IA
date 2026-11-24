@@ -2,7 +2,7 @@
 
 import { Audios, History, newId } from '../history.js';
 import { Auth } from '../cloud.js';
-import { Spaces, spacesError } from '../spaces.js';
+import { Spaces, sanitizeSharedDoc, spacesError } from '../spaces.js';
 import { canEncodeOpus, encodeOggOpus } from '../opus-ogg.js';
 import { decodeToMono16k } from '../audio.js';
 import { speakerColor } from '../speakers.js';
@@ -164,10 +164,11 @@ async function openSpaceDoc(id) {
         audioId = newId();
         await Audios.put({ id: audioId, blob, name: `${row.title}.ogg`, durationS: row.duration_s || undefined, createdAt: Date.now() });
       }
+      const clean = sanitizeSharedDoc(row.doc);
       local = {
-        ...row.doc, id: localId, audioId, folderId: null, owner: Auth.user()?.email || undefined,
-        fromSpace: { spaceId: row.space_id, name: s?.name || 'Espace', by: row.author_name || row.author_email || '' },
-        title: row.title, createdAt: row.doc.createdAt || new Date(row.created_at).getTime(), status: 'done',
+        ...clean, id: localId, audioId, folderId: null, owner: Auth.user()?.email || undefined,
+        fromSpace: { spaceId: row.space_id, name: s?.name || 'Espace', by: String(row.author_name || row.author_email || '').slice(0, 120) },
+        title: String(row.title || clean.title).slice(0, 200), createdAt: clean.createdAt || new Date(row.created_at).getTime() || Date.now(), status: 'done',
       };
       await History.put(local);
     } catch (e) { return spErr(e); }
@@ -182,7 +183,10 @@ function bindSpaces() {
     const key = $('#spc-key').value.trim();
     if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)\/?$/i.test(url)) return toast('Adresse attendue : https://xxxx.supabase.co', 'warn', 5000);
     if (!key.startsWith('•') && key.length < 20) return toast('Clé publique (anon / publishable) attendue.', 'warn', 5000);
-    if (/service_role/i.test(key)) return toast('Ne mets jamais la clé « service_role » ici : utilise la clé « anon » / « publishable ».', 'err', 7000);
+    // Clé secrète (accès total à la base, sans règles d'accès) : refusée, quel que soit son format
+    let role = '';
+    try { role = JSON.parse(atob(key.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).role || ''; } catch { /* pas un jeton JWT */ }
+    if (/service_role|^sb_secret_/i.test(key) || role === 'service_role') return toast('Ne mets jamais la clé secrète (« service_role » ou « sb_secret_… ») ici : utilise la clé « anon » / « publishable ».', 'err', 8000);
     Spaces.setConfig(url, key.startsWith('•') ? Spaces.key() : key);
     toast('Projet Supabase enregistré.', 'ok', 2500);
     renderSpaces();

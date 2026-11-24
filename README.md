@@ -70,6 +70,10 @@ js/history.js       Stockage local (IndexedDB) : transcriptions, audios, morceau
 
 Les modèles sont téléchargés une seule fois puis gardés dans le cache du navigateur (Cache API).
 
+## Sécurité
+
+Voir **[SECURITY.md](SECURITY.md)** : modèle de menace, failles corrigées, risques résiduels et réglages à faire (Supabase). En bref : politique de sécurité du contenu stricte (aucun script intégré, envois limités aux services utilisés), refus d'affichage dans le cadre d'un autre site, réunions partagées nettoyées à l'arrivée, auteur des réunions et messages d'un espace fixé par le serveur, accès aux espaces réservé aux adresses vérifiées par Google.
+
 ## Tests automatiques
 
 L'appli n'a besoin d'aucune compilation ; `package.json` ne sert qu'aux tests.

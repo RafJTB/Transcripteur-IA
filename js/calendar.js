@@ -218,6 +218,9 @@ export function parseIcs(text, { from = Date.now() - 30 * DAY, to = Date.now() +
     .sort((a, b) => a.start - b.start);
 }
 
+/** Lien web sûr (https uniquement), sinon chaîne vide. */
+export const safeUrl = (u) => (/^https:\/\/[^\s"'<>]+$/i.test(String(u || '').trim()) ? String(u).trim() : '');
+
 /** Événement Microsoft Graph (calendarView, heures en UTC) → événement de l'appli. */
 export function graphToEvent(g) {
   const utc = (x) => {
@@ -232,7 +235,7 @@ export function graphToEvent(g) {
     const d = (x) => { const m = x?.dateTime?.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null; };
     start = d(g.start); end = d(g.end);
   }
-  const link = g.onlineMeeting?.joinUrl || meetingLink(g.location?.displayName, g.bodyPreview, g.body?.content);
+  const link = safeUrl(g.onlineMeeting?.joinUrl) || meetingLink(g.location?.displayName, g.bodyPreview, g.body?.content);
   const who = (a) => ({ name: a?.emailAddress?.name || a?.emailAddress?.address || '', email: String(a?.emailAddress?.address || '').toLowerCase() });
   return {
     id: g.id,
@@ -246,7 +249,7 @@ export function graphToEvent(g) {
     attendees: (g.attendees || []).map((a) => ({ ...who(a), response: a.status?.response || '' })),
     joinUrl: link || '',
     online: kindOf(link) || (g.isOnlineMeeting ? 'Teams' : ''),
-    webLink: g.webLink || '',
+    webLink: safeUrl(g.webLink),
     recurring: g.type === 'occurrence' || g.type === 'exception',
     cancelled: !!g.isCancelled,
     source: 'outlook',

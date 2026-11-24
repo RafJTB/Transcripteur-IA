@@ -81,3 +81,20 @@ test('page « Nouvelle transcription » : fond d’écran visible, et pas l’au
   await expect(page.locator('#audio-card')).toBeHidden();
   expect(await page.evaluate(() => window.__app.state.audio)).toBeNull();
 });
+
+test('une seule action à la fois : bouton rouge pour enregistrer, « Transcrire » seulement pour un fichier chargé', async ({ page }) => {
+  await blockModels(page);
+  await boot(page);
+  await page.locator('#dash-new').click();
+  // Rien à transcrire : pas de bouton « Transcrire », une indication à la place
+  await expect(page.locator('#btn-transcribe')).toBeHidden();
+  await expect(page.locator('#go-idle')).toContainText('bouton rouge');
+  // Onglet fichier, avant l'import
+  await page.locator('[data-tab="file"]').click();
+  await expect(page.locator('#go-idle')).toContainText('Importe un fichier');
+  await expect(page.locator('#btn-transcribe')).toBeHidden();
+  // Fichier chargé : « Transcrire » apparaît, l'indication disparaît
+  await page.setInputFiles('#file-input', { name: 'reunion-test.wav', mimeType: 'audio/wav', buffer: makeWav() });
+  await expect(page.locator('#btn-transcribe')).toBeVisible();
+  await expect(page.locator('#go-idle')).toBeHidden();
+});

@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-26" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-26" />
-  <script src="js/boot.js?v=2026-11-22-26"></script>
+  <meta name="app-version" content="2026-11-22-27" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-27" />
+  <script src="js/boot.js?v=2026-11-22-27"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -243,11 +243,12 @@
                 </div>
 
                 <div class="actions side-go">
+                  <p class="go-idle" id="go-idle" hidden></p>
                   <button class="btn primary" id="btn-transcribe" type="button" disabled title="Ctrl + Entrée">
                     <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span>Transcrire</span>
                   </button>
                   <button class="btn" id="btn-cancel" type="button" hidden>Arrêter</button>
-                  <p class="go-hint"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Traitement local · <kbd>Ctrl</kbd> + <kbd>Entrée</kbd></p>
+                  <p class="go-hint" id="go-hint"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Traitement local · <kbd>Ctrl</kbd> + <kbd>Entrée</kbd></p>
                 </div>
 
                 <p class="status-line" id="status-line" role="status" aria-live="polite"></p>
@@ -834,6 +835,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-26"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-27"></script>
 </body>
 </html>

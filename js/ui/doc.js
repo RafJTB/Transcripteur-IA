@@ -522,6 +522,22 @@ export function updateButtons() {
     loading: 'Chargement du modèle…', transcribing: 'Transcription en cours…', live: 'Transcription en direct…',
   }[state.phase] || 'Transcrire';
   $('#btn-cancel').hidden = !(state.phase === 'loading' || state.phase === 'transcribing' || state.phase === 'verifying');
+  // Une seule action à la fois : le bouton rouge pour enregistrer (la transcription se fait en direct),
+  // « Transcrire » seulement quand un audio attend d'être transcrit (fichier importé, enregistrement sans direct).
+  const fileJob = ['loading', 'transcribing', 'verifying'].includes(state.phase);
+  const showGo = fileJob || (!!state.audio && !recording && state.phase !== 'live');
+  btn.hidden = !showGo;
+  if ($('#go-hint')) $('#go-hint').hidden = !showGo || busy;
+  const idle = $('#go-idle');
+  if (idle) {
+    const fileTab = $('[data-tab="file"]')?.getAttribute('aria-selected') === 'true';
+    idle.hidden = showGo;
+    idle.innerHTML = recording || state.phase === 'live'
+      ? '<b>Transcription en direct</b>Le texte s’écrit pendant l’enregistrement. Arrête-le pour terminer.'
+      : fileTab
+        ? '<b>Importe un fichier</b>Le bouton « Transcrire » apparaîtra une fois le fichier chargé.'
+        : '<b>Appuie sur le bouton rouge</b>La transcription se fait en direct pendant l’enregistrement, avec les réglages ci-dessus.';
+  }
   $$('[data-export], #btn-report, #act-report, #btn-copy, #btn-relex, #btn-claude, #btn-claude-tab, #btn-translate, #btn-speakers, #act-copy, #act-claude').forEach((b) => (b.disabled = !has));
   $('#summary-text').disabled = !state.doc;
   $('#export-menu').classList.toggle('disabled', !has);

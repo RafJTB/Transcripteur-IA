@@ -2776,3 +2776,12 @@ html.lg-refract .lg-pill { -webkit-backdrop-filter: url(#lg-refract) blur(8px) s
 .look-txt b { display: block; font-size: 14.5px; font-weight: 600; }
 .look-txt small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
 .look-row .switch { margin: 0; flex: none; }
+/* Verre liquide : glisser la pastille en restant appuyé */
+.lg-pill.drag { transition: width 0.14s ease, height 0.14s ease, opacity 0.25s; transform-origin: center; box-shadow:
+    inset 0 1px 0.5px rgb(255 255 255 / 0.85), inset 0 -1px 1px rgb(255 255 255 / 0.25), inset 0 0 18px rgb(255 255 255 / 0.16),
+    0 0 0 0.5px rgb(255 255 255 / 0.35), 0 16px 34px -12px rgb(var(--sel-b) / 0.95), 0 6px 14px -6px rgb(0 0 0 / 0.5); }
+.lg-dragging, .lg-dragging * { cursor: grabbing !important; user-select: none !important; -webkit-user-select: none !important; }
+@media (max-width: 760px) { #nav.lg-host { touch-action: none; } }
+/* Pendant le glissement : une seule pastille, l'onglet de départ perd son fond propre */
+.lg-host.lg-dragging > :not(.lg-pill) { background: none !important; border-color: transparent !important; box-shadow: none !important; }
+.lg-host.lg-dragging > :not(.lg-pill):not([data-lg-on]) { color: var(--text-2) !important; }

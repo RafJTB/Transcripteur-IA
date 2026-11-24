@@ -26,3 +26,52 @@ test('verre liquide : la pastille suit l’onglet choisi (menu, document, dossie
   await page.locator('[data-dtab="actions"]').click();
   await expect.poll(() => pillOn(page, '.dtabs', '[data-dtab="actions"]')).toBe('ok');
 });
+
+const mid = async (loc) => { const b = await loc.boundingBox(); return [b.x + b.width / 2, b.y + b.height / 2, b]; };
+
+test('verre liquide : rester appuyé et glisser, la pastille suit la souris ; au relâchement, l’onglet est ouvert', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await boot(page);
+  await seedMeetings(page);
+  const pill = page.locator('#nav > .lg-pill');
+  const [hx, hy] = await mid(page.locator('#nav [data-nav="home"]'));
+  const [, ay] = await mid(page.locator('#nav [data-nav="analytics"]'));
+  await page.mouse.move(hx, hy);
+  await page.mouse.down();
+  // À mi-chemin : la pastille est sous la souris (pas encore sur un onglet), en mode « glisser »
+  const midY = (hy + ay) / 2;
+  await page.mouse.move(hx, midY, { steps: 8 });
+  await expect(pill).toHaveClass(/drag/);
+  const pb = await pill.boundingBox();
+  expect(Math.abs(pb.y + pb.height / 2 - midY)).toBeLessThan(pb.height * 0.6);
+  // Sur « Analyses » : il s'éclaire ; au relâchement, la page s'ouvre
+  await page.mouse.move(hx, ay, { steps: 8 });
+  await expect(page.locator('#nav [data-nav="analytics"]')).toHaveAttribute('data-lg-on', '');
+  await page.mouse.up();
+  await expect(page.locator('body')).toHaveAttribute('data-page', 'analytics');
+  await expect(pill).not.toHaveClass(/drag/);
+  await expect.poll(() => pillOn(page, '#nav', '[data-nav="analytics"]')).toBe('ok');
+
+  // Revenir sur l'onglet de départ : rien ne change
+  const [sx, sy] = await mid(page.locator('#nav [data-nav="analytics"]'));
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(sx, sy - 120, { steps: 6 });
+  await page.mouse.move(sx, sy, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator('body')).toHaveAttribute('data-page', 'analytics');
+
+  // Onglets horizontaux d'une réunion
+  await nav(page, 'projects');
+  await page.locator('.proj-row').first().click();
+  const [tx, ty] = await mid(page.locator('[data-dtab="tr"]'));
+  const [ax2] = await mid(page.locator('[data-dtab="actions"]'));
+  await page.mouse.move(tx, ty);
+  await page.mouse.down();
+  await page.mouse.move(ax2, ty, { steps: 10 });
+  await page.mouse.up();
+  await expect(page.locator('[data-dtab="actions"]')).toHaveAttribute('aria-selected', 'true');
+  // Un simple clic marche toujours
+  await page.locator('[data-dtab="analysis"]').click();
+  await expect(page.locator('[data-dtab="analysis"]')).toHaveAttribute('aria-selected', 'true');
+});

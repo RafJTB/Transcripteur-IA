@@ -3,10 +3,26 @@
 // Couleur : --hover-rgb (couleur d'accent par défaut). Blocs concernés : <html data-hover="all|click|off">.
 
 const BLOCKS = [
-  '.card', '.glass', '.settings-card', '.set-card', '.hero-tile', '.audio-card', '.stat-tile', '.proj-card', '.model-card',
+  '.proj-row', '.proj-side', '.card', '.glass', '.settings-card', '.set-card', '.hero-tile', '.audio-card', '.stat-tile', '.proj-card', '.model-card',
   '.bg-tile', '.spc-item', '.spc-doc', '.cal-ev', '.capture-tiles > button', '.opt-row', '.recent-row', '.picker',
 ].join(', ');
-const SKIP = '.glass-btn, .glass-select, .view, .modal, .toasts';
+const SKIP = '.glass-btn, .glass-select, .btn, .view, .modal, .toasts, input, textarea, select';
+const OUTSIDE = '.sidebar, .topbar, .hover-glow';
+
+/**
+ * Un « bloc » : un élément connu, ou tout élément arrondi avec un fond ou une bordure,
+ * d'une taille raisonnable. Les nouvelles pages sont ainsi couvertes sans liste à tenir à jour.
+ */
+function isBlock(e) {
+  if (e.matches(SKIP)) return false;
+  if (e.matches(BLOCKS)) return true;
+  const r = e.getBoundingClientRect();
+  if (r.width < 120 || r.height < 44) return false;
+  const cs = getComputedStyle(e);
+  if ((parseFloat(cs.borderTopLeftRadius) || 0) < 8) return false;
+  const bg = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || cs.backgroundImage !== 'none' || (cs.backdropFilter && cs.backdropFilter !== 'none');
+  return bg || (parseFloat(cs.borderTopWidth) || 0) > 0;
+}
 
 let glow = null;
 let px = -1, py = -1, raf = 0;
@@ -16,10 +32,10 @@ const mode = () => document.documentElement.dataset.hover || 'all';
 /** Le bloc le plus proche sous la souris (le plus petit), ou rien. */
 function pick(el) {
   const m = mode();
-  if (m === 'off' || !el?.closest) return null;
+  if (m === 'off' || !el?.closest || el.closest(OUTSIDE)) return null;
   const big = innerWidth * innerHeight * 0.6;
-  for (let e = el.closest(BLOCKS); e; e = e.parentElement?.closest(BLOCKS)) {
-    if (e.matches(SKIP)) continue;
+  for (let e = el; e && e !== document.body; e = e.parentElement) {
+    if (!isBlock(e)) continue;
     const r = e.getBoundingClientRect();
     if (r.width * r.height > big) return null; // page entière : pas de lueur
     if (m === 'click' && getComputedStyle(e).cursor !== 'pointer') continue;

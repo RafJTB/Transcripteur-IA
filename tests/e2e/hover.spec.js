@@ -56,3 +56,30 @@ test('survol : le bord du bloc s’allume sous la souris, réglages respectés e
   await page.locator('#hover-row [data-hcolor=""]').click();
   expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--hover-rgb'))).toBe('');
 });
+
+test('survol : la lueur marche aussi sur les pages ajoutées après coup (projets, document)', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await boot(page);
+  await seedMeetings(page);
+  const glow = page.locator('.hover-glow');
+  // Mes projets : une ligne de réunion et la colonne des dossiers
+  await nav(page, 'projects');
+  const [rx, ry] = await center(page.locator('.proj-row').first());
+  await page.mouse.move(rx, ry);
+  await expect(glow).toHaveClass(/on/);
+  const [sx, sy] = await center(page.locator('.proj-side h4'));
+  await page.mouse.move(sx, sy);
+  await expect(glow).toHaveClass(/on/);
+  // Réunion ouverte : la barre de vérification (bloc détecté automatiquement, sans liste)
+  await page.locator('.proj-row').first().click();
+  await expect(page.locator('body')).toHaveAttribute('data-page', 'doc');
+  const bar = page.locator('.verify-bar');
+  await expect(bar).toBeVisible();
+  const [vx, vy] = await center(bar);
+  await page.mouse.move(vx, vy);
+  await expect(glow).toHaveClass(/on/);
+  // Barre latérale et barre du haut : jamais
+  const [nx, ny] = await center(page.locator('.sidebar [data-nav="home"]'));
+  await page.mouse.move(nx, ny);
+  await expect(glow).not.toHaveClass(/on/);
+});

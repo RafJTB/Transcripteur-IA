@@ -29,7 +29,7 @@ let px = -1, py = -1, raf = 0;
 let lastBlock = null, lastColor = null;
 
 // ---------- Couleur automatique : celle du bloc survolé ----------
-const ICONS = '.sq, .r-ico, .pr-ico, .set-ic, .ct-ico, .stat-ico, .pk-ico, .opt-ico, .am-ico, .ic';
+const ICONS = '.sq, .st-ico, .r-ico, .pr-ico, .set-ic, .ct-ico, .pk-ico, .opt-ico, .am-ico, .ic';
 const TRIPLE = /^\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})\s*$/;
 
 /** « r g b » d'une couleur vive (assez saturée et visible), sinon null. */
@@ -39,24 +39,43 @@ function vivid(r, g, b, a = 1) {
   if (mx < 60 || (mx - mn) / mx < 0.3) return null; // gris, blanc ou trop sombre
   return `${Math.round(r)} ${Math.round(g)} ${Math.round(b)}`;
 }
-/** Première couleur rgb()/rgba() d'un texte CSS (couleur, dégradé…). */
+/** La couleur la plus vive d'un texte CSS (couleur unie ou dégradé) : celle qu'on remarque. */
 function firstRgb(txt) {
-  const m = String(txt || '').match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?/);
-  if (!m) return null;
-  const a = m[4] == null ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
-  return vivid(+m[1], +m[2], +m[3], a);
+  let best = null, bestSat = -1;
+  for (const m of String(txt || '').matchAll(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?/g)) {
+    const a = m[4] == null ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+    const c = vivid(+m[1], +m[2], +m[3], a);
+    if (!c) continue;
+    const mx = Math.max(+m[1], +m[2], +m[3]), sat = (mx - Math.min(+m[1], +m[2], +m[3])) / mx;
+    if (sat > bestSat) { best = c; bestSat = sat; }
+  }
+  return best;
 }
 /** Couleur du bloc : sa couleur propre (dossier, catégorie…), sinon celle de son icône. */
 export function blockColor(e) {
   const cs = getComputedStyle(e);
   for (const v of ['--fc', '--c']) {
     const m = cs.getPropertyValue(v).match(TRIPLE);
-    if (m) return vivid(+m[1], +m[2], +m[3]);
+    if (m) return `${+m[1]} ${+m[2]} ${+m[3]}`; // couleur attribuée au bloc : respectée telle quelle, même grise
   }
+  // Icône connue : son fond, sinon sa couleur de trait
   const ic = e.querySelector(ICONS);
-  if (!ic) return null;
-  const is = getComputedStyle(ic);
-  return firstRgb(is.backgroundImage) || firstRgb(is.backgroundColor) || firstRgb(is.color);
+  if (ic) {
+    const is = getComputedStyle(ic);
+    const c = firstRgb(is.backgroundImage) || firstRgb(is.backgroundColor) || firstRgb(is.color);
+    if (c) return c;
+  }
+  // Sinon : le premier élément « de taille d'icône » (16 à 96 px) au fond coloré
+  const all = e.querySelectorAll('*');
+  for (let i = 0; i < all.length && i < 60; i++) {
+    const el = all[i];
+    const r = el.getBoundingClientRect();
+    if (r.width < 16 || r.height < 16 || r.width > 96 || r.height > 96) continue;
+    const es = getComputedStyle(el);
+    const c = firstRgb(es.backgroundImage) || firstRgb(es.backgroundColor);
+    if (c) return c;
+  }
+  return null;
 }
 
 const mode = () => document.documentElement.dataset.hover || 'all';

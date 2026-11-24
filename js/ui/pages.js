@@ -5,6 +5,7 @@ import { MODELS, isStreaming, pickVariant } from '../config.js';
 import { $, caps, esc, fmtMB, state, store, toast } from './core.js';
 import { monitor, player } from './recording.js';
 import { initHoverGlow, refreshHoverGlow } from './hover-glow.js';
+import { initLiquidTabs } from './liquid-tabs.js';
 
 // ---------- Page Personnalisation ----------
 let bgCat = 'all'; // famille affichée dans le catalogue de fonds
@@ -75,6 +76,7 @@ export function renderPerso() {
 export function bindPerso() {
   applyPerso();
   initHoverGlow();
+  initLiquidTabs();
   $('#bg-cats').addEventListener('click', (e) => {
     const b = e.target.closest('[data-cat]');
     if (!b) return;

@@ -5,14 +5,32 @@
 const KEY = 'transcripteur.perso';
 const IMG_KEY = 'transcripteur.perso.image';
 
+const img = (id, label, cat) => ({ id, label, cat, css: `url('assets/fonds/${id}.webp')`, thumb: `assets/fonds/${id}-mini.webp` });
+
+/** Familles du catalogue, dans l'ordre d'affichage. */
+export const BG_CATS = [['photo', 'Photo'], ['archi', 'Architecture'], ['nature', 'Nature'], ['abstrait', 'Abstrait'], ['degrade', 'Dégradés']];
+
 export const BACKGROUNDS = [
-  { id: 'photo', label: 'Salon violet', css: "url('assets/bg.webp')" },
-  { id: 'aurore', label: 'Aurore', css: 'radial-gradient(at 18% 22%, #7c3aed 0, transparent 52%), radial-gradient(at 82% 28%, #db2777 0, transparent 46%), radial-gradient(at 50% 92%, #2563eb 0, transparent 56%), #1e1b4b' },
-  { id: 'ocean', label: 'Océan', css: 'radial-gradient(at 15% 25%, #0284c7 0, transparent 52%), radial-gradient(at 85% 72%, #4f46e5 0, transparent 52%), radial-gradient(at 60% 10%, #0d9488 0, transparent 40%), #0b1e3f' },
-  { id: 'foret', label: 'Forêt', css: 'radial-gradient(at 25% 30%, #059669 0, transparent 50%), radial-gradient(at 80% 80%, #0f766e 0, transparent 55%), radial-gradient(at 75% 15%, #4d7c0f 0, transparent 40%), #062a23' },
-  { id: 'crepuscule', label: 'Crépuscule', css: 'radial-gradient(at 20% 85%, #ea580c 0, transparent 50%), radial-gradient(at 80% 20%, #9333ea 0, transparent 55%), radial-gradient(at 50% 50%, #be185d 0, transparent 45%), #2a1235' },
-  { id: 'graphite', label: 'Graphite', css: 'radial-gradient(at 30% 20%, #475569 0, transparent 55%), radial-gradient(at 80% 85%, #312e81 0, transparent 55%), #0f1117' },
-  { id: 'uni', label: 'Uni', css: 'none' },
+  { id: 'photo', label: 'Salon violet', cat: 'photo', css: "url('assets/bg.webp')" },
+  // Fonds originaux générés par programme (assets/fonds/generer.py)
+  img('plan-architecte', 'Plan d’architecte', 'archi'),
+  img('maquette-filaire', 'Maquette 3D', 'archi'),
+  img('ville-nuit', 'Ville la nuit', 'archi'),
+  img('beton-lumiere', 'Béton et lumière', 'archi'),
+  img('aurore-boreale', 'Aurore boréale', 'nature'),
+  img('dunes', 'Dunes', 'nature'),
+  img('montagnes-brume', 'Montagnes', 'nature'),
+  img('ocean-profond', 'Océan profond', 'nature'),
+  img('topographie', 'Courbes de niveau', 'nature'),
+  img('nebuleuse', 'Nébuleuse', 'abstrait'),
+  img('soie', 'Soie', 'abstrait'),
+  img('bokeh', 'Bokeh', 'abstrait'),
+  { id: 'aurore', cat: 'degrade', label: 'Aurore', css: 'radial-gradient(at 18% 22%, #7c3aed 0, transparent 52%), radial-gradient(at 82% 28%, #db2777 0, transparent 46%), radial-gradient(at 50% 92%, #2563eb 0, transparent 56%), #1e1b4b' },
+  { id: 'ocean', cat: 'degrade', label: 'Océan', css: 'radial-gradient(at 15% 25%, #0284c7 0, transparent 52%), radial-gradient(at 85% 72%, #4f46e5 0, transparent 52%), radial-gradient(at 60% 10%, #0d9488 0, transparent 40%), #0b1e3f' },
+  { id: 'foret', cat: 'degrade', label: 'Forêt', css: 'radial-gradient(at 25% 30%, #059669 0, transparent 50%), radial-gradient(at 80% 80%, #0f766e 0, transparent 55%), radial-gradient(at 75% 15%, #4d7c0f 0, transparent 40%), #062a23' },
+  { id: 'crepuscule', cat: 'degrade', label: 'Crépuscule', css: 'radial-gradient(at 20% 85%, #ea580c 0, transparent 50%), radial-gradient(at 80% 20%, #9333ea 0, transparent 55%), radial-gradient(at 50% 50%, #be185d 0, transparent 45%), #2a1235' },
+  { id: 'graphite', cat: 'degrade', label: 'Graphite', css: 'radial-gradient(at 30% 20%, #475569 0, transparent 55%), radial-gradient(at 80% 85%, #312e81 0, transparent 55%), #0f1117' },
+  { id: 'uni', cat: 'degrade', label: 'Uni', css: 'none' },
 ];
 
 export const DEFAULTS = { bg: 'photo', blur: 14, veil: 100, panel: 100, accent: null, hover: 'all', hoverColor: null };

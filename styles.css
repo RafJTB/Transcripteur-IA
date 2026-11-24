@@ -2273,3 +2273,10 @@ button.act-who:hover { filter: brightness(1.15); outline: 1px solid rgb(var(--ac
 button.store-chip { cursor: pointer; font: inherit; }
 .store-chip.where-none { color: var(--warn); }
 .who-pop button[data-pick]:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Espaces : compte différent du compte Drive actif */
+.spc-mismatch { display: flex; align-items: center; gap: 14px; padding: 16px 18px; margin-bottom: 16px; border-color: rgb(245 158 11 / 0.45); }
+.spc-mismatch > div:first-of-type { flex: 1; min-width: 0; }
+.spc-mismatch p { margin: 4px 0 0; color: var(--text-2); font-size: 13.5px; overflow-wrap: anywhere; }
+.spc-mismatch-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 720px) { .spc-mismatch { flex-direction: column; align-items: stretch; } }

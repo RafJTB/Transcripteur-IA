@@ -22,14 +22,36 @@ const spState = { me: null, spaces: [], current: lsGet('spaces.current', ''), me
 export const SP_PEOPLE = '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg>';
 const spErr = (e) => toast(spacesError(e), 'err', 7000);
 
+/** Compte des espaces différent du compte Google Drive actif : on le dit, et on propose de changer. */
+function renderMismatch() {
+  const box = $('#spc-mismatch');
+  if (!box) return;
+  const drive = Auth.user()?.email?.toLowerCase() || '';
+  const me = spState.me?.email || '';
+  const key = `${me}|${drive}`;
+  if (!me || !drive || me === drive || sessionStorage.getItem('transcripteur.spaces.keep') === key) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<span class="r-ico amber"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg></span>
+    <div><b>Espaces ouverts avec un autre compte</b><p>Tu es connecté(e) aux espaces avec <b>${esc(me)}</b>, alors que ton compte Google Drive actif est <b>${esc(drive)}</b>. Tu vois donc les espaces de ${esc(me)}.</p></div>
+    <div class="spc-mismatch-btns"><button class="btn primary sm" type="button" data-mm="switch">Passer à ${esc(drive)}</button><button class="btn sm" type="button" data-mm="keep">Garder</button></div>`;
+  box.querySelector('[data-mm="keep"]').onclick = () => { try { sessionStorage.setItem('transcripteur.spaces.keep', key); } catch { } box.hidden = true; };
+  box.querySelector('[data-mm="switch"]').onclick = async () => {
+    await Spaces.signOut().catch(() => {});
+    spState.me = null; stopChat();
+    Spaces.signIn(drive).catch(spErr);
+  };
+}
+
 export async function renderSpaces() {
   const setup = $('#spc-setup'), login = $('#spc-login'), main = $('#spc-main');
   if (!setup) return;
   setup.hidden = login.hidden = main.hidden = true;
+  if ($('#spc-mismatch')) $('#spc-mismatch').hidden = true;
   if (!Spaces.configured() && !window.__spacesClient) { setup.hidden = false; renderSpacesSetup(); return; }
   try { spState.me = await Spaces.user(); } catch (e) { spState.me = null; spErr(e); }
   if (!spState.me) { stopChat(); login.hidden = false; return; }
   main.hidden = false;
+  renderMismatch();
   $('#spc-me').innerHTML = `${avatarHtml(spState.me)}<span><b>${esc(spState.me.name)}</b><small>${esc(spState.me.email)}</small></span>`;
   await loadSpaces();
   startChat(spState.me, () => spState.spaces);
@@ -299,4 +321,13 @@ export async function initSpaces() {
       startChat(me, () => spState.spaces);
     } catch (e) { console.warn('espaces au démarrage', e); }
   }
+}
+
+/** Déconnexion de Google Drive : on ferme aussi la session des espaces (PC partagé). */
+export async function signOutSpaces() {
+  if (!Spaces.configured() && !window.__spacesClient) return;
+  await Spaces.signOut().catch(() => {});
+  spState.me = null;
+  stopChat();
+  if ($('#spc-setup')) renderSpaces();
 }

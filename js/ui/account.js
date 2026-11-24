@@ -113,7 +113,7 @@ export async function syncNow({ quiet = false } = {}) {
 async function signOut() {
   const u = Auth.user();
   if (!u) return;
-  const r = await ask('Se déconnecter ?', `Tes transcriptions restent dans ton Google Drive. Sur ce navigateur, elles seront masquées jusqu’à ta prochaine connexion.`, 'Se déconnecter',
+  const r = await ask('Se déconnecter ?', `Tes transcriptions restent dans ton Google Drive. Sur ce navigateur, elles seront masquées jusqu’à ta prochaine connexion. Tu seras aussi déconnecté(e) des espaces partagés.`, 'Se déconnecter',
     { checkbox: 'Les effacer aussi de ce navigateur (conseillé sur un PC partagé)', checked: false });
   if (!r) return;
   if (r.checked) {
@@ -123,6 +123,7 @@ async function signOut() {
     }
   }
   await Auth.signOut();
+  await (await import('./spaces.js')).signOutSpaces().catch(() => {});
   if (state.doc?.owner === u.email) { clearResult(); clearAudio(); }
   state.folder = 'all';
   Sync._set('off');

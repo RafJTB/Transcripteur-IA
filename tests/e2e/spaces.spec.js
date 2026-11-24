@@ -1,6 +1,7 @@
 // Espaces collaboratifs, avec un faux Supabase (en mémoire, partagé entre onglets du même navigateur).
 import { readFileSync } from 'node:fs';
 import { test, expect, boot, nav, seedMeetings } from './helpers.js';
+import { fakeDrive } from './mocks/drive.js';
 
 const MOCK = readFileSync(new URL('./mocks/supabase.js', import.meta.url), 'utf8');
 const as = (page, u) => page.addInitScript((u) => sessionStorage.setItem('mock.sb.user', JSON.stringify(u)), u);
@@ -62,4 +63,56 @@ test('sans configuration ni connexion : écran d’explication', async ({ page }
   await boot(page);
   await nav(page, 'spaces');
   await expect(page.locator('#view-spaces, [data-view="spaces"], body')).toContainText(/Google/);
+});
+
+test('compte des espaces ≠ compte Drive : avertissement, changement de compte, déconnexion commune', async ({ page, context }) => {
+  await fakeDrive(context);
+  await context.addInitScript(MOCK);
+  await as(page, RAF);
+  await page.addInitScript(() => {
+    localStorage.setItem('transcripteur.cloud.user', JSON.stringify({ email: 'pro@exemple.fr', name: 'Raf Pro', picture: '' }));
+    sessionStorage.setItem('transcripteur.cloud.token', JSON.stringify({ value: 'faux', exp: Date.now() + 3600e3 }));
+    const c = window.__spacesClient;
+    if (c) c.auth.signInWithOAuth = async (o) => { window.__oauth = o; return { error: null }; };
+  });
+  await boot(page);
+  await nav(page, 'spaces');
+  const box = page.locator('#spc-mismatch');
+  await expect(box).toBeVisible();
+  await expect(box).toContainText('raf@exemple.fr');
+  await expect(box).toContainText('pro@exemple.fr');
+
+  // « Garder » : masqué pour cette session
+  await box.locator('[data-mm="keep"]').click();
+  await expect(box).toBeHidden();
+  await nav(page, 'home');
+  await nav(page, 'spaces');
+  await expect(box).toBeHidden();
+
+  // « Passer à … » : déconnexion des espaces puis connexion Google proposée avec l'adresse Drive
+  await page.evaluate(() => sessionStorage.removeItem('transcripteur.spaces.keep'));
+  await nav(page, 'home');
+  await nav(page, 'spaces');
+  await box.locator('[data-mm="switch"]').click();
+  await expect.poll(() => page.evaluate(() => window.__oauth?.options?.queryParams?.login_hint)).toBe('pro@exemple.fr');
+  expect(await page.evaluate(() => sessionStorage.getItem('mock.sb.user'))).toBeNull();
+});
+
+test('se déconnecter de Google Drive ferme aussi la session des espaces', async ({ page, context }) => {
+  await fakeDrive(context);
+  await context.addInitScript(MOCK);
+  await as(page, RAF);
+  await page.addInitScript(() => {
+    localStorage.setItem('transcripteur.cloud.user', JSON.stringify({ email: 'raf@exemple.fr', name: 'Raf', picture: '' }));
+    sessionStorage.setItem('transcripteur.cloud.token', JSON.stringify({ value: 'faux', exp: Date.now() + 3600e3 }));
+  });
+  await boot(page);
+  await nav(page, 'spaces');
+  await expect(page.locator('#spc-main')).toBeVisible();
+  await expect(page.locator('#spc-mismatch')).toBeHidden(); // même compte : pas d'avertissement
+  await page.evaluate(() => document.querySelector('#acc-logout').click());
+  await expect(page.locator('#modal-text')).toContainText('espaces partagés');
+  await page.locator('#modal-ok').click();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('mock.sb.user'))).toBeNull();
+  await expect(page.locator('#spc-login')).toBeVisible();
 });

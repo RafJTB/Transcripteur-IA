@@ -109,6 +109,8 @@ export function applyPerso(p = loadPerso()) {
   for (const k of ACCENT_KEYS) vars ? s.setProperty(k, vars[k]) : s.removeProperty(k);
   // Lueur au survol des blocs : quels blocs, et quelle couleur (rien = couleur d'accent)
   document.documentElement.dataset.hover = ['all', 'click', 'off'].includes(p.hover) ? p.hover : 'all';
+  // Couleur : automatique (celle du bloc survolé), celle de l'accent, ou une couleur fixe
+  document.documentElement.dataset.hoverAuto = p.hoverColor ? '0' : '1';
   if (/^#[0-9a-f]{6}$/i.test(p.hoverColor || '')) s.setProperty('--hover-rgb', trip(toRgb(p.hoverColor)));
   else s.removeProperty('--hover-rgb');
 }

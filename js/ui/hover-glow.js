@@ -3,7 +3,7 @@
 // Couleur : --hover-rgb (couleur d'accent par défaut). Blocs concernés : <html data-hover="all|click|off">.
 
 const BLOCKS = [
-  '.proj-row', '.proj-side', '.card', '.glass', '.settings-card', '.set-card', '.hero-tile', '.audio-card', '.stat-tile', '.proj-card', '.model-card',
+  '.proj-row', '.proj-side .fchip', '#set-nav [data-set]', '.proj-side', '.card', '.glass', '.settings-card', '.set-card', '.hero-tile', '.audio-card', '.stat-tile', '.proj-card', '.model-card',
   '.bg-tile', '.spc-item', '.spc-doc', '.cal-ev', '.capture-tiles > button', '.opt-row', '.recent-row', '.picker',
 ].join(', ');
 const SKIP = '.glass-btn, .glass-select, .btn, .view, .modal, .toasts, input, textarea, select';
@@ -26,6 +26,38 @@ function isBlock(e) {
 
 let glow = null;
 let px = -1, py = -1, raf = 0;
+let lastBlock = null, lastColor = null;
+
+// ---------- Couleur automatique : celle du bloc survolé ----------
+const ICONS = '.sq, .r-ico, .pr-ico, .set-ic, .ct-ico, .stat-ico, .pk-ico, .opt-ico, .am-ico, .ic';
+const TRIPLE = /^\s*(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})\s*$/;
+
+/** « r g b » d'une couleur vive (assez saturée et visible), sinon null. */
+function vivid(r, g, b, a = 1) {
+  if (a < 0.15) return null;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  if (mx < 60 || (mx - mn) / mx < 0.3) return null; // gris, blanc ou trop sombre
+  return `${Math.round(r)} ${Math.round(g)} ${Math.round(b)}`;
+}
+/** Première couleur rgb()/rgba() d'un texte CSS (couleur, dégradé…). */
+function firstRgb(txt) {
+  const m = String(txt || '').match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?/);
+  if (!m) return null;
+  const a = m[4] == null ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+  return vivid(+m[1], +m[2], +m[3], a);
+}
+/** Couleur du bloc : sa couleur propre (dossier, catégorie…), sinon celle de son icône. */
+export function blockColor(e) {
+  const cs = getComputedStyle(e);
+  for (const v of ['--fc', '--c']) {
+    const m = cs.getPropertyValue(v).match(TRIPLE);
+    if (m) return vivid(+m[1], +m[2], +m[3]);
+  }
+  const ic = e.querySelector(ICONS);
+  if (!ic) return null;
+  const is = getComputedStyle(ic);
+  return firstRgb(is.backgroundImage) || firstRgb(is.backgroundColor) || firstRgb(is.color);
+}
 
 const mode = () => document.documentElement.dataset.hover || 'all';
 
@@ -77,6 +109,12 @@ function update() {
   s.clipPath = `inset(${Math.max(0, v.t - r.top)}px ${Math.max(0, r.right - v.r)}px ${Math.max(0, r.bottom - v.b)}px ${Math.max(0, v.l - r.left)}px)`;
   s.setProperty('--mx', `${px - r.left}px`);
   s.setProperty('--my', `${py - r.top}px`);
+  // Couleur automatique : calculée seulement quand on change de bloc
+  if (document.documentElement.dataset.hoverAuto !== '0') {
+    if (e !== lastBlock) { lastBlock = e; lastColor = blockColor(e); }
+    if (lastColor) s.setProperty('--hover-rgb', lastColor);
+    else s.removeProperty('--hover-rgb');
+  } else { lastBlock = null; s.removeProperty('--hover-rgb'); } // couleur fixe ou accent : jamais celle d'un bloc
   glow.classList.add('on');
 }
 
@@ -101,4 +139,4 @@ export function initHoverGlow() {
 }
 
 /** Après un changement de réglage : met la lueur à jour tout de suite. */
-export const refreshHoverGlow = schedule;
+export const refreshHoverGlow = () => { lastBlock = null; schedule(); };

@@ -92,8 +92,17 @@ test('survol : couleur automatique = la couleur du bloc survolé (dossiers, cat�
   await seedMeetings(page);
   const glow = page.locator('.hover-glow');
   const glowColor = () => glow.evaluate((e) => e.style.getPropertyValue('--hover-rgb'));
-  // Paramètres : chaque catégorie a sa couleur
+  // Accueil : les cartes de chiffres prennent la couleur vive de leur icône (dégradé)
+  await nav(page, 'home');
+  const [ax, ay] = await center(page.locator('.stat-tile.t-amber'));
+  await page.mouse.move(ax, ay);
+  await expect(glow).toHaveClass(/on/);
+  await expect.poll(glowColor).toBe('245 158 11');
+  // Paramètres : chaque catégorie a sa couleur, même grise (À propos)
   await nav(page, 'settings');
+  const [gx, gy] = await center(page.locator('#set-nav [data-set="apropos"]'));
+  await page.mouse.move(gx, gy);
+  await expect.poll(glowColor).toBe('148 163 184');
   for (const [k, rgb] of [['voix', '16 185 129'], ['moteur', '245 158 11'], ['compte', '59 130 246']]) {
     const [x, y] = await center(page.locator(`#set-nav [data-set="${k}"]`));
     await page.mouse.move(x, y);

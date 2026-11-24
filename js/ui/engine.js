@@ -1,5 +1,6 @@
 // Moteur de transcription : worker, messages, modèles, cache.
 
+import { renderSettings } from './settings-ui.js';
 import { DEFAULT_MODEL, MODELS, isStreaming, pickVariant } from '../config.js';
 import { fmtClock } from '../exporters.js';
 import { $, $$, caps, fmtBytes, fmtDuration, fmtMB, modelById, progress, state } from './core.js';
@@ -155,6 +156,7 @@ export function renderEngine() {
       : 'WebGPU indisponible dans ce navigateur : calcul sur le processeur, plus lent.';
   }
   $('span', pill).textContent = text;
+  renderSettings();
 }
 
 export function renderModels() {

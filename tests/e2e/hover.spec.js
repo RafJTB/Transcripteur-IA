@@ -35,6 +35,7 @@ test('survol : le bord du bloc s’allume sous la souris, réglages respectés e
   await page.mouse.move(cx + 200, cy + 30);
   await expect(glow).not.toHaveClass(/on/);
   // Une tuile de fond d'écran (cliquable) : lueur
+  await page.locator('.bg-tile').first().scrollIntoViewIfNeeded();
   const [tx, ty] = await center(page.locator('.bg-tile').first());
   await page.mouse.move(tx, ty);
   await expect(glow).toHaveClass(/on/);
@@ -47,6 +48,7 @@ test('survol : le bord du bloc s’allume sous la souris, réglages respectés e
   // Désactivé : jamais de lueur
   await nav(page, 'custom');
   await page.locator('#hover-mode [data-hover="off"]').click();
+  await page.locator('.bg-tile').first().scrollIntoViewIfNeeded();
   const [ux, uy] = await center(page.locator('.bg-tile').first());
   await page.mouse.move(ux, uy);
   await page.waitForTimeout(150);

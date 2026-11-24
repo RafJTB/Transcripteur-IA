@@ -1,12 +1,13 @@
 // Pages Personnalisation et Modèles.
 
-import { ACCENTS, BACKGROUNDS, DEFAULTS as PERSO_DEFAULTS, accentVars, applyPerso, customImage, loadPerso, saveCustomImage, savePerso, shrinkImage } from '../perso.js';
+import { ACCENTS, BACKGROUNDS, BG_CATS, DEFAULTS as PERSO_DEFAULTS, accentVars, applyPerso, customImage, loadPerso, saveCustomImage, savePerso, shrinkImage } from '../perso.js';
 import { MODELS, isStreaming, pickVariant } from '../config.js';
 import { $, caps, esc, fmtMB, state, store, toast } from './core.js';
 import { monitor, player } from './recording.js';
 import { initHoverGlow } from './hover-glow.js';
 
 // ---------- Page Personnalisation ----------
+let bgCat = 'all'; // famille affichée dans le catalogue de fonds
 const PLUS_ICON = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
 function setPerso(patch) {
   const p = { ...loadPerso(), ...patch };
@@ -24,10 +25,20 @@ export function renderPerso() {
   if (!grid) return;
   const p = loadPerso();
   const img = customImage();
-  grid.innerHTML = BACKGROUNDS.map((b) => `<button class="bg-tile${p.bg === b.id ? ' active' : ''}" type="button" data-bg="${b.id}"><span class="sw${b.id === 'uni' ? ' uni' : ''}" style="${b.id === 'uni' ? '' : `background:${esc(b.css)};background-size:cover;background-position:center`}"></span>${esc(b.label)}</button>`).join('')
-    + (img
-      ? `<button class="bg-tile${p.bg === 'custom' ? ' active' : ''}" type="button" data-bg="custom"><span class="sw" style="background-image:url('${img}')"></span>Ton image <small>· <span data-change>changer</span></small></button>`
-      : `<button class="bg-tile" type="button" data-import><span class="sw add">${PLUS_ICON}</span>Importer une image</button>`);
+  // Familles : « Tous », puis chaque famille ; la famille du fond actuel est proposée à l'ouverture
+  const cats = [['all', 'Tous'], ...BG_CATS, ['mine', 'Ton image']];
+  if (!cats.some(([k]) => k === bgCat)) bgCat = 'all';
+  const nOf = (k) => (k === 'all' ? BACKGROUNDS.length : k === 'mine' ? '' : BACKGROUNDS.filter((b) => b.cat === k).length);
+  $('#bg-cats').innerHTML = cats.map(([k, label]) => `<button type="button" role="tab" class="bg-cat${bgCat === k ? ' on' : ''}" data-cat="${k}" aria-selected="${bgCat === k}">${esc(label)}${nOf(k) !== '' ? `<small>${nOf(k)}</small>` : ''}</button>`).join('');
+  $('#bg-count').textContent = `${BACKGROUNDS.length} fonds`;
+  const shown = BACKGROUNDS.filter((b) => bgCat === 'all' || b.cat === bgCat);
+  const sw = (b) => (b.id === 'uni' ? '' : b.thumb ? `background-image:url('${esc(b.thumb)}')` : `background:${esc(b.css)};background-size:cover;background-position:center`);
+  grid.innerHTML = (bgCat === 'mine' ? [] : shown).map((b) => `<button class="bg-tile${p.bg === b.id ? ' active' : ''}" type="button" data-bg="${b.id}"><span class="sw${b.id === 'uni' ? ' uni' : ''}" style="${sw(b)}"></span>${esc(b.label)}</button>`).join('')
+    + (bgCat === 'all' || bgCat === 'mine'
+      ? (img
+        ? `<button class="bg-tile${p.bg === 'custom' ? ' active' : ''}" type="button" data-bg="custom"><span class="sw" style="background-image:url('${img}')"></span>Ton image <small>· <span data-change>changer</span></small></button>`
+        : `<button class="bg-tile" type="button" data-import><span class="sw add">${PLUS_ICON}</span>Importer une image</button>`)
+      : '');
   const cur = (p.accent || ACCENTS[0].hex).toLowerCase();
   const known = ACCENTS.find((a) => a.hex === cur);
   $('#accent-row').innerHTML = ACCENTS.map((a) => {
@@ -62,6 +73,12 @@ export function renderPerso() {
 export function bindPerso() {
   applyPerso();
   initHoverGlow();
+  $('#bg-cats').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cat]');
+    if (!b) return;
+    bgCat = b.dataset.cat;
+    renderPerso();
+  });
   $('#bg-grid').addEventListener('click', (e) => {
     const t = e.target.closest('[data-bg], [data-import]');
     if (!t) return;

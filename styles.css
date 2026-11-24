@@ -2690,3 +2690,12 @@ label.set-row:hover, .set-link:hover { background: rgb(var(--ov) / 0.04); }
   .set-row > .select, .set-row .pill, .set-sec .asst-claude .acc-redirect { max-width: none; width: 100%; min-width: 0; }
   .set-details .set-sub { padding-left: 16px; }
 }
+
+/* Catalogue de fonds d'écran : familles */
+.bg-cats { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 14px; }
+.bg-cat { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid rgb(var(--ov) / 0.12); background: rgb(var(--ov) / 0.04); color: var(--text-2); font: 600 12.5px var(--font); cursor: pointer; transition: background 0.15s, color 0.15s; }
+.bg-cat:hover { color: var(--text); background: rgb(var(--ov) / 0.08); }
+.bg-cat small { font-size: 11px; font-weight: 600; color: var(--text-3); }
+.bg-cat.on { color: #fff; border-color: transparent; background: linear-gradient(100deg, rgb(var(--sel-a) / 0.95), rgb(var(--sel-b) / 0.8)); }
+.bg-cat.on small { color: rgb(255 255 255 / 0.8); }
+.bg-tile .sw { background-size: cover; background-position: center; }

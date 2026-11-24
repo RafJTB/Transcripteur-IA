@@ -130,3 +130,47 @@ test('connecté à Google : « Sur mon Google Drive » proposé, et « Toujours 
   await nav(page, 'settings');
   await expect(page.locator('#audio-policy')).toHaveValue('drive');
 });
+
+test('ancien projet → « Sur ce PC » : supprimé du Drive, et pas renvoyé par un autre appareil', async ({ page, context, browser }) => {
+  const files = await fakeDrive(context);
+  await context.addInitScript(signedIn);
+  await boot(page);
+  // Ancien projet (avant l'option) : son audio est déjà dans le Drive
+  await seedDoc(page, 'vieux');
+  await page.evaluate(() => window.__app.syncNow());
+  const onDrive = () => [...files.values()].filter((f) => f.appProperties.kind === 'audio').map((f) => f.appProperties.aid);
+  await expect.poll(onDrive).toEqual(['aud-vieux']);
+
+  // Autre appareil : récupère la réunion et réécoute l'audio (copie gardée dans son navigateur)
+  const other = await browser.newContext();
+  await fakeDrive(other, files);
+  await other.addInitScript(signedIn);
+  await other.addInitScript(() => localStorage.setItem('transcripteur.theme', 'dark'));
+  const p2 = await other.newPage();
+  await boot(p2);
+  await p2.evaluate(() => window.__app.syncNow());
+  await expect.poll(() => p2.evaluate(() => window.__app.History.get('vieux').then((d) => !!d))).toBe(true);
+  await p2.evaluate(() => window.__app.Sync.pullAudio('aud-vieux'));
+  expect(await p2.evaluate(() => window.__app.Audios.get('aud-vieux').then((a) => !!a?.blob))).toBe(true);
+
+  // Sur ce PC : « Sur ce PC »
+  await page.evaluate(() => window.__app.History.get('vieux').then((d) => window.__app.showDoc(d)));
+  await expect(page.locator('#result-meta .store-chip')).toHaveText('Audio sur Google Drive');
+  await page.locator('#result-meta .store-chip').click();
+  await page.locator('#store-pop [data-pick="local"]').click();
+  await expect(page.locator('body')).toContainText('supprimé de ton Google Drive');
+  await page.evaluate(() => window.__app.syncNow());
+  await expect.poll(onDrive).toEqual([]);
+  // Le choix est parti avec la réunion
+  // (le faux Drive garde chaque envoi : on lit le dernier)
+  const docOnDrive = [...files.values()].filter((f) => f.appProperties.kind === 'doc' && f.appProperties.tid === 'vieux').at(-1);
+  expect(JSON.parse(docOnDrive.data.toString('utf8')).audioWhere).toBe('local');
+  // L'autre appareil se synchronise : il ne renvoie pas l'audio
+  await p2.evaluate(() => window.__app.syncNow());
+  await p2.waitForTimeout(500);
+  expect(onDrive()).toEqual([]);
+  expect(await p2.evaluate(() => window.__app.History.get('vieux').then((d) => d.audioWhere))).toBe('local');
+  // Toujours sur ce PC
+  expect(await page.evaluate(() => window.__app.Audios.get('aud-vieux').then((a) => !!a?.blob))).toBe(true);
+  await other.close();
+});

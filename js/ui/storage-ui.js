@@ -5,7 +5,7 @@
 //   none  : effacé dès la transcription terminée (vérification et « Qui parle ? » compris) : seul le texte reste.
 
 import { Audios, History } from '../history.js';
-import { Sync } from '../cloud.js';
+import { Auth, Sync } from '../cloud.js';
 import { $, ask, esc, state, store, toast } from './core.js';
 import { speakersBusy } from './speakers.js';
 
@@ -70,6 +70,7 @@ export async function dropAudioIfNone(doc, tries = 0) {
   await Audios.remove(aid).catch(() => {});
   Sync.forget(null, aid);
   doc.audioId = null;
+  doc.updatedAt = Date.now();
   await History.put(doc);
   if (state.audio?.docId === doc.id || state.audio?.audioId === aid) state.audio.audioId = null;
   if (state.doc?.id === doc.id) { renderAudioChip(); toast('Audio effacé, comme demandé : seul le texte est gardé.', 'ok', 4500); }
@@ -79,6 +80,7 @@ export async function dropAudioIfNone(doc, tries = 0) {
 export async function applyAudioChoice(doc, where) {
   if (!doc || !where) return;
   doc.audioWhere = where;
+  doc.updatedAt = Date.now();
   await History.put(doc);
   if (where === 'drive') Sync.schedule(1500);
   if (where === 'none') dropAudioIfNone(doc);
@@ -112,10 +114,12 @@ async function changeWhere(d, to) {
     if (!a?.blob) return toast('Audio introuvable sur ce PC et dans le Drive.', 'err', 5000);
     Sync.forget(null, d.audioId);
     d.audioWhere = 'local';
+    d.updatedAt = Date.now();
     await History.put(d);
-    toast('Audio gardé sur ce PC, et retiré de Google Drive à la prochaine synchro.', 'ok', 5000);
+    toast(Auth.token() ? 'Audio gardé sur ce PC : il est supprimé de ton Google Drive dans quelques secondes (définitivement, sans passer par la corbeille).' : 'Audio gardé sur ce PC. Ta connexion Google a expiré : reconnecte-toi pour qu’il soit supprimé de ton Drive.', Auth.token() ? 'ok' : 'warn', 7000);
   } else if (to === 'drive') {
     d.audioWhere = 'drive';
+    d.updatedAt = Date.now();
     await History.put(d);
     Sync.schedule(800);
     toast('L’audio part sur ton Google Drive, puis sera retiré de ce PC.', 'ok', 5000);

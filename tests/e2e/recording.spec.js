@@ -55,3 +55,29 @@ test('fichier : un audio importé est décodé et rangé dans un projet', async 
   await page.setInputFiles('#file-input', { name: 'reunion-test.wav', mimeType: 'audio/wav', buffer: makeWav() });
   await expect.poll(async () => page.evaluate(() => window.__app.state.audio?.duration ?? window.__app.state.audio?.durationS ?? (window.__app.state.audio ? 1 : 0)), { timeout: 20_000 }).toBeGreaterThan(0);
 });
+
+test('page « Nouvelle transcription » : fond d’écran visible, et pas l’audio d’une réunion déjà transcrite', async ({ page }) => {
+  await blockModels(page);
+  await boot(page);
+  await page.locator('#dash-new').click();
+  // Fond d'écran : le <body> (qui porte aussi data-page="record") ne doit pas devenir un « conteneur »,
+  // sinon le fond n'est plus dessiné derrière la page
+  expect(await page.evaluate(() => getComputedStyle(document.body).containerType)).toBe('normal');
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('section[data-page="record"]')).containerType)).toBe('inline-size');
+
+  // Audio importé, pas encore transcrit : il reste là pour cliquer sur « Transcrire »
+  await page.locator('[data-tab="file"]').click();
+  await page.setInputFiles('#file-input', { name: 'reunion-test.wav', mimeType: 'audio/wav', buffer: makeWav() });
+  await expect(page.locator('#audio-card')).toBeVisible();
+  await page.locator('[data-tab="mic"]').click();
+  await page.locator('section[data-page="record"] .back').click();
+  await page.locator('#dash-new').click();
+  await expect(page.locator('#audio-card')).toBeVisible();
+
+  // Audio d'une réunion déjà transcrite (ouverte depuis les projets) : page vide
+  await page.evaluate(() => { window.__app.state.audio.docId = 'd-deja-transcrite'; });
+  await page.locator('section[data-page="record"] .back').click();
+  await page.locator('#dash-new').click();
+  await expect(page.locator('#audio-card')).toBeHidden();
+  expect(await page.evaluate(() => window.__app.state.audio)).toBeNull();
+});

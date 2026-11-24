@@ -2713,3 +2713,56 @@ label.set-row:hover, .set-link:hover { background: rgb(var(--ov) / 0.04); }
 /* Survol : pastille « automatique » (la couleur du bloc survolé) */
 .acc-sw.auto i { position: relative; background: conic-gradient(from 200deg, #8b5cf6, #10b981, #f59e0b, #ec4899, #06b6d4, #8b5cf6); }
 .acc-sw.auto i::after { content: ''; position: absolute; inset: 7px; border-radius: 50%; background: rgb(var(--card-solid-rgb)); }
+
+/* =====================================================================
+   Onglets en « verre liquide » : une pastille de verre sous l'onglet choisi
+   ===================================================================== */
+.lg-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.lg-host { position: relative; isolation: isolate; }
+.lg-host > :not(.lg-pill) { position: relative; z-index: 1; }
+.lg-pill {
+  position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: 0;
+  border-radius: 13px; overflow: hidden;
+  /* le verre : tinté de la couleur d'accent, plus clair en haut */
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0.05) 48%, rgb(255 255 255 / 0.1)),
+    linear-gradient(120deg, rgb(var(--sel-a) / 0.38), rgb(var(--sel-b) / 0.2));
+  -webkit-backdrop-filter: blur(10px) saturate(1.9) brightness(1.12);
+          backdrop-filter: blur(10px) saturate(1.9) brightness(1.12);
+  /* bord de lumière, reflet du haut, épaisseur du verre, ombre portée */
+  box-shadow:
+    inset 0 1px 0.5px rgb(255 255 255 / 0.75),
+    inset 0 -1px 1px rgb(255 255 255 / 0.18),
+    inset 1px 0 0.5px rgb(255 255 255 / 0.25),
+    inset -1px 0 0.5px rgb(255 255 255 / 0.12),
+    inset 0 0 14px rgb(255 255 255 / 0.1),
+    0 0 0 0.5px rgb(255 255 255 / 0.28),
+    0 10px 26px -12px rgb(var(--sel-b) / 0.85),
+    0 4px 10px -6px rgb(0 0 0 / 0.45);
+  transition: transform 0.42s cubic-bezier(0.3, 1.35, 0.45, 1), width 0.42s cubic-bezier(0.3, 1.35, 0.45, 1), height 0.42s cubic-bezier(0.3, 1.35, 0.45, 1), opacity 0.25s;
+  will-change: transform, width;
+}
+.lg-pill.on { opacity: 1; }
+.lg-pill.still { transition: opacity 0.25s; }
+/* reflet spéculaire en haut à gauche */
+.lg-pill::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(120% 90% at 18% -10%, rgb(255 255 255 / 0.45), transparent 46%); mix-blend-mode: screen; }
+/* liseré irisé discret sur le bord */
+.lg-pill::after { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; background: linear-gradient(140deg, rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.05) 35%, rgb(255 255 255 / 0.05) 65%, rgb(255 255 255 / 0.45));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+html.lg-refract .lg-pill { -webkit-backdrop-filter: url(#lg-refract) blur(8px) saturate(1.9) brightness(1.12); backdrop-filter: url(#lg-refract) blur(8px) saturate(1.9) brightness(1.12); }
+/* l'onglet choisi laisse voir le verre (son propre fond est retiré) */
+.lg-host > [data-lg-on] { background: none !important; border-color: transparent !important; box-shadow: none !important; color: var(--text) !important; }
+.lg-host > [data-lg-on] svg { opacity: 1; }
+/* formes : suivre l'arrondi des onglets de chaque groupe */
+.nav > .lg-pill { border-radius: 13px; }
+.seg > .lg-pill { border-radius: 9px; }
+.dtabs > .lg-pill { border-radius: 11px; }
+#bg-cats > .lg-pill { border-radius: 99px; }
+#set-nav > .lg-pill, .proj-side .folder-bar > .lg-pill { border-radius: 12px; }
+/* thème clair : verre blanc, plus de contraste */
+:root[data-theme='light'] .lg-pill {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.85), rgb(255 255 255 / 0.55)), linear-gradient(120deg, rgb(var(--sel-a) / 0.22), rgb(var(--sel-b) / 0.12));
+  box-shadow: inset 0 1px 0.5px #fff, inset 0 -1px 1px rgb(255 255 255 / 0.6), 0 0 0 0.5px rgb(var(--ov) / 0.12), 0 8px 22px -12px rgb(var(--sel-b) / 0.6), 0 3px 8px -5px rgb(15 23 42 / 0.25);
+}
+:root[data-theme='light'] .lg-host > [data-lg-on] { color: var(--accent-text) !important; }
+@media (prefers-reduced-motion: reduce) { .lg-pill { transition: opacity 0.2s; } }

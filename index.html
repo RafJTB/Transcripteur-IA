@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-24" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-24" />
-  <script src="js/boot.js?v=2026-11-22-24"></script>
+  <meta name="app-version" content="2026-11-22-25" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-25" />
+  <script src="js/boot.js?v=2026-11-22-25"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -127,45 +127,50 @@
               <p>Enregistre ou importe un audio : tout est traité sur ton PC.</p>
             </div>
             <div class="rec-event glass" id="rec-event" hidden></div>
-            <div class="home-grid">
-              <!-- 1. SOURCE -->
-              <section class="card" id="step-source" aria-labelledby="h-source">
-                <header class="card-head">
-                  <h2 id="h-source"><span class="num">1</span>Source audio</h2>
-                  <div class="seg" role="tablist" aria-label="Type de source">
-                    <button role="tab" aria-selected="true" data-tab="mic" type="button">Micro</button>
-                    <button role="tab" aria-selected="false" data-tab="file" type="button">Fichier</button>
+            <div class="home-grid rec-grid">
+              <!-- 1. SOURCE : enregistrer ou importer -->
+              <section class="card rec-stage" id="step-source" aria-label="Source audio">
+                <header class="stage-top">
+                  <div class="seg stage-tabs" role="tablist" aria-label="Type de source">
+                    <button role="tab" aria-selected="true" data-tab="mic" type="button"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Enregistrer</button>
+                    <button role="tab" aria-selected="false" data-tab="file" type="button"><svg viewBox="0 0 24 24"><path d="M12 15V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>Importer un fichier</button>
                   </div>
+                  <p class="auto-info" id="auto-info"></p>
                 </header>
 
                 <div class="tab-panel" data-panel="mic">
                   <div class="capture-row" id="capture-row" hidden>
-                    <div class="seg capture-seg" id="capture-seg" role="radiogroup" aria-label="Ce qui est enregistré">
-                      <button type="button" data-capture="mic" title="Ton micro : réunion en salle, dictée">Ma voix</button>
-                      <button type="button" data-capture="mix" title="Ton micro et le son de la visio : tous les participants. Au démarrage, choisis l’onglet de la visio (ou « Écran entier » pour Teams / Zoom) et coche « Partager l’audio ».">Voix + visio</button>
-                      <button type="button" data-capture="system" title="Uniquement le son partagé : webinaire, vidéo, visio où tu ne parles pas. Au démarrage, coche « Partager l’audio ».">Visio seule</button>
+                    <div class="capture-tiles" id="capture-seg" role="radiogroup" aria-label="Ce qui est enregistré">
+                      <button type="button" data-capture="mic" title="Ton micro : réunion en salle, dictée"><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="ct-txt"><b>Ma voix</b><small>Réunion en salle, dictée</small></span></button>
+                      <button type="button" data-capture="mix" title="Ton micro et le son de la visio : tous les participants. Au démarrage, choisis l’onglet de la visio (ou « Écran entier » pour Teams / Zoom) et coche « Partager l’audio »."><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="10" rx="2"/><path d="M6 19h6"/><rect x="17" y="9" width="4" height="7" rx="2"/><path d="M19 18v2"/></svg></span><span class="ct-txt"><b>Voix + visio</b><small>Toi et tous les participants</small></span></button>
+                      <button type="button" data-capture="system" title="Uniquement le son partagé : webinaire, vidéo, visio où tu ne parles pas. Au démarrage, coche « Partager l’audio »."><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="m10 8 4 2-4 2z"/></svg></span><span class="ct-txt"><b>Visio seule</b><small>Webinaire, vidéo</small></span></button>
                     </div>
-                    <label class="switch video-opt" id="video-opt" hidden title="Garde aussi l’image de l’écran partagé (720p, 5 images/s, ≈ 150 Mo par heure), sur ce PC seulement. Pense à prévenir les participants."><input type="checkbox" id="toggle-video" /><span class="track"></span><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>Garder la vidéo de l’écran</label>
                   </div>
-                  <div class="auto-row">
-                    <label class="switch" title="Avant chaque enregistrement : choix du modèle selon ton PC et 3 s de diagnostic pour régler le son (gardé 1 h pour le même micro). Pendant l’enregistrement, le gain se corrige tout seul."><input type="checkbox" id="toggle-auto" /><span class="track"></span><b>Réglage automatique</b></label>
+
+                  <div class="rec-hero" id="rec-hero">
+                    <div class="recorder">
+                      <div class="rec-wave" aria-hidden="true"></div>
+                      <button class="rec-btn orb" id="rec-main" type="button" aria-label="Démarrer l’enregistrement">
+                        <span class="rec-core"></span><span class="rec-ico"></span>
+                      </button>
+                      <div class="rec-info">
+                        <div class="rec-time" id="rec-time">00:00</div>
+                        <div class="rec-state" id="rec-state">Prêt à enregistrer</div>
+                        <span class="lag-chip" id="rec-lag" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg><b></b></span>
+                      </div>
+                      <div class="rec-actions" id="rec-actions" hidden>
+                        <button class="btn" id="rec-pause" type="button" disabled><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
+                        <button class="btn stop" id="rec-stop" type="button" disabled><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span>Arrêter</span></button>
+                        <button class="btn icon-only danger" id="rec-discard" type="button" disabled title="Supprimer cet enregistrement sans le garder" aria-label="Supprimer cet enregistrement sans le garder"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="stage-strip">
+                    <label class="switch" title="Avant chaque enregistrement : choix du modèle selon ton PC et 3 s de diagnostic pour régler le son (gardé 1 h pour le même micro). Pendant l’enregistrement, le gain se corrige tout seul."><input type="checkbox" id="toggle-auto" /><span class="track"></span>Réglage automatique</label>
+                    <label class="switch video-opt" id="video-opt" hidden title="Garde aussi l’image de l’écran partagé (720p, 5 images/s, ≈ 150 Mo par heure), sur ce PC seulement. Pense à prévenir les participants."><input type="checkbox" id="toggle-video" /><span class="track"></span>Garder la vidéo de l’écran</label>
+                    <span class="grow"></span>
                     <button class="link-btn" id="auto-redo" type="button">Refaire le diagnostic</button>
-                  </div>
-                  <p class="auto-info" id="auto-info"></p>
-                  <div class="recorder">
-                    <button class="rec-btn" id="rec-main" type="button" aria-label="Démarrer l’enregistrement">
-                      <span class="rec-core"></span>
-                    </button>
-                    <div class="rec-info">
-                      <div class="rec-time" id="rec-time">00:00</div>
-                      <div class="rec-state" id="rec-state">Prêt à enregistrer</div>
-                      <span class="lag-chip" id="rec-lag" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg><b></b></span>
-                    </div>
-                  </div>
-                  <div class="rec-actions">
-                    <button class="btn" id="rec-pause" type="button" disabled><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg><span>Pause</span></button>
-                    <button class="btn" id="rec-stop" type="button" disabled><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Arrêter</button>
-                    <button class="btn danger" id="rec-discard" type="button" disabled title="Supprimer cet enregistrement sans le garder"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Supprimer</button>
                   </div>
                   <p class="live-hint" id="live-hint"></p>
                 </div>
@@ -181,7 +186,7 @@
 
                 <div class="audio-card" id="audio-card" hidden>
                   <div class="audio-meta">
-                    <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    <span class="am-ico"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
                     <div><strong id="audio-name">—</strong><span id="audio-info">—</span></div>
                     <button class="icon-btn danger" id="audio-delete" type="button" title="Supprimer l’enregistrement" aria-label="Supprimer l’enregistrement"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
                     <button class="icon-btn" id="audio-clear" type="button" title="Fermer (l’audio reste dans l’historique)" aria-label="Fermer cet audio"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -190,35 +195,59 @@
               </section>
 
               <!-- 2. TRANSCRIPTION -->
-              <section class="card" id="step-transcribe" aria-labelledby="h-trans">
-                <header class="card-head">
-                  <h2 id="h-trans"><span class="num">2</span>Transcription</h2>
+              <section class="card rec-side" id="step-transcribe" aria-labelledby="h-trans">
+                <header class="side-head">
+                  <h2 id="h-trans">Transcription</h2>
+                  <p>Tout est traité sur ton PC, rien n’est envoyé.</p>
                 </header>
 
-                <span class="label">Modèle et langue</span>
-                <details class="picker-box" id="model-pick">
-                  <summary class="picker" title="Changer de modèle">
-                    <span class="pk-main"><span class="pk-title"><b id="pk-label">—</b><em id="pk-name"></em></span><small id="pk-sub"></small></span>
-                    <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
-                  </summary>
-                  <fieldset class="models" id="models">
-                    <legend class="sr-only">Modèle</legend>
-                  </fieldset>
-                </details>
-
-                <div class="row">
-                  <select id="lang" class="select" aria-label="Langue parlée"></select>
-                  <p class="field-hint" id="lang-hint" hidden>Voxtral détecte la langue tout seul.</p>
-                  <label class="switch autotr" title="Si une autre langue que le français est parlée, chaque phrase est traduite en français automatiquement (traduction locale)."><input type="checkbox" id="toggle-autotr" /><span class="track"></span>Traduire en français automatiquement</label>
-                  <label class="switch autotr" title="Après chaque transcription, les voix sont comparées pour indiquer qui parle (analyse locale, module de 33 Mo téléchargé une fois)."><input type="checkbox" id="toggle-autospk" /><span class="track"></span>Reconnaître qui parle</label>
-                  <label class="switch autotr" title="À la fin de chaque transcription, un modèle plus précis réécoute les passages douteux et corrige ce qu’il entend mieux (s’il est déjà téléchargé)."><input type="checkbox" id="toggle-verify" /><span class="track"></span>Vérifier (seconde écoute)</label>
+                <div class="side-block">
+                  <span class="label">Modèle</span>
+                  <details class="picker-box" id="model-pick">
+                    <summary class="picker" title="Changer de modèle">
+                      <span class="pk-ico"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></span>
+                      <span class="pk-main"><span class="pk-title"><b id="pk-label">—</b><em id="pk-name"></em></span><small id="pk-sub"></small></span>
+                      <svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                    </summary>
+                    <fieldset class="models" id="models">
+                      <legend class="sr-only">Modèle</legend>
+                    </fieldset>
+                  </details>
                 </div>
 
-                <div class="actions">
+                <div class="side-block">
+                  <span class="label">Langue</span>
+                  <div class="select-wrap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><select id="lang" class="select" aria-label="Langue parlée"></select></div>
+                  <p class="field-hint" id="lang-hint" hidden>Voxtral détecte la langue tout seul.</p>
+                </div>
+
+                <div class="side-block">
+                  <span class="label">Options</span>
+                  <div class="opt-list">
+                    <label class="opt-row" title="Après chaque transcription, les voix sont comparées pour indiquer qui parle (analyse locale, module de 33 Mo téléchargé une fois).">
+                      <span class="opt-ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg></span>
+                      <span class="opt-txt"><b>Reconnaître qui parle</b><small>Sépare les voix des participants</small></span>
+                      <span class="switch"><input type="checkbox" id="toggle-autospk" /><span class="track"></span></span>
+                    </label>
+                    <label class="opt-row" title="À la fin de chaque transcription, un modèle plus précis réécoute les passages douteux et corrige ce qu’il entend mieux (s’il est déjà téléchargé).">
+                      <span class="opt-ico"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span>
+                      <span class="opt-txt"><b>Seconde écoute</b><small>Un modèle plus précis vérifie les passages douteux</small></span>
+                      <span class="switch"><input type="checkbox" id="toggle-verify" /><span class="track"></span></span>
+                    </label>
+                    <label class="opt-row" title="Si une autre langue que le français est parlée, chaque phrase est traduite en français automatiquement (traduction locale).">
+                      <span class="opt-ico"><svg viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c.5 3 2.5 5.5 5 7M11 5c-.8 3.5-3.2 6.5-7 8"/><path d="m12 21 4.5-10 4.5 10M13.8 17h5.4"/></svg></span>
+                      <span class="opt-txt"><b>Traduire en français</b><small>Si une autre langue est parlée</small></span>
+                      <span class="switch"><input type="checkbox" id="toggle-autotr" /><span class="track"></span></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="actions side-go">
                   <button class="btn primary" id="btn-transcribe" type="button" disabled title="Ctrl + Entrée">
                     <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span>Transcrire</span>
                   </button>
                   <button class="btn" id="btn-cancel" type="button" hidden>Arrêter</button>
+                  <p class="go-hint"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Traitement local · <kbd>Ctrl</kbd> + <kbd>Entrée</kbd></p>
                 </div>
 
                 <p class="status-line" id="status-line" role="status" aria-live="polite"></p>
@@ -805,6 +834,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-24"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-25"></script>
 </body>
 </html>

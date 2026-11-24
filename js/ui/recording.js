@@ -116,6 +116,7 @@ export const sound = (() => {
 export const saveSound = () => store.set('sound', JSON.stringify(sound));
 export const recorder = new Recorder({
   onLevel(l, info) {
+    heroLevel(l);
     if (info) monitor?.addLevel(info.t, info.rms, info.peak);
     if (tool.meter) $('#tool-meter-fill').style.width = `${Math.round(Math.min(1, l * 1.4) * 100)}%`;
   },
@@ -550,8 +551,38 @@ export function renderCapture() {
   });
 }
 
+// Forme d'onde de la scène : des barres fixes dont la hauteur suit le niveau réel du micro.
+let heroLvl = 0, heroAt = 0;
+function heroLevel(l) {
+  const hero = $('#rec-hero');
+  if (!hero || !micBusy()) return;
+  const now = performance.now();
+  heroLvl = Math.max(Math.min(1, l * 1.4), heroLvl * 0.85); // montée immédiate, retombée douce
+  if (now - heroAt < 60) return;
+  heroAt = now;
+  hero.style.setProperty('--lvl', heroLvl.toFixed(3));
+}
+function ensureWave() {
+  const w = $('#rec-hero .rec-wave');
+  if (!w || w.childElementCount) return;
+  w.innerHTML = Array.from({ length: 90 }, (_, i) => {
+    const v = Math.abs(Math.sin(i * 0.37 + 2) * 0.55 + Math.sin(i * 0.11 + 4) * 0.35 + Math.sin(i * 1.7) * 0.1);
+    return `<i style="--h:${Math.round((0.12 + v * 0.88) * 100)}%"></i>`;
+  }).join('');
+}
+
 export function renderRec() {
   const s = micBusy() ? recorder.state : 'idle';
+  ensureWave();
+  const hero = $('#rec-hero');
+  if (hero) {
+    hero.classList.toggle('live', s !== 'idle');
+    hero.classList.toggle('paused', s === 'paused');
+    if (s === 'idle') { heroLvl = 0; hero.style.setProperty('--lvl', '0'); }
+  }
+  if ($('#rec-actions')) $('#rec-actions').hidden = s === 'idle';
+  // En direct, l'arrêt termine aussi la transcription
+  if ($('#rec-stop span')) $('#rec-stop span').textContent = state.rec?.live ? 'Arrêter et transcrire' : 'Arrêter';
   const btn = $('#rec-main');
   btn.classList.toggle('recording', s !== 'idle');
   btn.classList.toggle('paused', s === 'paused');

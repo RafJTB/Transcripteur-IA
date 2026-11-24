@@ -114,7 +114,7 @@ function update() {
     if (e !== lastBlock) { lastBlock = e; lastColor = blockColor(e); }
     if (lastColor) s.setProperty('--hover-rgb', lastColor);
     else s.removeProperty('--hover-rgb');
-  } else if (lastBlock) { lastBlock = null; s.removeProperty('--hover-rgb'); }
+  } else { lastBlock = null; s.removeProperty('--hover-rgb'); } // couleur fixe ou accent : jamais celle d'un bloc
   glow.classList.add('on');
 }
 

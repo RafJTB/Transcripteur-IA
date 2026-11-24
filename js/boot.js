@@ -38,7 +38,7 @@
   // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
   // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
   (function () {
-    var FILES = ['./', 'index.html', 'js/boot.js?v=2026-11-22-26', 'styles.css?v=2026-11-22-26', 'sw.js', 'js/app.js?v=2026-11-22-26', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+    var FILES = ['./', 'index.html', 'js/boot.js?v=2026-11-22-27', 'styles.css?v=2026-11-22-27', 'sw.js', 'js/app.js?v=2026-11-22-27', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
       'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js', 'js/report.js', 'js/ui/report-ui.js', 'js/ui/space-chat.js', 'js/calendar.js', 'js/outlook.js', 'js/ui/calendar-ui.js', 'js/verify.js', 'js/ui/verify-ui.js', 'js/ui/storage-ui.js',
       'js/ui/account.js', 'js/ui/assistant.js', 'js/ui/core.js', 'js/ui/dashboard.js', 'js/ui/diagnostic.js', 'js/ui/doc-tabs.js', 'js/ui/doc.js', 'js/ui/engine.js', 'js/ui/history.js', 'js/ui/notifs.js', 'js/ui/pages.js', 'js/ui/recording.js', 'js/ui/sound.js', 'js/ui/spaces.js', 'js/ui/speakers.js', 'js/ui/transcription.js', 'js/ui/translation.js', 'js/ui/views.js'];
     var done = false;

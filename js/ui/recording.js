@@ -106,6 +106,7 @@ export function handleFiles(files) {
 export function selectTab(name) {
   $$('.seg [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   $$('.tab-panel').forEach((p) => (p.hidden = p.dataset.panel !== name));
+  updateButtons();
 }
 
 // ======================================================================

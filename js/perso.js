@@ -15,7 +15,7 @@ export const BACKGROUNDS = [
   { id: 'uni', label: 'Uni', css: 'none' },
 ];
 
-export const DEFAULTS = { bg: 'photo', blur: 14, veil: 100, panel: 100, accent: null };
+export const DEFAULTS = { bg: 'photo', blur: 14, veil: 100, panel: 100, accent: null, hover: 'all', hoverColor: null };
 
 /** Couleurs d'accent (onglets sélectionnés, boutons, liens). La première est celle d'origine. */
 export const ACCENTS = [
@@ -89,6 +89,10 @@ export function applyPerso(p = loadPerso()) {
   const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
   const vars = p.accent ? accentVars(p.accent)[theme] : null;
   for (const k of ACCENT_KEYS) vars ? s.setProperty(k, vars[k]) : s.removeProperty(k);
+  // Lueur au survol des blocs : quels blocs, et quelle couleur (rien = couleur d'accent)
+  document.documentElement.dataset.hover = ['all', 'click', 'off'].includes(p.hover) ? p.hover : 'all';
+  if (/^#[0-9a-f]{6}$/i.test(p.hoverColor || '')) s.setProperty('--hover-rgb', trip(toRgb(p.hoverColor)));
+  else s.removeProperty('--hover-rgb');
 }
 
 /**

@@ -1,5 +1,6 @@
 // Compte Google, synchronisation, dossiers, installation.
 
+import { NO_FOLDER_COLOR, folderColor } from '../projects.js';
 import { Audios, History } from '../history.js';
 import { Auth, Folders, Sync, redirectUri } from '../cloud.js';
 import { $, ask, askText, esc2, initials, state, toast, writeClipboard } from './core.js';
@@ -194,12 +195,13 @@ export function renderFolderBar(items) {
   const fs = Folders.list();
   const count = (id) => items.filter((it) => (id === 'none' ? !Folders.get(it.folderId) : it.folderId === id)).length;
   if (state.folder !== 'all' && state.folder !== 'none' && !Folders.get(state.folder)) state.folder = 'all';
-  const chip = (id, name, n, extra = '') => `<button type="button" class="fchip${state.folder === id ? ' active' : ''}" data-folder="${id}">${extra}<span>${esc2(name)}</span><small>${n}</small></button>`;
   const folderIco = '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
-  bar.innerHTML = chip('all', 'Tous', items.length)
-    + fs.map((f) => chip(f.id, f.name, count(f.id), folderIco)).join('')
-    + (fs.length ? chip('none', 'Sans dossier', count('none')) : '')
-    + '<button type="button" class="fchip add" data-folder-new><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Nouveau dossier</span></button>';
+  const allIco = '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18"/></svg>';
+  const chip = (id, name, n, color, ico = folderIco) => `<button type="button" class="fchip${state.folder === id ? ' active' : ''}" data-folder="${id}" style="--fc:${color}"><span class="sq">${ico}</span><span class="nm">${esc2(name)}</span><small>${n}</small></button>`;
+  bar.innerHTML = chip('all', 'Tous les projets', items.length, 'var(--accent-rgb)', allIco)
+    + fs.map((f) => chip(f.id, f.name, count(f.id), folderColor(f.id, Folders.raw()))).join('')
+    + (fs.length ? chip('none', 'Sans dossier', count('none'), NO_FOLDER_COLOR) : '')
+    + '<button type="button" class="fchip add" data-folder-new><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="nm">Nouveau dossier</span></button>';
   const cur = Folders.get(state.folder);
   $('#folder-tools').hidden = !cur;
 }

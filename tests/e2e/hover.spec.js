@@ -55,7 +55,7 @@ test('survol : le bord du bloc s’allume sous la souris, réglages respectés e
   await expect(glow).not.toHaveClass(/on/);
   // Retour à la couleur d'accent
   await page.locator('#hover-mode [data-hover="all"]').click();
-  await page.locator('#hover-row [data-hcolor=""]').click();
+  await page.locator('#hover-row [data-hcolor="accent"]').click();
   expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--hover-rgb'))).toBe('');
 });
 
@@ -84,4 +84,37 @@ test('survol : la lueur marche aussi sur les pages ajoutées après coup (projet
   const [nx, ny] = await center(page.locator('.sidebar [data-nav="home"]'));
   await page.mouse.move(nx, ny);
   await expect(glow).not.toHaveClass(/on/);
+});
+
+test('survol : couleur automatique = la couleur du bloc survolé (dossiers, catégories), sinon l’accent', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await boot(page);
+  await seedMeetings(page);
+  const glow = page.locator('.hover-glow');
+  const glowColor = () => glow.evaluate((e) => e.style.getPropertyValue('--hover-rgb'));
+  // Paramètres : chaque catégorie a sa couleur
+  await nav(page, 'settings');
+  for (const [k, rgb] of [['voix', '16 185 129'], ['moteur', '245 158 11'], ['compte', '59 130 246']]) {
+    const [x, y] = await center(page.locator(`#set-nav [data-set="${k}"]`));
+    await page.mouse.move(x, y);
+    await expect(glow).toHaveClass(/on/);
+    await expect.poll(glowColor).toBe(rgb);
+  }
+  // Mes projets : la ligne prend la couleur de son dossier
+  await page.evaluate(async () => { const f = window.__app.Folders.add('Coswin'); const d = await window.__app.History.get('d1'); d.folderId = f.id; await window.__app.History.put(d); });
+  await nav(page, 'projects');
+  const row = page.locator('.proj-row[data-doc="d1"]');
+  const fc = await row.evaluate((e) => e.style.getPropertyValue('--fc'));
+  const [rx, ry] = await center(row);
+  await page.mouse.move(rx, ry);
+  await expect.poll(glowColor).toBe(fc);
+  // Couleur fixe choisie : elle l'emporte partout
+  await nav(page, 'custom');
+  await page.locator('#hover-row [data-hcolor="#ea580c"]').click();
+  await nav(page, 'settings');
+  const [vx, vy] = await center(page.locator('#set-nav [data-set="voix"]'));
+  await page.mouse.move(vx, vy);
+  await expect(glow).toHaveClass(/on/);
+  await expect.poll(glowColor).toBe('');
+  expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--hover-rgb'))).toBe('234 88 12');
 });

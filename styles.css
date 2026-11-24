@@ -2709,3 +2709,7 @@ label.set-row:hover, .set-link:hover { background: rgb(var(--ov) / 0.04); }
   .nav button { height: 38px; }
   .nav-head { margin: 8px 12px 0; }
 }
+
+/* Survol : pastille « automatique » (la couleur du bloc survolé) */
+.acc-sw.auto i { position: relative; background: conic-gradient(from 200deg, #8b5cf6, #10b981, #f59e0b, #ec4899, #06b6d4, #8b5cf6); }
+.acc-sw.auto i::after { content: ''; position: absolute; inset: 7px; border-radius: 50%; background: rgb(var(--card-solid-rgb)); }

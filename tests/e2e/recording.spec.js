@@ -25,8 +25,14 @@ test('micro : enregistrer puis arrêter garde l’audio dans un projet', async (
   await boot(page);
   await page.locator('#dash-new').click();
   await expect(page.locator('body')).toHaveAttribute('data-page', 'record');
+  // Au repos : seul l'orbe est proposé, pas de Pause / Arrêter grisés
+  await expect(page.locator('#rec-actions')).toBeHidden();
   await page.locator('#rec-main').click();
   await expect.poll(() => page.evaluate(() => window.__app.recorderState())).toBe('recording');
+  await expect(page.locator('#rec-actions')).toHaveJSProperty('hidden', false); // (la vue peut être passée au texte en direct)
+  await expect(page.locator('#rec-hero')).toHaveClass(/live/);
+  await expect(page.locator('#rec-main')).toHaveClass(/recording/);
+  await expect.poll(() => page.evaluate(() => document.querySelector('#rec-hero').style.getPropertyValue('--lvl'))).not.toBe('');
   await page.waitForTimeout(2500);
   // Enregistrement en direct : on passe sur la page de la réunion, avec la barre d'enregistrement
   await expect(page.locator('#rb-time')).not.toHaveText('00:00');

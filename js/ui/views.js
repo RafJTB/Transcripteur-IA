@@ -5,7 +5,7 @@ import { renderAnalytics, renderDashboard, renderQuick } from './dashboard.js';
 import { renderActions, renderAnalysis, renderInsights, renderSummary } from './doc-tabs.js';
 import { renderHistory } from './history.js';
 import { renderModelsPage, renderPerso } from './pages.js';
-import { monitor, player, recorder } from './recording.js';
+import { freshSource, monitor, player, recorder } from './recording.js';
 import { renderSpaces } from './spaces.js';
 import { renderCalendar } from './calendar-ui.js';
 
@@ -28,6 +28,7 @@ export function toggleSheet(open = !document.body.classList.contains('sheet-open
 export function setView(name) {
   if (document.body.classList.contains('sheet-open')) { document.body.classList.remove('sheet-open'); $('#nav [data-nav="panel"]')?.classList.remove('active'); }
   const page = PAGE_OF[name] || 'home';
+  if (page === 'record' && state.page !== 'record') freshSource();
   state.page = page;
   document.body.dataset.page = page;
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.page === page));

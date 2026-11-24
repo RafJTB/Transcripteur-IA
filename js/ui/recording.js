@@ -41,6 +41,17 @@ export async function setAudioFromBlob(blob, name, { audioId = null, pcm = null,
   updateButtons();
 }
 
+/**
+ * Page « Nouvelle transcription » : on part d'une page vide. L'audio d'une réunion déjà
+ * transcrite (ouverte depuis les projets, ou enregistrée en direct) n'y reste pas affiché ;
+ * il est toujours dans le projet. Un audio pas encore transcrit (import, enregistrement
+ * sans direct) est gardé, pour pouvoir cliquer sur « Transcrire ».
+ */
+export function freshSource() {
+  if (micBusy() || state.phase !== 'idle' || !state.audio?.docId) return;
+  clearAudio();
+}
+
 export function clearAudio() {
   if (state.audio?.url) URL.revokeObjectURL(state.audio.url);
   state.audio = null;

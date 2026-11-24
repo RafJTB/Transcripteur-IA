@@ -2284,7 +2284,7 @@ button.store-chip { cursor: pointer; font: inherit; }
 /* =====================================================================
    Page « Nouvelle transcription » (v5) : scène d'enregistrement + réglages
    ===================================================================== */
-[data-page='record'] { container-type: inline-size; container-name: recpage; }
+section.view[data-page='record'] { container-type: inline-size; container-name: recpage; }
 .rec-grid { grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 18px; align-items: stretch; }
 @container recpage (max-width: 720px) { .rec-grid { grid-template-columns: minmax(0, 1fr); } }
 .rec-stage, .rec-side { border-radius: 22px; padding: 22px; display: flex; flex-direction: column; gap: 18px; }

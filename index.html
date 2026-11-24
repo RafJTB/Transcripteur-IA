@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-27" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-27" />
-  <script src="js/boot.js?v=2026-11-22-27"></script>
+  <meta name="app-version" content="2026-11-22-28" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-28" />
+  <script src="js/boot.js?v=2026-11-22-28"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -511,6 +511,16 @@
               <div class="accent-preview" aria-hidden="true"><span class="fchip active">Onglet sélectionné <small>3</small></span><span class="btn primary sm">Bouton principal</span><span class="link-btn">Lien</span></div>
             </section>
             <section class="glass dash-card">
+              <header class="dash-head"><h3>Survol des blocs</h3></header>
+              <p class="an-note hover-note">Quand la souris passe sur un bloc, son bord s’allume là où est le curseur.</p>
+              <div class="seg hover-seg" id="hover-mode" role="radiogroup" aria-label="Blocs concernés">
+                <button type="button" data-hover="all">Tous les blocs</button>
+                <button type="button" data-hover="click">Blocs cliquables</button>
+                <button type="button" data-hover="off">Désactivé</button>
+              </div>
+              <div class="accent-row" id="hover-row"></div>
+            </section>
+            <section class="glass dash-card">
               <header class="dash-head"><h3>Effets</h3><button class="link-btn" id="perso-reset" type="button">Réinitialiser</button></header>
               <div class="perso-sliders">
                 <label class="perso-row"><span>Flou du fond</span><input type="range" class="range" id="perso-blur" min="0" max="40" step="1" /><output id="perso-blur-v"></output></label>
@@ -835,6 +845,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-27"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-28"></script>
 </body>
 </html>

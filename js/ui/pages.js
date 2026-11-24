@@ -4,6 +4,7 @@ import { ACCENTS, BACKGROUNDS, DEFAULTS as PERSO_DEFAULTS, accentVars, applyPers
 import { MODELS, isStreaming, pickVariant } from '../config.js';
 import { $, caps, esc, fmtMB, state, store, toast } from './core.js';
 import { monitor, player } from './recording.js';
+import { initHoverGlow } from './hover-glow.js';
 
 // ---------- Page Personnalisation ----------
 const PLUS_ICON = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
@@ -33,6 +34,20 @@ export function renderPerso() {
     const v = accentVars(a.hex).dark;
     return `<button type="button" class="acc-sw${a.hex === cur ? ' active' : ''}" data-accent="${a.hex}" title="${esc(a.label)}" aria-label="${esc(a.label)}" style="--a:rgb(${v['--sel-a']});--b:${a.hex}"><i></i></button>`;
   }).join('') + `<label class="acc-sw custom${known ? '' : ' active'}" title="Couleur personnalisée"><i></i><input type="color" id="accent-custom" value="${cur}" aria-label="Couleur personnalisée" /></label><span class="accent-name">${esc(known ? known.label : `Personnalisée (${cur})`)}</span>`;
+  // Survol des blocs
+  const hm = ['all', 'click', 'off'].includes(p.hover) ? p.hover : 'all';
+  document.querySelectorAll('#hover-mode [data-hover]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.hover === hm)));
+  const hc = (p.hoverColor || '').toLowerCase();
+  const hKnown = ACCENTS.find((a) => a.hex === hc);
+  const accHex = (p.accent || ACCENTS[0].hex).toLowerCase();
+  const accV = accentVars(accHex).dark;
+  $('#hover-row').classList.toggle('off', hm === 'off');
+  $('#hover-row').innerHTML = `<button type="button" class="acc-sw same${hc ? '' : ' active'}" data-hcolor="" title="Comme la couleur d’accent" aria-label="Comme la couleur d’accent" style="--a:rgb(${accV['--sel-a']});--b:${accHex}"><i></i></button>`
+    + ACCENTS.map((a) => {
+      const v = accentVars(a.hex).dark;
+      return `<button type="button" class="acc-sw${a.hex === hc ? ' active' : ''}" data-hcolor="${a.hex}" title="${esc(a.label)}" aria-label="${esc(a.label)}" style="--a:rgb(${v['--sel-a']});--b:${a.hex}"><i></i></button>`;
+    }).join('')
+    + `<label class="acc-sw custom${hc && !hKnown ? ' active' : ''}" title="Couleur personnalisée"><i></i><input type="color" id="hover-custom" value="${hc || accHex}" aria-label="Couleur personnalisée du survol" /></label><span class="accent-name">${esc(!hc ? 'Comme la couleur d’accent' : hKnown ? hKnown.label : `Personnalisée (${hc})`)}</span>`;
   const light = document.documentElement.dataset.theme === 'light';
   $('#perso-blur').value = p.blur;
   $('#perso-blur-v').textContent = `${p.blur} px`;
@@ -46,6 +61,7 @@ export function renderPerso() {
 
 export function bindPerso() {
   applyPerso();
+  initHoverGlow();
   $('#bg-grid').addEventListener('click', (e) => {
     const t = e.target.closest('[data-bg], [data-import]');
     if (!t) return;
@@ -88,6 +104,21 @@ export function bindPerso() {
   });
   $('#accent-row').addEventListener('change', (e) => {
     if (e.target.id === 'accent-custom') setPerso({ accent: e.target.value.toLowerCase() });
+  });
+  // Survol des blocs : blocs concernés et couleur
+  $('#hover-mode').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hover]');
+    if (b) setPerso({ hover: b.dataset.hover });
+  });
+  $('#hover-row').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hcolor]');
+    if (b) setPerso({ hoverColor: b.dataset.hcolor || null });
+  });
+  $('#hover-row').addEventListener('input', (e) => {
+    if (e.target.id === 'hover-custom') applyPerso({ ...loadPerso(), hoverColor: e.target.value });
+  });
+  $('#hover-row').addEventListener('change', (e) => {
+    if (e.target.id === 'hover-custom') setPerso({ hoverColor: e.target.value.toLowerCase() });
   });
   // Le libellé et l'opacité affichée dépendent du thème
   $('#btn-theme').addEventListener('click', () => setTimeout(() => { applyPerso(); applyThemeColors(); renderPerso(); }));

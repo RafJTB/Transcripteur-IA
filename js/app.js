@@ -25,7 +25,7 @@ import { autoSetup, bindSound, renderAutoInfo, setAutoTune } from './ui/sound.js
 import { applySpeakers, bindVoices, identifySpeakers, openSpeakerMenu, spkCache } from './ui/speakers.js';
 import { cancel, hideResume, isMine, persist, renderResume, startTranscription } from './ui/transcription.js';
 import { autoTranslate, translateDoc } from './ui/translation.js';
-import { closeDrawers, openDrawer } from './ui/views.js';
+import { closeDrawers, openDrawer, setView } from './ui/views.js';
 import { bindReport } from './ui/report-ui.js';
 import { handleCalendarReturn, initCalendar } from './ui/calendar-ui.js';
 import { bindVerify, verifyDoc } from './ui/verify-ui.js';
@@ -262,6 +262,7 @@ function bind() {
     saveLexicon(state.lexicon);
     renderLexicon();
   };
+  $('#proj-new').onclick = () => { setView('record'); selectTab('mic'); };
   $('#hist-clear').onclick = async () => {
     if (state.phase !== 'idle' || micBusy()) return toast('Attends la fin de la transcription ou de l’enregistrement en cours.', 'warn');
     const where = Sync.enabled() ? 'de ce navigateur et de ton Google Drive' : 'de ce navigateur';

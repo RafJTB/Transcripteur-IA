@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-28" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-28" />
-  <script src="js/boot.js?v=2026-11-22-28"></script>
+  <meta name="app-version" content="2026-11-22-29" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-29" />
+  <script src="js/boot.js?v=2026-11-22-29"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -413,18 +413,24 @@
 
           <!-- ===== MES PROJETS / HISTORIQUE ===== -->
           <section class="view view-page hist-card" data-page="history" id="step-history" aria-labelledby="h-hist">
-            <header class="card-head proj-head">
+            <header class="proj-head">
               <div><h2 id="h-hist">Historique</h2><span class="hist-count" id="hist-count"></span></div>
+              <span class="grow"></span>
               <button class="icon-btn danger" id="hist-clear" type="button" title="Tout supprimer (transcriptions et audios)" aria-label="Tout supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+              <button class="btn primary proj-new" id="proj-new" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nouvelle transcription</button>
             </header>
-            <div class="folder-row">
-              <div class="folder-bar" id="folder-bar"></div>
-              <div class="folder-tools" id="folder-tools" hidden>
-                <button class="icon-btn xs" id="folder-rename" type="button" title="Renommer ce dossier" aria-label="Renommer ce dossier"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>
-                <button class="icon-btn xs danger" id="folder-delete" type="button" title="Supprimer ce dossier (pas les transcriptions)" aria-label="Supprimer ce dossier"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
-              </div>
+            <div class="proj-layout">
+              <aside class="proj-side" aria-label="Dossiers">
+                <h4>Dossiers</h4>
+                <div class="folder-bar" id="folder-bar"></div>
+                <div class="folder-tools" id="folder-tools" hidden>
+                  <button class="link-btn" id="folder-rename" type="button" title="Renommer ce dossier"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>Renommer</button>
+                  <button class="link-btn danger" id="folder-delete" type="button" title="Supprimer ce dossier (pas les transcriptions)"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Supprimer</button>
+                </div>
+                <div class="proj-storage" id="proj-storage"></div>
+              </aside>
+              <div class="hist-list" id="hist-list"></div>
             </div>
-            <div class="hist-list" id="hist-list"></div>
           </section>
 
           <!-- ===== ESPACES COLLABORATIFS ===== -->
@@ -845,6 +851,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-28"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-29"></script>
 </body>
 </html>

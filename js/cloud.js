@@ -399,7 +399,10 @@ export const Sync = {
     // 3. Audios d'origine (envoyés une fois ; récupérés seulement à l'ouverture)
     // Choix de l'utilisateur pour chaque audio (audioWhere) : « local » et « none » ne partent jamais ;
     // « drive » : la copie de ce PC est retirée une fois l'audio dans le Drive. Sans choix (anciennes transcriptions) : envoyé.
-    const whereOf = new Map(local.filter((d) => d.audioId).map((d) => [d.audioId, d.audioWhere || '']));
+    // (relu après l'étape 2 : un choix fait sur un autre appareil est déjà arrivé ici, on ne renvoie donc pas
+    // un audio que l'utilisateur a demandé de garder sur son PC ou d'effacer)
+    const fresh = (await History.list()).filter((d) => d.owner === email);
+    const whereOf = new Map(fresh.filter((d) => d.audioId).map((d) => [d.audioId, d.audioWhere || '']));
     for (const [aid, where] of whereOf) {
       if (where === 'local' || where === 'none') continue;
       if (!rAudios.has(aid)) {

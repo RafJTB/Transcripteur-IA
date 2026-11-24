@@ -26,7 +26,7 @@ test('les réunions sont envoyées sur Drive, et retrouvées sur un autre appare
   await other.addInitScript(() => localStorage.setItem('transcripteur.theme', 'dark'));
   const p2 = await other.newPage();
   await boot(p2);
-  expect(await p2.evaluate(() => window.__app.History.get('d1'))).toBeUndefined();
+  // (la synchro du démarrage peut déjà l'avoir récupérée : on ne suppose pas l'historique vide)
   await p2.evaluate(() => window.__app.syncNow());
   await expect.poll(() => p2.evaluate(() => window.__app.History.get('d1').then((d) => d?.title))).toContain('Ledona');
   await other.close();

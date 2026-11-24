@@ -1,6 +1,7 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 
+import { Look } from './presentation.js';
 import { Audios, History, RecChunks } from './history.js';
 import { Auth, Folders, Sync } from './cloud.js';
 import { CONF, Monitor } from './monitor.js';
@@ -299,6 +300,7 @@ async function init() {
     document.documentElement.dataset.theme = t;
     store.set('theme', t);
     applyThemeColors();
+    Look.touch();
   };
   setPlayer(new Player({
     root: $('#player'), audio: $('#audio-player'), canvas: $('#pl-wave'), play: $('#pl-play'),

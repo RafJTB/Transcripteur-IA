@@ -73,6 +73,9 @@ test('sans réunion choisie : l’enregistrement se relie à la réunion en cour
   await page.route(/huggingface\.co|hf\.co/, (r) => r.abort());
   await boot(page);
   await importIcs(page, 3);
+  // Le direct (et donc la vue « texte » avec son bouton Arrêter) attend la détection du matériel :
+  // sous charge elle peut être lente, on l'attend pour ne pas enregistrer sans direct.
+  await expect.poll(() => page.evaluate(() => !!window.__app.state.caps), { timeout: 30_000 }).toBe(true);
   await page.locator('#dash-new').evaluate((b) => b.click());
   await page.locator('#rec-main').click();
   await expect(page.locator('body')).toContainText('Enregistrement relié à « Point équipe projet Ledona »');

@@ -3,6 +3,8 @@
 import { ACCENTS, BACKGROUNDS, BG_CATS, DEFAULTS as PERSO_DEFAULTS, accentVars, applyPerso, customImage, loadPerso, saveCustomImage, savePerso, shrinkImage } from '../perso.js';
 import { MODELS, isStreaming, pickVariant } from '../config.js';
 import { $, caps, esc, fmtMB, state, store, toast } from './core.js';
+import { Auth, Sync } from '../cloud.js';
+import { Look } from '../presentation.js';
 import { monitor, player } from './recording.js';
 import { initHoverGlow, refreshHoverGlow } from './hover-glow.js';
 import { initLiquidTabs } from './liquid-tabs.js';
@@ -10,18 +12,47 @@ import { initLiquidTabs } from './liquid-tabs.js';
 // ---------- Page Personnalisation ----------
 let bgCat = 'all'; // famille affichée dans le catalogue de fonds
 const PLUS_ICON = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
-function setPerso(patch) {
-  const p = { ...loadPerso(), ...patch };
+/** Enregistre les réglages, avec ce que le petit script en tête de page applique avant l'affichage. */
+function persist(p) {
   p.css = (BACKGROUNDS.find((b) => b.id === p.bg) || BACKGROUNDS[0]).css;
-  // Gardé tout calculé pour le petit script en tête de page (couleur appliquée avant l'affichage)
   p.accentVars = p.accent ? accentVars(p.accent) : null;
   savePerso(p);
+  return p;
+}
+
+/** Changement fait par l'utilisateur : appliqué, et marqué pour la synchronisation entre navigateurs. */
+function setPerso(patch) {
+  const p = persist({ ...loadPerso(), ...patch });
   applyPerso(p);
   applyThemeColors();
   renderPerso();
+  Look.touch();
+}
+
+/** Présentation importée depuis le Drive (autre navigateur) : appliquée sans être renvoyée. */
+export function applyRemoteLook() {
+  const t = store.get('theme');
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  persist(loadPerso());
+  applyPerso();
+  applyThemeColors();
+  renderPerso();
+  refreshHoverGlow();
+  toast('Ta présentation a été importée depuis ton Google Drive.', 'ok', 4000);
+}
+
+/** Ligne « Retrouver ma présentation sur mes autres navigateurs ». */
+export function renderLookSync() {
+  const el = $('#look-sync-info');
+  if (!el) return;
+  const u = Auth.user();
+  el.textContent = !Look.enabled() ? 'Désactivé : cette présentation reste propre à ce navigateur.'
+    : u ? `Thème, fond, couleurs et effets sont enregistrés dans le Google Drive de ${u.email} et appliqués sur tes autres navigateurs connectés à ce compte.`
+      : 'Connecte-toi à Google (en bas à gauche) : ta présentation te suivra sur tes autres navigateurs.';
 }
 
 export function renderPerso() {
+  renderLookSync();
   const grid = $('#bg-grid');
   if (!grid) return;
   const p = loadPerso();
@@ -77,6 +108,9 @@ export function bindPerso() {
   applyPerso();
   initHoverGlow();
   initLiquidTabs();
+  Sync.onLook = applyRemoteLook;
+  $('#look-sync').checked = Look.enabled();
+  $('#look-sync').onchange = (e) => { Look.setEnabled(e.target.checked); renderLookSync(); };
   $('#bg-cats').addEventListener('click', (e) => {
     const b = e.target.closest('[data-cat]');
     if (!b) return;
@@ -108,6 +142,7 @@ export function bindPerso() {
       applyPerso(p);
       savePerso({ ...p, css: (BACKGROUNDS.find((b) => b.id === p.bg) || BACKGROUNDS[0]).css });
       renderPerso();
+      Look.touch();
     });
   };
   live('#perso-blur', 'blur');

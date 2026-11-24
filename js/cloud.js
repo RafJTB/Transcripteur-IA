@@ -8,6 +8,7 @@
 // - La transcription reste 100 % locale ; seuls les résultats (et l'audio) sont copiés
 //   dans le Drive de la personne connectée. Personne d'autre n'y a accès.
 
+import { Look, hash } from './presentation.js';
 import { GOOGLE_CLIENT_ID } from './config.js';
 import { History, Audios } from './history.js';
 
@@ -212,6 +213,7 @@ export const Drive = {
 
   async getBlob(id) { return (await api(`${DRIVE}/files/${id}?alt=media`)).blob(); },
   async getJson(id) { return (await api(`${DRIVE}/files/${id}?alt=media`)).json(); },
+  async getText(id) { return (await api(`${DRIVE}/files/${id}?alt=media`)).text(); },
   async remove(id) {
     try { await api(`${DRIVE}/files/${id}`, { method: 'DELETE' }); } catch (e) { if (e.status !== 404) throw e; }
   },
@@ -435,7 +437,30 @@ export const Sync = {
     if (rFolders) Folders.merge(await Drive.getJson(rFolders.id));
     const fl = new Blob([JSON.stringify(Folders.raw())], { type: 'application/json' });
     await Drive.put(rFolders?.id || null, 'dossiers.json', fl, { kind: 'folders' });
+
+    // 5. Présentation (thème, fond, couleurs, effets) : la plus récente gagne
+    if (Look.enabled()) await Sync._syncLook(files);
     return changed;
+  },
+
+  async _syncLook(files) {
+    const newest = (kind) => files.filter((f) => f.appProperties?.kind === kind).sort((a, b) => (Number(b.appProperties.u) || 0) - (Number(a.appProperties.u) || 0))[0] || null;
+    const rLook = newest('look');
+    const rImg = files.filter((f) => f.appProperties?.kind === 'lookimg').pop() || null;
+    const ru = Number(rLook?.appProperties?.u) || 0;
+    const lu = Look.updatedAt();
+    if (rLook && ru > lu) {
+      // Réglages plus récents ailleurs : on les applique ici
+      const remote = await Drive.getJson(rLook.id);
+      const img = remote.imgHash && remote.imgHash !== hash(Look.image()) && rImg ? await Drive.getText(rImg.id) : null;
+      if (Look.apply(remote, img)) Sync.onLook?.();
+    } else if (lu > ru) {
+      // Réglages faits ici plus récents : on les envoie (l'image seulement si elle a changé)
+      const snap = Look.snapshot();
+      await Drive.put(rLook?.id || null, 'presentation.json', new Blob([JSON.stringify(snap)], { type: 'application/json' }), { kind: 'look', u: String(lu) });
+      const img = Look.image();
+      if (img && rImg?.appProperties?.h !== snap.imgHash) await Drive.put(rImg?.id || null, 'fond-perso.txt', new Blob([img], { type: 'text/plain' }), { kind: 'lookimg', h: snap.imgHash });
+    }
   },
 
   async _upload(d, fileId) {
@@ -462,3 +487,6 @@ export const Sync = {
     return rec;
   },
 };
+
+// Présentation modifiée par l'utilisateur : synchronisation prochaine
+Look.onTouch = () => Sync.schedule(1500);

@@ -15,6 +15,7 @@ import { confirmBigDownload, ensureLoaded, finalizeDoc, getAudio, hideResume, ne
 import { carryTranslations, liveTranslate } from './translation.js';
 import { takeRecordingEvent } from './calendar-ui.js';
 import { stopVerify } from './verify-ui.js';
+import { applyAudioChoice, askAudioStorage } from './storage-ui.js';
 
 // ======================================================================
 // Source audio
@@ -298,6 +299,12 @@ export async function recStop() {
   }
   RecChunks.remove(`${rec.id}.video`).catch(() => {});
   store.del('rec.active');
+  // Où garder cet audio ? (la question n'empêche pas la fin de la transcription de se faire)
+  const liveDoc = rec.live ? state.doc : null;
+  askAudioStorage({ name, durationS: r.seconds, recording: true }).then((where) => {
+    if (liveDoc && liveDoc.id === rec.id) return applyAudioChoice(liveDoc, where);
+    if (state.audio && state.audio.audioId === audioId) state.audio.where = where;
+  });
 
   renderLag(true);
   if (rec.live && state.live) {

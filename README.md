@@ -410,6 +410,15 @@ Deux sources :
 - **Outlook / Microsoft 365** (mis à jour tout seul, relu au démarrage s'il date de plus de 30 min, bouton Actualiser) : connexion Microsoft en **lecture seule** (`Calendars.Read`, `User.Read`), OAuth « code + PKCE » directement depuis le navigateur, sans serveur ni secret. À faire une fois : inscrire l'appli dans [Microsoft Entra → Inscriptions d'applications](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade) (gratuit) : comptes « annuaire organisationnel **et** comptes Microsoft personnels », URI de redirection de type **Application monopage (SPA)** = l'adresse du site (`https://rafjtb.github.io/Transcripteur-IA/`), puis coller l'**ID d'application (client)** dans l'onglet Calendrier (ou dans `OUTLOOK_CLIENT_ID` de `js/config.js`). Un compte professionnel ou d'école peut exiger l'**accord de l'administrateur** : l'appli l'explique et propose le fichier .ics. La session Microsoft d'une appli web dure 24 h, ensuite « Se reconnecter » ; l'agenda déjà lu reste affiché.
 - **Fichier .ics** (export Outlook, Google Agenda…) : lecture des fuseaux horaires (y compris les noms Windows d'Outlook), des réunions répétées (quotidiennes, hebdomadaires, mensuelles « 2e mardi »…), des exceptions et occurrences déplacées, des annulations. Pas de mise à jour automatique.
 
+## Où garder l'audio (confidentialité)
+
+À chaque audio traité (arrêt d'un enregistrement, ou « Transcrire » un fichier importé), l'appli demande **où le garder** :
+- **Sur ce PC** : dans ce navigateur, jamais envoyé sur Internet (ni dans Google Drive) ;
+- **Sur mon Google Drive** (si connecté) : envoyé dans le dossier « Transcripteur IA » de ton Drive, puis **retiré de ce PC** ; récupéré au besoin pour la réécoute ;
+- **Ne pas garder l'audio** : effacé (ici et dans le Drive) dès la transcription terminée, vérification et « Qui parle ? » compris ; seul le texte reste.
+
+Échap ou fermeture = « Sur ce PC » (rien ne sort de l'appareil). La question ne bloque pas la fin de la transcription. « Toujours ce choix » (ou **Paramètres → Stockage**) règle un choix par défaut ; « Demander à chaque audio » est le réglage d'origine. Pour une réunion déjà faite, la pastille **« Audio sur… »** en haut de la transcription permet de changer d'avis (rapatrier sur ce PC et retirer du Drive, envoyer dans le Drive, ou effacer). La vidéo de l'écran suit le même choix. Les transcriptions faites avant cette option gardent l'ancien fonctionnement (audio envoyé dans le Drive si connecté). Pendant un enregistrement, une copie de secours est gardée sur ce PC (en cas de coupure) puis effacée à l'arrêt. Le **texte** des transcriptions, lui, est sauvegardé dans ton Drive si tu es connecté à Google.
+
 ## Compte Google, dossiers et synchronisation (facultatif)
 
 Sans compte, tout reste dans le navigateur, comme avant. Avec un compte Google :

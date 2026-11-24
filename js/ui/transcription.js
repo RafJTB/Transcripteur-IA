@@ -14,6 +14,7 @@ import { ensureAudioStored, loadDocAudio, micBusy } from './recording.js';
 import { identifySpeakers } from './speakers.js';
 import { autoTranslate } from './translation.js';
 import { shouldAutoVerify, stopVerify, verifyDoc } from './verify-ui.js';
+import { askAudioStorage, dropAudioIfNone } from './storage-ui.js';
 
 // ======================================================================
 // Transcription (reprise + repli automatiques)
@@ -120,6 +121,7 @@ export async function startTranscription() {
   }
   if (!(await confirmBigDownload(model))) return;
   const a = state.audio;
+  if (!a.where) a.where = await askAudioStorage({ name: a.name, durationS: a.durationS });
   const audioId = await ensureAudioStored();
   const doc = newDoc({
     title: a.name.replace(/\.[a-z0-9]{2,4}$/i, ''),
@@ -131,6 +133,7 @@ export async function startTranscription() {
     status: 'running',
     job: { modelId: model.id, language: state.language, fromS: 0, baseSegments: [], seqs: [], total: null },
     ...(a.event ? { event: a.event, title: a.event.title } : {}),
+    ...(a.where ? { audioWhere: a.where } : {}),
   });
   a.docId = doc.id;
   await persist(doc);
@@ -272,7 +275,11 @@ export function finalizeDoc(doc, newSegments) {
   showDoc(doc);
   if (matchMedia('(max-width: 980px)').matches) $('#step-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (!doc.segments.length) status('Aucune parole détectée dans cet audio.', 'warn');
-  const next = () => { autoTranslate(doc); if (state.autoSpk && doc.segments.length) identifySpeakers(doc); };
+  const next = () => {
+    autoTranslate(doc);
+    const spk = state.autoSpk && doc.segments.length ? identifySpeakers(doc) : null;
+    Promise.resolve(spk).catch(() => {}).finally(() => dropAudioIfNone(doc));
+  };
   if (shouldAutoVerify(doc)) verifyDoc(doc, { mode: 'quick', auto: true }).finally(next);
   else next();
   if (doc.segments.length) notify({ kind: 'ok', title: 'Transcription terminée', text: `« ${doc.title} »${doc.durationS ? ` · ${fmtClock(doc.durationS)}` : ''}`, docId: doc.id, system: true });

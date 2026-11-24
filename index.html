@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-30" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-30" />
-  <script src="js/boot.js?v=2026-11-22-30"></script>
+  <meta name="app-version" content="2026-11-22-31" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-31" />
+  <script src="js/boot.js?v=2026-11-22-31"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -557,7 +557,7 @@
 
           <!-- ===== PARAMÈTRES ===== -->
           <section class="view view-settings" data-page="settings">
-            <div class="home-head"><h2>Paramètres</h2><p>Compte, voix, moteur, lexique et stockage. Les réglages du micro sont sur la page « Nouvelle transcription », dans le panneau de droite.</p></div>
+            <div class="home-head"><h2>Paramètres</h2><p>Compte, assistant, voix, moteur, lexique et stockage. Les réglages du micro sont sur la page « Nouvelle transcription ».</p></div>
             <div class="m-links">
               <button class="btn glass-btn" type="button" data-nav="calendar"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendrier</button>
               <button class="btn glass-btn" type="button" data-nav="spaces"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg>Espaces</button>
@@ -566,88 +566,190 @@
               <button class="btn glass-btn" type="button" data-nav="custom"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2a1.7 1.7 0 0 1 1.3-2.9H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10" cy="7" r="1.2"/><circle cx="14.5" cy="7" r="1.2"/></svg>Personnalisation</button>
               <button class="btn glass-btn" type="button" data-nav="help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.6M12 17h.01"/></svg>Aide</button>
             </div>
-            <div class="set-grid">
-              <section class="card set-card acc-card">
-                <h3>Compte Google</h3>
-                <p id="acc-status"></p>
-                <div class="acc-actions">
-                  <button class="btn primary g-btn" id="acc-login" type="button"><span>Se connecter avec Google</span></button>
-                  <button class="btn" id="acc-sync" type="button" hidden>Synchroniser maintenant</button>
-                  <button class="btn" id="acc-switch" type="button" hidden>Changer de compte</button>
-                  <button class="btn ghost" id="acc-logout" type="button" hidden>Se déconnecter</button>
-                </div>
-                <label class="switch acc-videos"><input type="checkbox" id="acc-videos" /><span class="track"></span>Sauvegarder aussi les vidéos de l’écran dans Google Drive</label>
-                <p class="acc-note">Connecté, chaque personne retrouve ses transcriptions et ses dossiers sur tous ses appareils : ils sont copiés dans <b>son</b> Google Drive (dossier « Transcripteur IA »). L’appli ne voit que les fichiers qu’elle a créés. La transcription, elle, reste faite sur ton PC. <a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></p>
-                <details class="acc-admin">
-                  <summary>Configuration (administrateur)</summary>
-                  <label class="label" for="acc-client">ID client OAuth (Google Cloud)</label>
-                  <input class="text-input" id="acc-client" placeholder="123456-abc.apps.googleusercontent.com" spellcheck="false" />
-                  <span class="label">Adresse de retour à déclarer dans Google Cloud</span>
-                  <div class="acc-redirect"><code id="acc-redirect"></code><button class="btn xs" id="acc-copy" type="button">Copier</button></div>
-                </details>
-              </section>
-              <section class="card set-card asst-card">
-                <h3>Assistant IA</h3>
-                <p>Répond à tes questions sur tes réunions, en citant ses sources.</p>
-                <label class="label" for="asst-engine">Moteur</label>
-                <select id="asst-engine" class="select">
-                  <option value="auto">Local, automatique (recommandé)</option>
-                  <option value="local-small">Local léger · Qwen3 0,6B (≈ 620 Mo, expérimental)</option>
-                  <option value="local-large">Local précis · Qwen3 1,7B (≈ 1,4 Go, carte graphique)</option>
-                  <option value="local-xl">Local avancé · Qwen3 4B (≈ 2,8 Go, carte graphique récente)</option>
-                  <option value="claude">Claude · clé API (payant à l’usage)</option>
-                  <option value="search">Recherche simple, sans IA</option>
-                </select>
-                <p class="asst-info" id="asst-info"></p>
-                <p class="asst-fail" id="asst-fail" hidden></p>
-                <div class="asst-actions">
-                  <button class="btn sm" id="asst-test" type="button">Tester l’assistant</button>
-                  <button class="btn sm ghost" id="asst-retry" type="button" hidden>Oublier les échecs</button>
-                </div>
-                <div class="asst-report" id="asst-report" hidden><small></small><pre></pre><button class="btn xs" type="button" id="asst-report-copy">Copier le rapport</button></div>
-                <div class="asst-claude" id="asst-claude" hidden>
-                  <label class="label" for="asst-model">Modèle Claude</label>
-                  <select id="asst-model" class="select"></select>
-                  <label class="label" for="asst-key">Clé API Anthropic</label>
-                  <div class="acc-redirect"><input id="asst-key" class="text-input" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" /><button class="btn xs" id="asst-key-clear" type="button">Effacer</button></div>
-                  <p class="acc-note">Clé à créer sur console.anthropic.com (compte API, distinct de l’abonnement claude.ai). Elle reste dans ce navigateur, n’est jamais synchronisée, et n’est envoyée qu’à Anthropic.</p>
-                </div>
-              </section>
-              <section class="card set-card voice-card">
-                <h3>Voix connues</h3>
-                <p>Quand tu renommes un intervenant, sa voix est mémorisée : aux réunions suivantes, il est reconnu et nommé tout seul. Le carnet de voix reste dans ce navigateur.</p>
-                <label class="switch"><input type="checkbox" id="toggle-voiceid" /><span class="track"></span>Reconnaître les voix connues</label>
-                <ul class="voice-list" id="voice-list"></ul>
-                <button class="link-btn danger" id="voice-clear" type="button" hidden>Oublier toutes les voix</button>
-              </section>
-              <section class="card set-card">
-                <h3>Moteur de calcul</h3>
-                <span class="pill" id="pill-engine" title="Moteur de calcul"><i class="dot"></i><span>Détection du matériel…</span></span>
-                <p>WebGPU utilise la carte graphique (rapide). Sinon, le processeur (WASM) prend le relais.</p>
-              </section>
-              <section class="card set-card">
-                <h3>Lexique de corrections</h3>
-                <p>Mots que le modèle comprend mal (sigles, noms propres) et leur correction, appliqués après chaque transcription.</p>
-                <button class="btn" id="btn-lexicon" type="button"><svg viewBox="0 0 24 24"><path d="M4 5h11M4 12h16M4 19h9"/><path d="m17 17 2 2 3-4"/></svg>Ouvrir le lexique</button>
-              </section>
-              <section class="card set-card">
-                <h3>Stockage</h3>
-                <p id="foot-storage"></p>
-                <label class="label" for="audio-policy">Où garder les audios</label>
-                <select id="audio-policy" class="select">
-                  <option value="ask">Demander à chaque audio (recommandé)</option>
-                  <option value="local">Toujours sur ce PC</option>
-                  <option value="drive">Toujours sur mon Google Drive</option>
-                  <option value="none">Ne jamais garder l’audio (texte seul)</option>
-                </select>
-                <p>« Sur ce PC » : jamais envoyé. « Google Drive » : envoyé dans ton Drive puis retiré de ce PC. Le choix se change ensuite réunion par réunion (pastille « Audio… » en haut de la transcription). Avec un compte Google, le texte des transcriptions est sauvegardé dans ton Drive.</p>
-              </section>
-              <section class="card set-card">
-                <h3>À propos</h3>
-                <p>Transcripteur IA by RJB · Transformers.js <span id="foot-version"></span> · Whisper (OpenAI, MIT) · Traitement 100 % local</p>
-                <p><a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a> · <a href="https://github.com/RafJTB/Transcripteur-IA" target="_blank" rel="noopener">Code source</a></p>
-                <button class="btn sm" id="btn-install-2" type="button" hidden>Installer l’application sur cet appareil</button>
-              </section>
+            <div class="set-layout">
+              <nav class="set-nav" id="set-nav" aria-label="Catégories de paramètres" role="tablist">
+                <button type="button" role="tab" data-set="compte" style="--c:59 130 246"><span class="sq"><svg viewBox="0 0 24 24"><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z"/></svg></span><span class="nm">Compte et synchronisation</span><i class="set-dot" data-dot="compte"></i></button>
+                <button type="button" role="tab" data-set="ia" style="--c:139 92 246"><span class="sq"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span><span class="nm">Assistant IA</span><i class="set-dot" data-dot="ia"></i></button>
+                <button type="button" role="tab" data-set="voix" style="--c:16 185 129"><span class="sq"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="nm">Voix connues</span><i class="set-dot" data-dot="voix"></i></button>
+                <button type="button" role="tab" data-set="moteur" style="--c:245 158 11"><span class="sq"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></span><span class="nm">Moteur de calcul</span><i class="set-dot" data-dot="moteur"></i></button>
+                <button type="button" role="tab" data-set="lexique" style="--c:236 72 153"><span class="sq"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M9 7h6M9 11h6"/></svg></span><span class="nm">Lexique</span><i class="set-dot" data-dot="lexique"></i></button>
+                <button type="button" role="tab" data-set="stockage" style="--c:6 182 212"><span class="sq"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span><span class="nm">Stockage et confidentialité</span><i class="set-dot" data-dot="stockage"></i></button>
+                <button type="button" role="tab" data-set="apropos" style="--c:148 163 184"><span class="sq"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg></span><span class="nm">À propos</span><i class="set-dot" data-dot="apropos"></i></button>
+              </nav>
+
+              <div class="set-main">
+                <!-- Compte -->
+                <section class="set-sec acc-card" data-sec="compte" role="tabpanel" style="--c:59 130 246">
+                  <h3><span class="sq"><svg viewBox="0 0 24 24"><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z"/></svg></span>Compte et synchronisation</h3>
+                  <div class="set-group">
+                    <div class="set-hero">
+                      <span class="g-logo"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg></span>
+                      <span class="set-txt"><b>Compte Google</b><small id="acc-status"></small></span>
+                      <span class="acc-actions">
+                        <button class="btn primary g-btn" id="acc-login" type="button"><span>Se connecter avec Google</span></button>
+                        <button class="btn" id="acc-sync" type="button" hidden>Synchroniser maintenant</button>
+                        <button class="btn" id="acc-switch" type="button" hidden>Changer de compte</button>
+                        <button class="btn ghost" id="acc-logout" type="button" hidden>Se déconnecter</button>
+                      </span>
+                    </div>
+                    <label class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg></span>
+                      <span class="set-txt"><b>Sauvegarder aussi les vidéos de l’écran</b><small>Dans ton Google Drive · environ 150 Mo par heure de visio</small></span>
+                      <span class="switch acc-videos"><input type="checkbox" id="acc-videos" /><span class="track"></span></span>
+                    </label>
+                    <p class="set-note acc-note">Connecté, chaque personne retrouve ses transcriptions et ses dossiers sur tous ses appareils : ils sont copiés dans <b>son</b> Google Drive (dossier « Transcripteur IA »). L’appli ne voit que les fichiers qu’elle a créés. La transcription, elle, reste faite sur ton PC. <a href="confidentialite.html" target="_blank" rel="noopener">Politique de confidentialité</a></p>
+                    <details class="acc-admin set-details">
+                      <summary class="set-row">
+                        <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span>
+                        <span class="set-txt"><b>Configuration (administrateur)</b><small>Identifiant client Google et adresse de retour</small></span>
+                        <svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+                      </summary>
+                      <div class="set-sub">
+                        <label class="label" for="acc-client">ID client OAuth (Google Cloud)</label>
+                        <input class="text-input" id="acc-client" placeholder="123456-abc.apps.googleusercontent.com" spellcheck="false" />
+                        <span class="label">Adresse de retour à déclarer dans Google Cloud</span>
+                        <div class="acc-redirect"><code id="acc-redirect"></code><button class="btn xs" id="acc-copy" type="button">Copier</button></div>
+                      </div>
+                    </details>
+                  </div>
+                </section>
+
+                <!-- Assistant IA -->
+                <section class="set-sec asst-card" data-sec="ia" role="tabpanel" style="--c:139 92 246" hidden>
+                  <h3><span class="sq"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span>Assistant IA</h3>
+                  <p class="set-lead">Répond à tes questions sur tes réunions, en citant ses sources.</p>
+                  <div class="set-group">
+                    <div class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></span>
+                      <span class="set-txt"><b>Moteur de l’assistant</b><small>Local : rien n’est envoyé. Claude : réponses plus fines, avec ta clé API.</small></span>
+                      <select id="asst-engine" class="select" aria-label="Moteur de l’assistant">
+                        <option value="auto">Local, automatique (recommandé)</option>
+                        <option value="local-small">Local léger · Qwen3 0,6B (≈ 620 Mo, expérimental)</option>
+                        <option value="local-large">Local précis · Qwen3 1,7B (≈ 1,4 Go, carte graphique)</option>
+                        <option value="local-xl">Local avancé · Qwen3 4B (≈ 2,8 Go, carte graphique récente)</option>
+                        <option value="claude">Claude · clé API (payant à l’usage)</option>
+                        <option value="search">Recherche simple, sans IA</option>
+                      </select>
+                    </div>
+                    <p class="set-note asst-info" id="asst-info"></p>
+                    <p class="set-note asst-fail" id="asst-fail" hidden></p>
+                    <div class="asst-claude" id="asst-claude" hidden>
+                      <div class="set-row">
+                        <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg></span>
+                        <span class="set-txt"><b>Modèle Claude</b></span>
+                        <select id="asst-model" class="select" aria-label="Modèle Claude"></select>
+                      </div>
+                      <div class="set-row">
+                        <span class="set-ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M14 9l2 2"/></svg></span>
+                        <span class="set-txt"><b>Clé API Anthropic</b><small>Gardée dans ce navigateur, jamais synchronisée, envoyée seulement à Anthropic</small></span>
+                        <span class="acc-redirect"><input id="asst-key" class="text-input" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" aria-label="Clé API Anthropic" /><button class="btn xs" id="asst-key-clear" type="button">Effacer</button></span>
+                      </div>
+                      <p class="set-note acc-note">Clé à créer sur console.anthropic.com (compte API, distinct de l’abonnement claude.ai).</p>
+                    </div>
+                    <div class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg></span>
+                      <span class="set-txt"><b>Tester l’assistant</b><small>Pose une question d’essai sur tes réunions</small></span>
+                      <span class="asst-actions">
+                        <button class="btn sm ghost" id="asst-retry" type="button" hidden>Oublier les échecs</button>
+                        <button class="btn sm" id="asst-test" type="button">Tester</button>
+                      </span>
+                    </div>
+                    <div class="asst-report" id="asst-report" hidden><small></small><pre></pre><button class="btn xs" type="button" id="asst-report-copy">Copier le rapport</button></div>
+                  </div>
+                </section>
+
+                <!-- Voix -->
+                <section class="set-sec voice-card" data-sec="voix" role="tabpanel" style="--c:16 185 129" hidden>
+                  <h3><span class="sq"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>Voix connues</h3>
+                  <div class="set-group">
+                    <label class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span>
+                      <span class="set-txt"><b>Reconnaître les voix connues</b><small>Quand tu renommes « Personne 1 » en « Julie », sa voix est mémorisée et reconnue aux réunions suivantes. Le carnet reste dans ce navigateur.</small></span>
+                      <span class="switch"><input type="checkbox" id="toggle-voiceid" /><span class="track"></span></span>
+                    </label>
+                    <ul class="voice-list" id="voice-list"></ul>
+                    <div class="set-row set-row-end"><button class="link-btn danger" id="voice-clear" type="button" hidden>Oublier toutes les voix</button></div>
+                  </div>
+                </section>
+
+                <!-- Moteur -->
+                <section class="set-sec" data-sec="moteur" role="tabpanel" style="--c:245 158 11" hidden>
+                  <h3><span class="sq"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></span>Moteur de calcul</h3>
+                  <div class="set-group">
+                    <div class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span>
+                      <span class="set-txt"><b>Calcul utilisé pour transcrire</b><small>WebGPU utilise la carte graphique (rapide). Sinon, le processeur (WASM) prend le relais, plus lentement.</small></span>
+                      <span class="pill" id="pill-engine" title="Moteur de calcul"><i class="dot"></i><span>Détection du matériel…</span></span>
+                    </div>
+                    <button class="set-row set-link" type="button" data-nav="models">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg></span>
+                      <span class="set-txt"><b>Modèles de transcription</b><small>Choisir, télécharger ou libérer de la place</small></span>
+                      <span class="set-go">Page Modèles<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>
+                    </button>
+                  </div>
+                </section>
+
+                <!-- Lexique -->
+                <section class="set-sec" data-sec="lexique" role="tabpanel" style="--c:236 72 153" hidden>
+                  <h3><span class="sq"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M9 7h6M9 11h6"/></svg></span>Lexique de corrections</h3>
+                  <div class="set-group">
+                    <div class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M4 5h11M4 12h16M4 19h9"/><path d="m17 17 2 2 3-4"/></svg></span>
+                      <span class="set-txt"><b>Mots corrigés automatiquement</b><small>Mots que le modèle comprend mal (sigles, noms propres) et leur correction, appliqués après chaque transcription</small></span>
+                      <span class="set-ctl"><span class="set-chip" id="lex-count"></span><button class="btn" id="btn-lexicon" type="button">Ouvrir le lexique</button></span>
+                    </div>
+                    <div class="lex-preview" id="lex-preview"></div>
+                  </div>
+                </section>
+
+                <!-- Stockage -->
+                <section class="set-sec" data-sec="stockage" role="tabpanel" style="--c:6 182 212" hidden>
+                  <h3><span class="sq"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></span>Stockage et confidentialité</h3>
+                  <div class="set-group">
+                    <div class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg></span>
+                      <span class="set-txt"><b>Place utilisée dans ce navigateur</b><small id="foot-storage"></small></span>
+                    </div>
+                    <div class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+                      <span class="set-txt"><b>Où garder les audios</b><small>« Sur ce PC » : jamais envoyé. « Google Drive » : envoyé dans ton Drive puis retiré de ce PC.</small></span>
+                      <select id="audio-policy" class="select" aria-label="Où garder les audios">
+                        <option value="ask">Demander à chaque audio (recommandé)</option>
+                        <option value="local">Toujours sur ce PC</option>
+                        <option value="drive">Toujours sur mon Google Drive</option>
+                        <option value="none">Ne jamais garder l’audio (texte seul)</option>
+                      </select>
+                    </div>
+                    <p class="set-note">Le choix se change ensuite réunion par réunion (pastille « Audio… » en haut de la transcription). Avec un compte Google, le texte des transcriptions est sauvegardé dans ton Drive.</p>
+                    <a class="set-row set-link" href="confidentialite.html" target="_blank" rel="noopener">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span>
+                      <span class="set-txt"><b>Politique de confidentialité</b><small>Ce qui reste sur ton appareil, ce qui peut être envoyé</small></span>
+                      <span class="set-go">Lire<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></span>
+                    </a>
+                  </div>
+                </section>
+
+                <!-- À propos -->
+                <section class="set-sec" data-sec="apropos" role="tabpanel" style="--c:148 163 184" hidden>
+                  <h3><span class="sq"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg></span>À propos</h3>
+                  <div class="set-group">
+                    <div class="set-row">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg></span>
+                      <span class="set-txt"><b>Transcripteur IA by RJB</b><small>Transformers.js <span id="foot-version"></span> · Whisper (OpenAI, MIT) · Traitement 100 % local</small></span>
+                    </div>
+                    <div class="set-row set-install">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M4 19h16"/></svg></span>
+                      <span class="set-txt"><b>Installer l’application</b><small>Sur cet appareil, comme une appli</small></span>
+                      <button class="btn sm" id="btn-install-2" type="button" hidden>Installer</button>
+                    </div>
+                    <a class="set-row set-link" href="https://github.com/RafJTB/Transcripteur-IA" target="_blank" rel="noopener">
+                      <span class="set-ic"><svg viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span>
+                      <span class="set-txt"><b>Code source</b><small>GitHub</small></span>
+                      <span class="set-go">Ouvrir<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></span>
+                    </a>
+                  </div>
+                </section>
+              </div>
             </div>
           </section>
         </div>
@@ -851,6 +953,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-30"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-31"></script>
 </body>
 </html>

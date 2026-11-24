@@ -26,6 +26,7 @@ import { applySpeakers, bindVoices, identifySpeakers, openSpeakerMenu, spkCache 
 import { cancel, hideResume, isMine, persist, renderResume, startTranscription } from './ui/transcription.js';
 import { autoTranslate, translateDoc } from './ui/translation.js';
 import { closeDrawers, openDrawer, setView } from './ui/views.js';
+import { bindSettings } from './ui/settings-ui.js';
 import { bindReport } from './ui/report-ui.js';
 import { handleCalendarReturn, initCalendar } from './ui/calendar-ui.js';
 import { bindVerify, verifyDoc } from './ui/verify-ui.js';
@@ -192,6 +193,7 @@ function bind() {
   });
   bindSpeakers();
   bindVoices();
+  bindSettings();
   bindActions();
   bindV3();
   bindDashboard();

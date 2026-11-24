@@ -8,6 +8,7 @@ import { renderModelsPage, renderPerso } from './pages.js';
 import { freshSource, monitor, player, recorder } from './recording.js';
 import { renderSpaces } from './spaces.js';
 import { renderCalendar } from './calendar-ui.js';
+import { renderSettings } from './settings-ui.js';
 
 // ======================================================================
 // Interface v3 : vues, onglets du document, panneau d'analyse
@@ -47,6 +48,7 @@ export function setView(name) {
   if (page === 'custom') renderPerso();
   if (page === 'spaces') renderSpaces();
   if (page === 'calendar') renderCalendar();
+  if (page === 'settings') renderSettings();
   if (page === 'record') requestAnimationFrame(() => monitor?.draw());
   if (page === 'doc') requestAnimationFrame(() => player?.draw());
   else {

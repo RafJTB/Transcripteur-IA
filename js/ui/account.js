@@ -12,6 +12,7 @@ import { notify } from './notifs.js';
 import { clearAudio, loadDocVideo, micBusy } from './recording.js';
 import { isMine, persist } from './transcription.js';
 import { setView } from './views.js';
+import { renderSettings, setSettingsTab } from './settings-ui.js';
 
 // ======================================================================
 // Compte Google et dossiers de travail
@@ -62,11 +63,12 @@ function renderAccount() {
   $('#acc-switch').hidden = !u;
   $('#acc-client').value = Auth.clientId();
   $('#acc-redirect').textContent = redirectUri();
+  renderSettings();
 }
 
 function signIn(silent = false, { email = null, choose = false } = {}) {
   if (state.phase !== 'idle' || micBusy()) return toast('Attends la fin de l’enregistrement ou de la transcription en cours.', 'warn');
-  if (!Auth.clientId()) { setView('settings'); return toast('Renseigne d’abord l’identifiant client Google (Paramètres → Compte Google).', 'warn', 6000); }
+  if (!Auth.clientId()) { setSettingsTab('compte'); setView('settings'); return toast('Renseigne d’abord l’identifiant client Google (Paramètres → Compte Google).', 'warn', 6000); }
   saveDoc();
   try { Auth.signIn({ silent, email, choose }); } catch (e) { toast(e.message, 'err'); }
 }

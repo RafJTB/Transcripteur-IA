@@ -3,7 +3,7 @@
 // Les requêtes vers d'autres domaines (CDN, Hugging Face) ne sont pas touchées.
 // Les fichiers du site sont toujours revérifiés auprès du serveur (cache: 'no-cache') :
 // après une mise à jour, le navigateur ne peut plus mélanger ancienne et nouvelle version.
-// Version : 2026-11-22-22
+// Version : 2026-11-22-23
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
@@ -18,6 +18,15 @@ self.addEventListener('fetch', (event) => {
       headers.set('Cross-Origin-Opener-Policy', 'same-origin');
       headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
       headers.set('Cross-Origin-Resource-Policy', 'same-origin');
+      // Sécurité (GitHub Pages ne permet pas d'envoyer ces en-têtes) : pas d'interprétation hasardeuse des types,
+      // pas de référent, et pour la page elle-même : jamais affichée dans le cadre d'un autre site, accès limités.
+      headers.set('X-Content-Type-Options', 'nosniff');
+      headers.set('Referrer-Policy', 'no-referrer');
+      if (req.mode === 'navigate') {
+        headers.set('X-Frame-Options', 'SAMEORIGIN');
+        headers.set('Content-Security-Policy', "frame-ancestors 'self'");
+        headers.set('Permissions-Policy', 'camera=(), geolocation=(), payment=(), usb=(), microphone=(self), display-capture=(self)');
+      }
       return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
     })
   );

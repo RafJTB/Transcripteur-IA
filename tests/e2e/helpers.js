@@ -16,9 +16,13 @@ export const test = base.extend({
       if (!localStorage.getItem('transcripteur.theme')) localStorage.setItem('transcripteur.theme', 'dark');
       localStorage.setItem('transcripteur.autospk', '0');
     });
+    // Politique de sécurité du contenu : toute ressource bloquée fait échouer le test
+    const csp = [];
+    page.on('console', (m) => { if (/Content Security Policy|Refused to (load|connect|execute|apply|frame)/i.test(m.text())) csp.push(m.text().slice(0, 300)); });
     page.errors = errors;
     await use(page);
     expect(errors, 'erreurs JavaScript dans la page').toEqual([]);
+    expect(csp, 'ressources bloquées par la politique de sécurité (CSP)').toEqual([]);
   },
 });
 export { expect };

@@ -217,6 +217,47 @@ export const Spaces = {
   },
 };
 
+const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : typeof v === 'number' && Number.isFinite(v) ? String(v) : undefined);
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+/**
+ * Transcription reçue d'un espace (écrite par un autre membre, éventuellement sans passer par l'appli) :
+ * on ne garde que les champs connus, avec les bons types et des tailles raisonnables.
+ * Rien d'autre (état interne, identifiants, réglages) ne peut ainsi s'inviter dans l'historique local.
+ */
+export function sanitizeSharedDoc(raw) {
+  const d = raw && typeof raw === 'object' ? raw : {};
+  const segs = Array.isArray(d.segments) ? d.segments.slice(0, 50000) : [];
+  const out = {
+    title: str(d.title, 200) || 'Réunion partagée',
+    createdAt: num(d.createdAt),
+    durationS: num(d.durationS),
+    language: /^[a-z]{2,3}(-[A-Za-z]{2,4})?$|^auto$/.test(d.language || '') ? d.language : undefined,
+    model: str(d.model, 80),
+    source: str(d.source, 200),
+    summary: str(d.summary, 100000),
+    segments: segs.filter((s) => s && typeof s === 'object').map((s) => ({
+      text: str(s.text, 5000) || '',
+      start: num(s.start) ?? 0,
+      end: num(s.end) ?? num(s.start) ?? 0,
+      ...(Number.isInteger(s.spk) && s.spk >= 0 && s.spk < 50 ? { spk: s.spk } : {}),
+      ...(num(s.conf) != null ? { conf: Math.max(0, Math.min(1, s.conf)) } : {}),
+      ...(/^[a-z]{2,3}$/.test(s.lang || '') ? { lang: s.lang } : {}),
+      ...(typeof s.tr === 'string' ? { tr: s.tr.slice(0, 5000) } : {}),
+      ...(s.edited === true ? { edited: true } : {}),
+    })),
+    speakers: (Array.isArray(d.speakers) ? d.speakers.slice(0, 50) : []).map((p, i) => ({ name: str(p?.name, 80) || `Personne ${i + 1}` })),
+  };
+  if (d.event && typeof d.event === 'object') out.event = { title: str(d.event.title, 200) || '', start: num(d.event.start), end: num(d.event.end) };
+  if (d.translation && typeof d.translation === 'object') out.translation = { from: str(d.translation.from, 10), to: 'fr', engine: str(d.translation.engine, 80) };
+  // État des actions (fait / retiré) et responsables choisis : des chaînes courtes, rien d'autre
+  const strings = (o, ok) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).slice(0, 2000)
+    .filter(([key, v]) => key.length < 200 && typeof v === 'string' && ok(v)).map(([key, v]) => [key, v.slice(0, 80)]));
+  if (d.actionState) out.actionState = strings(d.actionState, (v) => v === 'done' || v === 'hidden');
+  if (d.actionWho) out.actionWho = strings(d.actionWho, () => true);
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined));
+}
+
 /** Messages d'erreur de Supabase, en clair. */
 export function spacesError(e) {
   const t = String(e?.message || e || '');

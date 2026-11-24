@@ -18,6 +18,8 @@ const SPK_WORKER = new URL('../speaker-worker.js', import.meta.url);
 let spkWorker = null;
 let spkSeq = 0;
 let spkRun = null;
+/** « Qui parle ? » en cours (il a besoin de l'audio). */
+export const speakersBusy = () => !!spkRun;
 /** Empreintes vocales déjà calculées, par transcription : changer le nombre de personnes est instantané. */
 export const spkCache = new Map();
 

@@ -397,21 +397,27 @@ export const Sync = {
     }
 
     // 3. Audios d'origine (envoyés une fois ; récupérés seulement à l'ouverture)
-    const audioIds = new Set(local.map((d) => d.audioId).filter(Boolean));
-    for (const aid of audioIds) {
-      if (rAudios.has(aid)) continue;
-      const a = await Audios.get(aid).catch(() => null);
-      if (!a?.blob) continue;
-      const ext = (a.blob.type.split('/')[1] || 'audio').split(';')[0];
-      const id = await Drive.put(null, `audio-${aid}.${ext}`, a.blob, { kind: 'audio', aid, name: String(a.name || '').slice(0, 100), dur: String(Math.round(a.durationS || 0)) });
-      rAudios.set(aid, { id, appProperties: { kind: 'audio', aid } });
+    // Choix de l'utilisateur pour chaque audio (audioWhere) : « local » et « none » ne partent jamais ;
+    // « drive » : la copie de ce PC est retirée une fois l'audio dans le Drive. Sans choix (anciennes transcriptions) : envoyé.
+    const whereOf = new Map(local.filter((d) => d.audioId).map((d) => [d.audioId, d.audioWhere || '']));
+    for (const [aid, where] of whereOf) {
+      if (where === 'local' || where === 'none') continue;
+      if (!rAudios.has(aid)) {
+        const a = await Audios.get(aid).catch(() => null);
+        if (!a?.blob) continue;
+        const ext = (a.blob.type.split('/')[1] || 'audio').split(';')[0];
+        const id = await Drive.put(null, `audio-${aid}.${ext}`, a.blob, { kind: 'audio', aid, name: String(a.name || '').slice(0, 100), dur: String(Math.round(a.durationS || 0)) });
+        rAudios.set(aid, { id, appProperties: { kind: 'audio', aid } });
+        Sync._remote.push({ id, appProperties: { kind: 'audio', aid, name: String(a.name || '').slice(0, 100), dur: String(Math.round(a.durationS || 0)) } });
+      }
+      if (where === 'drive') await Audios.removeOnly(aid).catch(() => {});
     }
 
     // 3 bis. Vidéos de l'écran (option, activée par défaut) : envoyées une fois, nom lisible dans Drive
     if (Sync.videosEnabled()) {
       for (const d of local) {
         const aid = d.audioId;
-        if (!aid || rVideos.has(aid)) continue;
+        if (!aid || rVideos.has(aid) || d.audioWhere === 'local' || d.audioWhere === 'none') continue;
         const v = await Audios.get(`${aid}.video`).catch(() => null);
         if (!v?.blob?.size) continue;
         Sync._set('syncing', `Envoi de la vidéo de l’écran (${Math.round(v.blob.size / 1e6)} Mo)…`);

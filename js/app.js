@@ -30,6 +30,7 @@ import { bindReport } from './ui/report-ui.js';
 import { handleCalendarReturn, initCalendar } from './ui/calendar-ui.js';
 import { bindVerify, verifyDoc } from './ui/verify-ui.js';
 import { finalizeDoc } from './ui/transcription.js';
+import { bindStorage } from './ui/storage-ui.js';
 
 // ======================================================================
 // Récupération après fermeture ou plantage de l'onglet
@@ -309,6 +310,7 @@ async function init() {
   bindReport();
   initCalendar();
   bindVerify();
+  bindStorage();
   bindBell();
   $('#toggle-auto').onchange = (e) => setAutoTune(e.target.checked, e.target.checked ? 'Réglage automatique activé : le son et le modèle seront réglés avant chaque enregistrement.' : '');
   $('#auto-redo').onclick = async () => {

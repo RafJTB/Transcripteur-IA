@@ -11,8 +11,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-20" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-20" />
+  <meta name="app-version" content="2026-11-22-21" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-21" />
   <script>
     // Thème clair / sombre : choix enregistré, sinon celui de Windows
     (function () {
@@ -41,8 +41,8 @@
     // d'ancienne et de nouvelle version gardées par le navigateur), on retélécharge tous ses
     // fichiers puis on recharge une fois. Si ça échoue encore, un bandeau explique quoi faire.
     (function () {
-      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-20', 'sw.js', 'js/app.js?v=2026-11-22-20', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
-        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js', 'js/report.js', 'js/ui/report-ui.js', 'js/ui/space-chat.js', 'js/calendar.js', 'js/outlook.js', 'js/ui/calendar-ui.js', 'js/verify.js', 'js/ui/verify-ui.js',
+      var FILES = ['./', 'index.html', 'styles.css?v=2026-11-22-21', 'sw.js', 'js/app.js?v=2026-11-22-21', 'js/config.js', 'js/audio.js', 'js/lexicon.js',
+        'js/exporters.js', 'js/claude-export.js', 'js/player.js', 'js/translate.js', 'js/translate-worker.js', 'js/speakers.js', 'js/speaker-worker.js', 'js/voices.js', 'js/actions.js', 'js/insights.js', 'js/assistant.js', 'js/perso.js', 'js/spaces.js', 'js/opus-ogg.js', 'js/llm-worker.js', 'js/langid.js', 'js/cloud.js', 'js/history.js', 'js/live.js', 'js/monitor.js', 'js/asr-worker.js', 'js/voxtral-engine.js', 'js/pcm-worklet.js', 'js/report.js', 'js/ui/report-ui.js', 'js/ui/space-chat.js', 'js/calendar.js', 'js/outlook.js', 'js/ui/calendar-ui.js', 'js/verify.js', 'js/ui/verify-ui.js', 'js/ui/storage-ui.js',
         'js/ui/account.js', 'js/ui/assistant.js', 'js/ui/core.js', 'js/ui/dashboard.js', 'js/ui/diagnostic.js', 'js/ui/doc-tabs.js', 'js/ui/doc.js', 'js/ui/engine.js', 'js/ui/history.js', 'js/ui/notifs.js', 'js/ui/pages.js', 'js/ui/recording.js', 'js/ui/sound.js', 'js/ui/spaces.js', 'js/ui/speakers.js', 'js/ui/transcription.js', 'js/ui/translation.js', 'js/ui/views.js'];
       var done = false;
       function refreshAll() {
@@ -648,7 +648,14 @@
               <section class="card set-card">
                 <h3>Stockage</h3>
                 <p id="foot-storage"></p>
-                <p>Sans compte, transcriptions et audios restent dans ce navigateur. Avec un compte Google, ils sont aussi sauvegardés dans ton Google Drive.</p>
+                <label class="label" for="audio-policy">Où garder les audios</label>
+                <select id="audio-policy" class="select">
+                  <option value="ask">Demander à chaque audio (recommandé)</option>
+                  <option value="local">Toujours sur ce PC</option>
+                  <option value="drive">Toujours sur mon Google Drive</option>
+                  <option value="none">Ne jamais garder l’audio (texte seul)</option>
+                </select>
+                <p>« Sur ce PC » : jamais envoyé. « Google Drive » : envoyé dans ton Drive puis retiré de ce PC. Le choix se change ensuite réunion par réunion (pastille « Audio… » en haut de la transcription). Avec un compte Google, le texte des transcriptions est sauvegardé dans ton Drive.</p>
               </section>
               <section class="card set-card">
                 <h3>À propos</h3>
@@ -859,6 +866,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-20"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-21"></script>
 </body>
 </html>

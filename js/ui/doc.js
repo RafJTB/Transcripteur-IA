@@ -19,6 +19,7 @@ import { renderSpeakers, speakerNames } from './speakers.js';
 import { hideResume, persist } from './transcription.js';
 import { setView } from './views.js';
 import { renderBar } from './verify-ui.js';
+import { audioChipHtml } from './storage-ui.js';
 
 // ======================================================================
 // Résultat
@@ -103,6 +104,7 @@ export function renderMeta() {
     const low = withC.filter((x) => x.conf < CONF.fair && !x.vok && !x.vfix).length + state.segments.filter((x) => x.vcheck && (x.conf == null || x.conf >= CONF.fair)).length;
     if (low) chips.push(metaChip('check', `${low} à vérifier`, { cls: 'tocheck', title: 'Aller au passage suivant à vérifier (souligné dans le texte)' }));
   }
+  chips.push(audioChipHtml(d));
   el.innerHTML = chips.join('');
   renderInsights();
   if (state.dtab === 'analysis') renderAnalysis();

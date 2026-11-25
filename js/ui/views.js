@@ -77,8 +77,9 @@ export function openDrawer(id) {
   const d = $(id);
   d.classList.add('open');
   d.setAttribute('aria-hidden', 'false');
+  d.inert = false;
   $('.drawer-panel button, .drawer-panel input', d)?.focus();
 }
 export function closeDrawers() {
-  $$('.drawer.open').forEach((d) => { d.classList.remove('open'); d.setAttribute('aria-hidden', 'true'); });
+  $$('.drawer.open').forEach((d) => { d.classList.remove('open'); d.setAttribute('aria-hidden', 'true'); d.inert = true; });
 }

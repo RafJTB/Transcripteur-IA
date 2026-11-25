@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-43" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-43" />
-  <script src="js/boot.js?v=2026-11-22-43"></script>
+  <meta name="app-version" content="2026-11-22-45" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-45" />
+  <script src="js/boot.js?v=2026-11-22-45"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -60,7 +60,7 @@
     </aside>
 
     <!-- ================= ZONE PRINCIPALE ================= -->
-    <div class="main">
+    <div class="main" role="presentation">
       <header class="topbar">
         <button type="button" class="m-brand" data-nav="home" aria-label="Accueil"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="#fff" d="M5.5 6h30.5l-1.6 7.6H23.3l-4.6 21.3c-.5 2.3-2.7 3.8-5 3.3-2.3-.5-3.8-2.7-3.3-5l4.2-19.6H3.9z"/></svg></button>
         <label class="search top-search">
@@ -95,7 +95,7 @@
       </header>
 
       <div class="content">
-        <div class="views">
+        <main class="views">
           <!-- ===== ACCUEIL : tableau de bord ===== -->
           <section class="view view-dash" data-page="home">
             <section class="glass hero">
@@ -145,10 +145,10 @@
 
                 <div class="tab-panel" data-panel="mic">
                   <div class="capture-row" id="capture-row" hidden>
-                    <div class="capture-tiles" id="capture-seg" role="radiogroup" aria-label="Ce qui est enregistré">
-                      <button type="button" data-capture="mic" title="Ton micro : réunion en salle, dictée"><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="ct-txt"><b>Ma voix</b><small>Réunion en salle, dictée</small></span></button>
-                      <button type="button" data-capture="mix" title="Ton micro et le son de la visio : tous les participants. Au démarrage, choisis l’onglet de la visio (ou « Écran entier » pour Teams / Zoom) et coche « Partager l’audio »."><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="10" rx="2"/><path d="M6 19h6"/><rect x="17" y="9" width="4" height="7" rx="2"/><path d="M19 18v2"/></svg></span><span class="ct-txt"><b>Voix + visio</b><small>Toi et tous les participants</small></span></button>
-                      <button type="button" data-capture="system" title="Uniquement le son partagé : webinaire, vidéo, visio où tu ne parles pas. Au démarrage, coche « Partager l’audio »."><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="m10 8 4 2-4 2z"/></svg></span><span class="ct-txt"><b>Visio seule</b><small>Webinaire, vidéo</small></span></button>
+                    <div class="capture-tiles" id="capture-seg" role="tablist" aria-label="Ce qui est enregistré">
+                      <button type="button" role="tab" data-capture="mic" title="Ton micro : réunion en salle, dictée"><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span class="ct-txt"><b>Ma voix</b><small>Réunion en salle, dictée</small></span></button>
+                      <button type="button" role="tab" data-capture="mix" title="Ton micro et le son de la visio : tous les participants. Au démarrage, choisis l’onglet de la visio (ou « Écran entier » pour Teams / Zoom) et coche « Partager l’audio »."><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="10" rx="2"/><path d="M6 19h6"/><rect x="17" y="9" width="4" height="7" rx="2"/><path d="M19 18v2"/></svg></span><span class="ct-txt"><b>Voix + visio</b><small>Toi et tous les participants</small></span></button>
+                      <button type="button" role="tab" data-capture="system" title="Uniquement le son partagé : webinaire, vidéo, visio où tu ne parles pas. Au démarrage, coche « Partager l’audio »."><span class="ct-ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="m10 8 4 2-4 2z"/></svg></span><span class="ct-txt"><b>Visio seule</b><small>Webinaire, vidéo</small></span></button>
                     </div>
                   </div>
 
@@ -325,7 +325,7 @@
 
             <!-- Onglet Transcription -->
             <div class="dpanel dpanel-tr" data-dpanel="tr">
-              <aside class="spk-side" id="spk-side">
+              <div class="spk-side" id="spk-side">
                 <div class="spk-panel" id="spk-panel" hidden>
                   <div class="spk-list" id="spk-list"></div>
                   <div class="spk-tools">
@@ -339,7 +339,7 @@
                   </div>
                 </div>
                 <button class="btn sm spk-run" id="btn-speakers" type="button" title="Reconnaître les intervenants à leur voix (local)" disabled><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A4.5 4.5 0 0 1 21 18.5"/></svg><span class="lbl">Qui parle ?</span></button>
-              </aside>
+              </div>
               <div class="transcript" id="transcript" data-ts="on">
                 <div class="verify-bar" id="verify-bar" hidden></div>
                 <div class="empty" id="empty-state">
@@ -429,15 +429,15 @@
               <button class="btn primary proj-new" id="proj-new" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nouvelle transcription</button>
             </header>
             <div class="proj-layout">
-              <aside class="proj-side" aria-label="Dossiers">
-                <h4>Dossiers</h4>
+              <nav class="proj-side" aria-label="Dossiers">
+                <h3 class="side-title">Dossiers</h3>
                 <div class="folder-bar" id="folder-bar"></div>
                 <div class="folder-tools" id="folder-tools" hidden>
                   <button class="link-btn" id="folder-rename" type="button" title="Renommer ce dossier"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>Renommer</button>
                   <button class="link-btn danger" id="folder-delete" type="button" title="Supprimer ce dossier (pas les transcriptions)"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>Supprimer</button>
                 </div>
                 <div class="proj-storage" id="proj-storage"></div>
-              </aside>
+              </nav>
               <div class="hist-list" id="hist-list"></div>
             </div>
           </section>
@@ -509,10 +509,10 @@
           <!-- ===== ANALYSES ===== -->
           <section class="view view-page" data-page="analytics">
             <div class="home-head"><h2>Analyses</h2><p>Toutes tes réunions en un coup d’œil : volume, intervenants, sujets et actions en cours.</p></div>
-            <div class="seg range-seg" id="an-range" role="radiogroup" aria-label="Période">
-              <button type="button" data-range="week" aria-selected="false">7 jours</button>
-              <button type="button" data-range="month" aria-selected="true">30 jours</button>
-              <button type="button" data-range="all" aria-selected="false">Tout</button>
+            <div class="seg range-seg" id="an-range" role="tablist" aria-label="Période">
+              <button type="button" role="tab" data-range="week" aria-selected="false">7 jours</button>
+              <button type="button" role="tab" data-range="month" aria-selected="true">30 jours</button>
+              <button type="button" role="tab" data-range="all" aria-selected="false">Tout</button>
             </div>
             <div class="stat-row" id="an-stats"></div>
             <div class="an-grid">
@@ -560,10 +560,10 @@
             <section class="glass dash-card">
               <header class="dash-head"><h3>Survol des blocs</h3></header>
               <p class="an-note hover-note">Quand la souris passe sur un bloc, son bord s’allume là où est le curseur.</p>
-              <div class="seg hover-seg" id="hover-mode" role="radiogroup" aria-label="Blocs concernés">
-                <button type="button" data-hover="all">Tous les blocs</button>
-                <button type="button" data-hover="click">Blocs cliquables</button>
-                <button type="button" data-hover="off">Désactivé</button>
+              <div class="seg hover-seg" id="hover-mode" role="tablist" aria-label="Blocs concernés">
+                <button type="button" role="tab" data-hover="all">Tous les blocs</button>
+                <button type="button" role="tab" data-hover="click">Blocs cliquables</button>
+                <button type="button" role="tab" data-hover="off">Désactivé</button>
               </div>
               <div class="accent-row" id="hover-row"></div>
             </section>
@@ -794,7 +794,7 @@
               </div>
             </div>
           </section>
-        </div>
+        </main>
 
         <!-- ================= PANNEAU DROIT : ANALYSE AUDIO ================= -->
         <aside class="panel" aria-label="Analyse">
@@ -952,7 +952,7 @@
   </div>
 
   <!-- Tiroir : lexique -->
-  <aside class="drawer" id="drawer-lexicon" aria-hidden="true" aria-labelledby="h-lex">
+  <aside class="drawer" id="drawer-lexicon" aria-hidden="true" inert aria-labelledby="h-lex">
     <div class="drawer-panel">
       <header class="drawer-head">
         <h3 id="h-lex">Lexique de corrections</h3>
@@ -995,6 +995,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-43"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-45"></script>
 </body>
 </html>

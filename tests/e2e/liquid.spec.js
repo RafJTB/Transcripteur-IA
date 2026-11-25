@@ -75,3 +75,23 @@ test('verre liquide : rester appuyé et glisser, la pastille suit la souris ; au
   await page.locator('[data-dtab="analysis"]').click();
   await expect(page.locator('[data-dtab="analysis"]')).toHaveAttribute('aria-selected', 'true');
 });
+
+test('verre liquide : prend la couleur du bloc choisi, sinon reste neutre (couleur du fond)', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => { for (const n of ['Chantier A', 'Chantier B']) window.__app.Folders.add(n); });
+  await nav(page, 'projects');
+  const chip = page.locator('.proj-side .fchip[data-folder]').nth(2);
+  await expect(chip).toBeVisible();
+  const fc = await chip.evaluate((e) => getComputedStyle(e).getPropertyValue('--fc').trim().replace(/\s+/g, ' '));
+  expect(fc).toMatch(/^\d+ \d+ \d+$/);
+  await chip.click();
+  const pill = page.locator('.proj-side .folder-bar > .lg-pill');
+  await expect.poll(() => pill.evaluate((p) => p.style.getPropertyValue('--lg-a'))).toBe(fc);
+  await expect(pill).not.toHaveClass(/neutral/);
+  // Barre latérale : icônes sans couleur propre → verre neutre, plus la couleur d'accent
+  await expect(page.locator('#nav > .lg-pill')).toHaveClass(/neutral/);
+  // Paramètres : la couleur de la catégorie
+  await nav(page, 'settings');
+  await page.locator('[data-set="voix"]').click();
+  await expect.poll(() => page.locator('#set-nav > .lg-pill').evaluate((p) => p.style.getPropertyValue('--lg-a'))).toBe('16 185 129');
+});

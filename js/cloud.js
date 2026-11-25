@@ -448,6 +448,8 @@ export const Sync = {
     const rLook = newest('look');
     const rImg = files.filter((f) => f.appProperties?.kind === 'lookimg').pop() || null;
     const ru = Number(rLook?.appProperties?.u) || 0;
+    // Réglages faits avant cette fonction (sans date) et rien encore dans le Drive : on les envoie
+    if (!Look.updatedAt() && !rLook && Look.isCustom()) Look.stamp();
     const lu = Look.updatedAt();
     if (rLook && ru > lu) {
       // Réglages plus récents ailleurs : on les applique ici

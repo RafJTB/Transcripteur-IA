@@ -48,6 +48,10 @@ export const Look = {
   touch() { set(K.u, String(Date.now())); Look.onTouch?.(); },
   onTouch: null,
   image: () => get(K.img) || '',
+  /** Présentation personnalisée sur ce navigateur (fond, couleurs, thème choisis), même sans date. */
+  isCustom: () => !!(get(K.perso) || get(K.theme) || get(K.img)),
+  /** Date posée sans relancer de synchronisation (réglages d'avant cette fonction). */
+  stamp() { set(K.u, String(Date.now())); },
   /** Ce qui part dans le Drive (l'image de fond, plus lourde, part dans un fichier à part). */
   snapshot() {
     let perso = null;

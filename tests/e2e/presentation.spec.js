@@ -58,7 +58,39 @@ test('présentation : synchronisation désactivable', async ({ page, context }) 
   await page.locator('.look-row').click();
   await expect(page.locator('#look-sync')).not.toBeChecked();
   await expect(page.locator('#look-sync-info')).toContainText('Désactivé');
+  await page.evaluate(() => window.__app.syncNow());
+  const before = JSON.stringify(looks(files).map((f) => f.appProperties.u));
   await page.locator('#bg-grid [data-bg="dunes"]').click();
   await page.evaluate(() => window.__app.syncNow());
-  expect(looks(files)).toHaveLength(0);
+  expect(JSON.stringify(looks(files).map((f) => f.appProperties.u))).toBe(before); // rien d'envoyé après la désactivation
+});
+
+test('présentation choisie avant cette fonction (sans date) : envoyée au 1er passage, retrouvée ailleurs', async ({ browser }) => {
+  const files = new Map();
+  const a = await browser.newContext();
+  await fakeDrive(a, files);
+  await a.addInitScript(signedIn);
+  await a.addInitScript(() => {
+    if (localStorage.getItem('seeded')) return;
+    localStorage.setItem('seeded', '1');
+    localStorage.setItem('transcripteur.perso', JSON.stringify({ bg: 'dunes', blur: 4, veil: 100, panel: 100, accent: '#059669' }));
+    localStorage.setItem('transcripteur.theme', 'dark');
+  });
+  const pa = await a.newPage();
+  await boot(pa);
+  await pa.evaluate(() => window.__app.syncNow());
+  await expect.poll(() => looks(files).length).toBe(1);
+  // Autre navigateur qui avait ses propres réglages (eux aussi sans date) : il reçoit ceux du Drive
+  const b = await browser.newContext();
+  await fakeDrive(b, files);
+  await b.addInitScript(signedIn);
+  await b.addInitScript(() => { if (!localStorage.getItem('seeded')) { localStorage.setItem('seeded', '1'); localStorage.setItem('transcripteur.perso', JSON.stringify({ bg: 'soie' })); localStorage.setItem('transcripteur.theme', 'light'); } });
+  const pb = await b.newPage();
+  await boot(pb);
+  await pb.evaluate(() => window.__app.syncNow());
+  await expect.poll(() => pb.evaluate(() => document.documentElement.style.getPropertyValue('--bg-image'))).toContain('dunes');
+  expect(await pb.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+  expect(looks(files)).toHaveLength(1); // B n'a rien renvoyé
+  await a.close();
+  await b.close();
 });

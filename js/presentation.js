@@ -7,7 +7,9 @@ const K = {
   img: 'transcripteur.perso.image',
   theme: 'transcripteur.theme',
   u: 'transcripteur.look.u',
+  auto: 'transcripteur.look.auto',
   on: 'transcripteur.look.sync',
+  status: 'transcripteur.look.status',
 };
 const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const set = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); return true; } catch { return false; } };
@@ -36,6 +38,14 @@ export function cleanPerso(p) {
   };
 }
 
+const DEF = { bg: 'photo', blur: 14, veil: 100, panel: 100, accent: null, hover: 'all', hoverColor: null };
+/** Réglages différents de ceux par défaut. */
+export function isCustomPerso(p) {
+  if (!p || typeof p !== 'object') return false;
+  const c = cleanPerso(p);
+  return Object.keys(DEF).some((k) => c[k] !== DEF[k]);
+}
+
 const IMG = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
 
 export const Look = {
@@ -45,19 +55,28 @@ export const Look = {
   /** Date de la dernière modification faite par l'utilisateur sur ce navigateur (0 = jamais). */
   updatedAt: () => Number(get(K.u)) || 0,
   /** À appeler après un changement fait par l'utilisateur (pas après une importation). */
-  touch() { set(K.u, String(Date.now())); Look.onTouch?.(); },
+  touch() { set(K.u, String(Date.now())); set(K.auto, null); Look.onTouch?.(); },
   onTouch: null,
   image: () => get(K.img) || '',
-  /** Présentation personnalisée sur ce navigateur (fond, couleurs, thème choisis), même sans date. */
-  isCustom: () => !!(get(K.perso) || get(K.theme) || get(K.img)),
-  /** Date posée sans relancer de synchronisation (réglages d'avant cette fonction). */
-  stamp() { set(K.u, String(Date.now())); },
+  /** Présentation différente de celle par défaut (le thème seul ne compte pas : il suit souvent Windows). */
+  isCustom() {
+    let p = null;
+    try { p = JSON.parse(get(K.perso) || 'null'); } catch { /* ignore */ }
+    return isCustomPerso(p) || !!get(K.img);
+  },
+  /** Date posée automatiquement (réglages d'avant cette fonction), sans relancer de synchronisation. */
+  stamp() { set(K.u, String(Date.now())); set(K.auto, '1'); },
+  /** Dernier échange avec le Drive, affiché dans Personnalisation. */
+  status() { try { return JSON.parse(get(K.status) || 'null'); } catch { return null; } },
+  setStatus(kind, extra = '') { set(K.status, JSON.stringify({ kind, at: Date.now(), extra: String(extra).slice(0, 160) })); Look.onStatus?.(); },
+  onStatus: null,
   /** Ce qui part dans le Drive (l'image de fond, plus lourde, part dans un fichier à part). */
   snapshot() {
     let perso = null;
     try { perso = JSON.parse(get(K.perso) || 'null'); } catch { /* ignore */ }
     const theme = get(K.theme);
-    return { v: 1, u: Look.updatedAt(), theme: theme === 'light' || theme === 'dark' ? theme : null, perso: perso ? cleanPerso(perso) : null, imgHash: hash(Look.image()) };
+    const clean = perso ? cleanPerso(perso) : null;
+    return { v: 1, u: Look.updatedAt(), auto: get(K.auto) === '1', custom: isCustomPerso(clean) || !!Look.image(), theme: theme === 'light' || theme === 'dark' ? theme : null, perso: clean, imgHash: hash(Look.image()) };
   },
   /**
    * Applique des réglages venus du Drive (sans les marquer comme une modification locale).
@@ -72,6 +91,7 @@ export const Look = {
     if (typeof image === 'string' && IMG.test(image) && image.length < 6e6) set(K.img, image);
     else if (remote.imgHash === '') set(K.img, null);
     set(K.u, String(Number(remote.u) || Date.now()));
+    set(K.auto, remote.auto ? '1' : null);
     return true;
   },
 };

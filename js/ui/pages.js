@@ -46,6 +46,13 @@ export function renderLookSync() {
   const el = $('#look-sync-info');
   if (!el) return;
   const u = Auth.user();
+  const st = Look.status();
+  const at = st ? new Date(st.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  const stEl = $('#look-status');
+  stEl.className = `look-status ${st?.kind || ''}`;
+  stEl.textContent = !u || !Look.enabled() ? '' : !st ? 'Pas encore synchronisée.'
+    : { out: `Envoyée dans ton Drive le ${at}.`, in: `Importée depuis ton Drive le ${at}.`, same: `À jour (vérifiée le ${at}).`, error: `Échec le ${at} : ${st.extra}` }[st.kind] || '';
+  $('#look-actions').hidden = !u || !Look.enabled();
   el.textContent = !Look.enabled() ? 'Désactivé : cette présentation reste propre à ce navigateur.'
     : u ? `Thème, fond, couleurs et effets sont enregistrés dans le Google Drive de ${u.email} et appliqués sur tes autres navigateurs connectés à ce compte.`
       : 'Connecte-toi à Google (en bas à gauche) : ta présentation te suivra sur tes autres navigateurs.';
@@ -111,6 +118,13 @@ export function bindPerso() {
   Sync.onLook = applyRemoteLook;
   $('#look-sync').checked = Look.enabled();
   $('#look-sync').onchange = (e) => { Look.setEnabled(e.target.checked); renderLookSync(); };
+  Look.onStatus = renderLookSync;
+  $('#look-push').onclick = async () => {
+    if (!Sync.enabled()) return toast('Connecte-toi d’abord à Google (en bas à gauche).', 'warn', 5000);
+    Look.touch();
+    $('#look-push').disabled = true;
+    try { await Sync.run(); toast(Look.status()?.kind === 'error' ? `Envoi impossible : ${Look.status().extra}` : 'Présentation envoyée dans ton Google Drive.', Look.status()?.kind === 'error' ? 'err' : 'ok', 4500); } catch (e) { toast(e.message, 'err', 6000); } finally { $('#look-push').disabled = false; renderLookSync(); }
+  };
   $('#bg-cats').addEventListener('click', (e) => {
     const b = e.target.closest('[data-cat]');
     if (!b) return;

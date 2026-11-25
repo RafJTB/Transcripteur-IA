@@ -40,6 +40,7 @@ export async function renderActionBoard() {
   const list = $('#ab-list');
   if (!list) return;
   all = collectActions(await myDocs());
+  list.removeAttribute('aria-busy');
   renderActionBadge();
   const c = countActions(all);
   const tiles = [['todo', 'À faire', c.todo, 'violet'], ['overdue', 'En retard', c.overdue, 'red'], ['soon', 'Cette semaine', c.soon, 'amber'], ['done', 'Faites', c.done, 'green']];

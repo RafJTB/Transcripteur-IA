@@ -37,7 +37,6 @@ test('Mes projets : chronologie, dossiers en couleur, ranger, filtrer, supprimer
   // Supprimer la 2e réunion
   await rows.nth(1).hover();
   await rows.nth(1).locator('.pc-del').click();
-  await page.locator('#modal-ok').click();
   await expect(rows).toHaveCount(1);
 
   // Ouvrir la réunion restante

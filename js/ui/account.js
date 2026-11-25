@@ -12,6 +12,7 @@ import { notify } from './notifs.js';
 import { clearAudio, loadDocVideo, micBusy } from './recording.js';
 import { isMine, persist } from './transcription.js';
 import { setView } from './views.js';
+import { removeFolder } from './undo.js';
 import { renderSettings, setSettingsTab } from './settings-ui.js';
 
 // ======================================================================
@@ -291,11 +292,12 @@ export function bindAccount(authResult) {
   $('#folder-delete').onclick = async () => {
     const f = Folders.get(state.folder);
     if (!f) return;
-    if (!(await ask('Supprimer ce dossier ?', `Le dossier « ${f.name} » sera supprimé. Les transcriptions qu’il contient ne sont pas effacées : elles passent dans « Sans dossier ».`, 'Supprimer', { danger: true }))) return;
-    Folders.remove(f.id);
-    state.folder = 'all';
-    renderHistory();
-    renderDocFolder();
+    // Les réunions du dossier ne sont pas effacées (elles passent dans « Sans dossier ») ; « Annuler » le rétablit
+    removeFolder(f, ({ removed, id }) => {
+      state.folder = removed ? 'all' : id;
+      renderHistory();
+      renderDocFolder();
+    });
   };
   $('#doc-folder').onchange = (e) => { if (state.doc) moveToFolder(state.doc, e.target.value); };
   // Synchronisation régulière

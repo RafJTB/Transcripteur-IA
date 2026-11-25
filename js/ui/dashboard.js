@@ -174,6 +174,8 @@ export async function renderDashboard() {
   $('#hero-hello').textContent = helloText();
   $('#dash-stats').innerHTML = statTiles(docs, dashStats(docs));
   $('#dash-recent').innerHTML = recentRows(docs);
+  $('#dash-recent').removeAttribute('aria-busy');
+  $('#dash-stats').removeAttribute('aria-busy');
   $('#dash-insights').innerHTML = insightsHtml(docs);
   renderQuick(docs);
 }

@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-45" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-45" />
-  <script src="js/boot.js?v=2026-11-22-45"></script>
+  <meta name="app-version" content="2026-11-22-48" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-48" />
+  <script src="js/boot.js?v=2026-11-22-48"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -97,7 +97,7 @@
       <div class="content">
         <main class="views">
           <!-- ===== ACCUEIL : tableau de bord ===== -->
-          <section class="view view-dash" data-page="home">
+          <section class="view view-dash active" data-page="home">
             <section class="glass hero">
               <div class="hero-txt">
                 <h2 id="hero-hello">Bonjour ! 👋</h2>
@@ -113,10 +113,10 @@
               </div>
             </section>
             <section class="glass dash-next" id="dash-next" hidden></section>
-            <div class="stat-row" id="dash-stats"></div>
+            <div class="stat-row" id="dash-stats" aria-busy="true"><div class="sk-tile" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-num"></i><i class="sk sk-line w60"></i></span></div><div class="sk-tile" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-num"></i><i class="sk sk-line w60"></i></span></div><div class="sk-tile" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-num"></i><i class="sk sk-line w60"></i></span></div><div class="sk-tile" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-num"></i><i class="sk sk-line w60"></i></span></div></div>
             <section class="glass dash-card dash-recent-card">
               <header class="dash-head"><h3><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>Mes derniers projets</h3><button class="link-btn more-link" type="button" data-nav="projects">Voir tous<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></header>
-              <div class="recent-list" id="dash-recent"></div>
+              <div class="recent-list" id="dash-recent" aria-busy="true"><div class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-line w55"></i><i class="sk sk-line w35"></i></span><i class="sk sk-pill"></i></div><div class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-line w55"></i><i class="sk sk-line w35"></i></span><i class="sk sk-pill"></i></div><div class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-line w55"></i><i class="sk sk-line w35"></i></span><i class="sk sk-pill"></i></div><div class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-line w55"></i><i class="sk sk-line w35"></i></span><i class="sk sk-pill"></i></div></div>
             </section>
             <section class="glass dash-card">
               <header class="dash-head"><h3><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V17h5v-1.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>Vos insights</h3><button class="link-btn more-link" type="button" data-nav="analytics">Voir plus<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></header>
@@ -438,7 +438,7 @@
                 </div>
                 <div class="proj-storage" id="proj-storage"></div>
               </nav>
-              <div class="hist-list" id="hist-list"></div>
+              <div class="hist-list" id="hist-list" aria-busy="true"><div class="sk-row tall" aria-hidden="true"><span class="sk-when"><i class="sk sk-line w70"></i><i class="sk sk-line w45"></i></span><i class="sk sk-bar"></i><i class="sk sk-ic"></i><span><i class="sk sk-line w60"></i><i class="sk sk-line w40"></i></span><i class="sk sk-pill"></i></div><div class="sk-row tall" aria-hidden="true"><span class="sk-when"><i class="sk sk-line w70"></i><i class="sk sk-line w45"></i></span><i class="sk sk-bar"></i><i class="sk sk-ic"></i><span><i class="sk sk-line w60"></i><i class="sk sk-line w40"></i></span><i class="sk sk-pill"></i></div><div class="sk-row tall" aria-hidden="true"><span class="sk-when"><i class="sk sk-line w70"></i><i class="sk sk-line w45"></i></span><i class="sk sk-bar"></i><i class="sk sk-ic"></i><span><i class="sk sk-line w60"></i><i class="sk sk-line w40"></i></span><i class="sk sk-pill"></i></div><div class="sk-row tall" aria-hidden="true"><span class="sk-when"><i class="sk sk-line w70"></i><i class="sk sk-line w45"></i></span><i class="sk sk-bar"></i><i class="sk sk-ic"></i><span><i class="sk sk-line w60"></i><i class="sk sk-line w40"></i></span><i class="sk sk-pill"></i></div><div class="sk-row tall" aria-hidden="true"><span class="sk-when"><i class="sk sk-line w70"></i><i class="sk sk-line w45"></i></span><i class="sk sk-bar"></i><i class="sk sk-ic"></i><span><i class="sk sk-line w60"></i><i class="sk sk-line w40"></i></span><i class="sk sk-pill"></i></div></div>
             </div>
           </section>
 
@@ -461,7 +461,7 @@
                 </div>
               </div>
               <div class="ab-people" id="ab-people" aria-label="Responsables"></div>
-              <div class="ab-list" id="ab-list"></div>
+              <div class="ab-list" id="ab-list" aria-busy="true"><div class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-line w55"></i><i class="sk sk-line w35"></i></span><i class="sk sk-pill"></i></div><div class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-line w55"></i><i class="sk sk-line w35"></i></span><i class="sk sk-pill"></i></div><div class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-line w55"></i><i class="sk sk-line w35"></i></span><i class="sk sk-pill"></i></div><div class="sk-row" aria-hidden="true"><i class="sk sk-ic"></i><span><i class="sk sk-line w55"></i><i class="sk sk-line w35"></i></span><i class="sk sk-pill"></i></div></div>
             </section>
           </section>
 
@@ -995,6 +995,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-45"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-48"></script>
 </body>
 </html>

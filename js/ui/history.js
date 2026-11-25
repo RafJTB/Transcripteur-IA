@@ -15,6 +15,7 @@ import { SP_PEOPLE } from './spaces.js';
 import { getAudio, isMine, renderResume } from './transcription.js';
 import { closeDrawers } from './views.js';
 import { removeMeeting } from './undo.js';
+import { emptyState } from './empty.js';
 
 // ======================================================================
 // Lexique
@@ -64,7 +65,12 @@ export async function renderHistory() {
   const acts = items.reduce((a, it) => a + openActionCount(it), 0);
   $('#hist-count').innerHTML = items.length ? `<b>${items.length} réunion${items.length > 1 ? 's' : ''}</b>${total ? ` · ${fmtHours(total)} d’audio` : ''}${acts ? ` · <b>${acts} action${acts > 1 ? 's' : ''}</b> à faire` : ''}` : '';
   renderProjStorage(sizes);
-  if (!items.length) { list.innerHTML = `<div class="hist-empty"><span class="r-ico violet">${STAT_ICONS.docs}</span><b>${state.folder === 'all' ? 'Aucune transcription pour l’instant' : 'Ce dossier est vide'}</b><small>${state.folder === 'all' ? 'Lance ta première avec « Nouvelle transcription » sur l’accueil.' : 'Range une transcription ici avec son menu « Dossier ».'}</small></div>`; return; }
+  if (!items.length) {
+    list.innerHTML = state.folder === 'all'
+      ? emptyState({ art: 'meetings', title: 'Aucune réunion pour l’instant', text: 'Tes réunions transcrites apparaîtront ici, classées par date et par dossier.', actions: [{ label: 'Nouvelle transcription', attrs: 'data-em="record"', primary: true }, { label: 'Importer un fichier', attrs: 'data-em="import"' }] })
+      : emptyState({ art: 'folder', title: 'Ce dossier est vide', text: 'Range une réunion ici avec le bouton « Dossier » de sa ligne (au survol).' });
+    return;
+  }
   const rawQ = $('#hist-search').value.trim();
   const q = [...rawQ].map(fold).join('');
   // Intervenant choisi : seulement ses réunions ; avec un texte cherché, seulement ce qu'il a dit
@@ -72,7 +78,7 @@ export async function renderHistory() {
   if (who) items = items.filter((it) => saidBy(it, who, rawQ).length);
   const textOf = (it) => [...`${it.title} ${it.segments.map((x) => x.text).join(' ')}`].map(fold).join('');
   if (q && !who) items = items.filter((it) => textOf(it).includes(q));
-  if (!items.length) { list.innerHTML = `<p class="hist-empty">${who ? `Aucune réunion où ${esc(who)} ${rawQ ? `parle de « ${esc(rawQ)} »` : 'parle'}.` : 'Aucun résultat.'}</p>`; return; }
+  if (!items.length) { list.innerHTML = emptyState({ art: 'search', title: who ? `Aucune réunion où ${who} ${rawQ ? `parle de « ${rawQ} »` : 'parle'}` : `Rien trouvé pour « ${rawQ} »`, text: 'Essaie un autre mot, ou vérifie l’orthographe : la recherche ignore les accents et les majuscules.' }); return; }
   list.innerHTML = '';
   const now = Date.now();
   let group = null;

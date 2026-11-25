@@ -1,5 +1,6 @@
 // Page « Suivi des actions » : toutes les actions de toutes les réunions, à cocher, filtrer et copier.
 
+import { emptyState } from './empty.js';
 import { History } from '../history.js';
 import { Folders } from '../cloud.js';
 import { actionPeople, actionsToText, collectActions, countActions, filterActions, groupActions } from '../actionboard.js';
@@ -61,11 +62,13 @@ export async function renderActionBoard() {
   const shown = filterActions(all, f);
   $('#ab-copy').disabled = !shown.length;
   if (!all.length) {
-    list.innerHTML = '<div class="ab-empty"><b>Aucune action pour l’instant</b><small>Les actions sont relevées automatiquement dans tes transcriptions (« Julie, tu peux… », « je m’en occupe », « pour vendredi »…).</small></div>';
+    list.innerHTML = emptyState({ art: 'actions', title: 'Aucune action pour l’instant', text: 'Les actions sont relevées automatiquement dans tes réunions : « Julie, tu peux… », « je m’en occupe », « pour vendredi »…' });
     return;
   }
   if (!shown.length) {
-    list.innerHTML = `<div class="ab-empty"><b>${f.status === 'overdue' ? 'Aucune action en retard' : f.status === 'done' ? 'Aucune action faite' : 'Rien à afficher'}</b><small>Change de filtre pour voir d’autres actions.</small></div>`;
+    list.innerHTML = f.status === 'overdue'
+      ? emptyState({ art: 'actions', title: 'Aucune action en retard', text: 'Tout est dans les temps. 👏', small: true })
+      : emptyState({ art: 'search', title: f.status === 'done' ? 'Aucune action faite' : 'Rien à afficher', text: 'Change de filtre pour voir d’autres actions.', small: true });
     return;
   }
   const allF = Folders.raw();

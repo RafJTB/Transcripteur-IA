@@ -29,6 +29,12 @@ export { expect };
 
 export async function boot(page, path = '/') {
   await page.goto(path);
+  // 1re visite : le service worker recharge une fois la page pour activer l'isolation (WASM multithread).
+  // On attend ce rechargement : sous charge, il arrivait en plein test et effaçait ce qui était en cours.
+  for (const t0 = Date.now(); Date.now() - t0 < 15_000;) {
+    try { if (await page.evaluate(() => window.crossOriginIsolated)) break; } catch { /* page en train de se recharger */ }
+    await page.waitForTimeout(100);
+  }
   await page.waitForFunction(() => window.__appBoot && window.__app, null, { timeout: 30_000 });
 }
 

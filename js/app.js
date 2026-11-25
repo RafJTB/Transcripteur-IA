@@ -1,6 +1,7 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 
+import { maybeOnboard, openOnboarding } from './ui/onboarding.js';
 import { commitStale } from './ui/undo.js';
 import { bindSpeakerPick } from './ui/history.js';
 import { Look } from './presentation.js';
@@ -200,6 +201,7 @@ function bind() {
   bindSettings();
   bindActionBoard();
   bindSpeakerPick();
+  $('#help-tour').onclick = () => openOnboarding();
   commitStale();
   bindActions();
   bindV3();
@@ -318,6 +320,7 @@ async function init() {
   bind();
   bindAccount(authResult);
   bindInstall();
+  maybeOnboard();
   bindReport();
   initCalendar();
   bindVerify();

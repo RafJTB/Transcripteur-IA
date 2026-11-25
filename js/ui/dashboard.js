@@ -1,5 +1,6 @@
 // Accueil (tableau de bord) et page Analyses.
 
+import { emptyState } from './empty.js';
 import { Auth, Folders } from '../cloud.js';
 import { dailyMinutes, dashStats, periodStart, speakerTotals, topicShares, weeklyMinutes } from '../insights.js';
 import { extractActions } from '../actions.js';
@@ -54,7 +55,7 @@ export function docIcon(title) {
 const STATUS = (d) => (d.status === 'running' || d.status === 'live' ? ['run', 'En cours'] : d.status === 'interrupted' ? ['warn', 'Interrompue'] : ['ok', 'Terminée']);
 
 function recentRows(docs) {
-  if (!docs.length) return '<p class="dash-empty">Aucune transcription pour l’instant. Lance ta première avec « Nouvelle transcription ».</p>';
+  if (!docs.length) return emptyState({ art: 'meetings', title: 'Ta première réunion t’attend', text: 'Enregistre une réunion ou importe un fichier : la transcription, les intervenants et les actions apparaîtront ici.', actions: [{ label: 'Nouvelle transcription', attrs: 'data-em="record"', primary: true }, { label: 'Importer un fichier', attrs: 'data-em="import"' }], inline: true });
   return docs.slice(0, 12).map((d) => {
     const [tone, icon] = docIcon(d.title);
     const [sk, sl] = STATUS(d);
@@ -199,6 +200,11 @@ export async function renderQuick(docs = null) {
 
 export function bindDashboard() {
   $('#dash-new').onclick = () => { setView('record'); selectTab('mic'); };
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-em]')?.dataset.em;
+    if (a === 'record') { setView('record'); selectTab('mic'); }
+    if (a === 'import') { setView('record'); selectTab('file'); $('#file-input').click(); }
+  });
   $('#dash-import').onclick = () => { setView('record'); selectTab('file'); $('#file-input').click(); };
   $('#dash-recent').addEventListener('click', async (e) => {
     const row = e.target.closest('.recent-row');

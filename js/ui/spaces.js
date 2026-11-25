@@ -1,5 +1,6 @@
 // Espaces collaboratifs (interface).
 
+import { emptyState } from './empty.js';
 import { Audios, History, newId } from '../history.js';
 import { Auth } from '../cloud.js';
 import { Spaces, normalizeUrl, sanitizeSharedDoc, spacesError } from '../spaces.js';
@@ -75,7 +76,7 @@ function renderSpaceList() {
   const list = $('#spc-list');
   list.innerHTML = spState.spaces.length
     ? spState.spaces.map((s) => `<button type="button" class="spc-item${s.id === spState.current ? ' active' : ''}" data-space="${esc(s.id)}"><span class="spc-ico">${SP_PEOPLE}</span><span class="spc-txt"><b>${esc(s.name)}</b><small>${s.members} membre${s.members > 1 ? 's' : ''} · ${s.docs} réunion${s.docs > 1 ? 's' : ''}</small></span>${s.owner === spState.me?.id ? '<i class="spc-own" title="Tu es propriétaire">Propriétaire</i>' : ''}</button>`).join('')
-    : '<p class="dash-empty sm">Aucun espace pour l’instant. Crée le premier, ou demande à quelqu’un de t’inviter avec ton adresse.</p>';
+    : emptyState({ art: 'people', title: 'Aucun espace pour l’instant', text: 'Crée le premier, ou demande à quelqu’un de t’inviter avec ton adresse.', small: true });
   refreshBadges();
 }
 

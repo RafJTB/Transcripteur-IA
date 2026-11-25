@@ -1,6 +1,8 @@
 // Onglets en « verre liquide » : une pastille de verre se pose sous l'onglet sélectionné
 // et glisse vers le nouveau en s'étirant comme une goutte. Une pastille par groupe d'onglets.
 
+import { blockColor } from './hover-glow.js';
+
 const GROUPS = [
   // [conteneur, onglets, est sélectionné ?]
   ['#nav', '[data-nav]', (b) => b.classList.contains('active')],
@@ -21,6 +23,10 @@ function place(host, st, animate) {
   items.forEach((b) => (b === on ? b.setAttribute('data-lg-on', '') : b.removeAttribute('data-lg-on')));
   if (!st.pill.isConnected) { host.prepend(st.pill); animate = false; }
   if (!on || !on.offsetWidth) { st.pill.classList.remove('on'); st.last = null; return; }
+  // Teinte : la couleur propre de l'onglet choisi (dossier, catégorie, icône colorée) ; sinon verre neutre
+  const c = blockColor(on);
+  if (c) st.pill.style.setProperty('--lg-a', c); else st.pill.style.removeProperty('--lg-a');
+  st.pill.classList.toggle('neutral', !c);
   const to = { x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
   const set = (r) => { const s = st.pill.style; s.transform = `translate(${r.x}px, ${r.y}px)`; s.width = `${r.w}px`; s.height = `${r.h}px`; };
   const from = st.last;

@@ -60,3 +60,11 @@ test('page : politique de sécurité stricte, aucun script intégré', () => {
   assert.ok(!/\son[a-z]+="/i.test(html), 'aucun gestionnaire d’événement dans le HTML');
   assert.match(html, /<meta name="referrer" content="no-referrer"/);
 });
+
+test('adresse Supabase : celle de l’API (/rest/v1/) ou avec « / » final est ramenée à la racine du projet', async () => {
+  const { normalizeUrl } = await import('../../js/spaces.js');
+  assert.equal(normalizeUrl(' https://AbCd.supabase.co/rest/v1/ '), 'https://abcd.supabase.co');
+  assert.equal(normalizeUrl('https://abcd.supabase.co/'), 'https://abcd.supabase.co');
+  assert.equal(normalizeUrl('https://abcd.supabase.in'), 'https://abcd.supabase.in');
+  assert.equal(normalizeUrl('https://pirate.example.com/'), 'https://pirate.example.com'); // non reconnue : refusée ensuite
+});

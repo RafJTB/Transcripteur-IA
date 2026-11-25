@@ -9,11 +9,12 @@ import { freshSource, monitor, player, recorder } from './recording.js';
 import { renderSpaces } from './spaces.js';
 import { renderCalendar } from './calendar-ui.js';
 import { renderSettings } from './settings-ui.js';
+import { renderActionBoard } from './actions-board.js';
 
 // ======================================================================
 // Interface v3 : vues, onglets du document, panneau d'analyse
 // ======================================================================
-const PAGE_OF = { home: 'home', record: 'record', doc: 'doc', projects: 'history', history: 'history', settings: 'settings', analytics: 'analytics', models: 'models', help: 'help', custom: 'custom', spaces: 'spaces', calendar: 'calendar' };
+const PAGE_OF = { home: 'home', record: 'record', doc: 'doc', projects: 'history', history: 'history', settings: 'settings', analytics: 'analytics', models: 'models', help: 'help', custom: 'custom', spaces: 'spaces', calendar: 'calendar', actions: 'actions' };
 
 /** Affiche une vue (accueil, document, projets / historique, paramètres). */
 /** Téléphone : le panneau « Analyse audio » s'ouvre en plein écran (onglet Analyse). */
@@ -49,6 +50,7 @@ export function setView(name) {
   if (page === 'spaces') renderSpaces();
   if (page === 'calendar') renderCalendar();
   if (page === 'settings') renderSettings();
+  if (page === 'actions') renderActionBoard();
   if (page === 'record') requestAnimationFrame(() => monitor?.draw());
   if (page === 'doc') requestAnimationFrame(() => player?.draw());
   else {

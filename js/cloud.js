@@ -259,6 +259,8 @@ const tombKey = () => `deleted.${Auth.user()?.email}`;
 const listeners = new Set();
 
 export const Sync = {
+  /** Réunions supprimées ici, encore annulables : la synchronisation ne les fait pas revenir. */
+  held: new Set(),
   status: 'idle', // idle | syncing | ok | error | expired | off
   error: '',
   lastAt: Number(ls.get('lastAt', 0)) || 0,
@@ -396,7 +398,7 @@ export const Sync = {
       }
     }
     for (const [id, r] of rDocs) {
-      if (localIds.has(id)) continue;
+      if (localIds.has(id) || Sync.held.has(id)) continue; // en attente de suppression (« Annuler » possible)
       const d = await Drive.getJson(r.id);
       // Même identifiant chez un autre compte de ce navigateur : on ne mélange pas
       if (all.some((x) => x.id === id)) continue;

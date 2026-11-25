@@ -2920,3 +2920,49 @@ html.lg-refract .lg-pill { -webkit-backdrop-filter: url(#lg-refract) blur(8px) s
 .search:focus-within, .proj-spk:focus-within, .chat-compose:focus-within, .ab-search:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .search input:focus-visible, .proj-spk select:focus-visible, .chat-compose textarea:focus-visible, .chat-compose input:focus-visible, .ab-search input:focus-visible { outline: none; }
 :root[data-theme='light'] .scope-chip small { color: var(--text-2); }
+
+/* Message avec « Annuler » : bouton, et barre qui se vide pendant le délai */
+.toast.has-action { position: relative; align-items: center; overflow: hidden; pointer-events: auto; }
+.toast .t-txt { flex: 1; min-width: 0; }
+.toast .t-act { flex: none; margin-left: 8px; padding: 5px 12px; border: 0; border-radius: 9px; background: rgb(var(--accent-rgb) / 0.18); color: var(--accent-text); font: 700 13px var(--font); cursor: pointer; }
+.toast .t-act:hover { background: rgb(var(--accent-rgb) / 0.3); }
+.toast .t-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--accent); transform-origin: left; animation: t-bar var(--t-ms, 7s) linear forwards; }
+@keyframes t-bar { to { transform: scaleX(0); } }
+/* Ligne supprimée : elle se replie */
+.proj-row.leaving { animation: row-out 0.28s var(--ease) forwards; pointer-events: none; }
+@keyframes row-out { to { opacity: 0; transform: translateX(-12px) scale(0.98); } }
+
+/* =====================================================================
+   Fluidité : arrivée des pages, squelettes de chargement
+   ===================================================================== */
+/* Arrivée d'une page : fondu, et ses blocs montent en cascade */
+.view.active { animation: view-in 0.3s var(--ease) both; }
+.view.active > * { animation: view-item 0.42s var(--ease) both; }
+.view.active > *:nth-child(2) { animation-delay: 0.035s; }
+.view.active > *:nth-child(3) { animation-delay: 0.07s; }
+.view.active > *:nth-child(4) { animation-delay: 0.105s; }
+.view.active > *:nth-child(5) { animation-delay: 0.14s; }
+.view.active > *:nth-child(n + 6) { animation-delay: 0.17s; }
+@keyframes view-in { from { opacity: 0; } }
+@keyframes view-item { from { opacity: 0; transform: translateY(12px); } }
+@media (prefers-reduced-motion: reduce) { .view.active, .view.active > * { animation: none; } }
+
+/* Squelettes : la forme du contenu, qui scintille doucement en attendant */
+.sk { display: block; border-radius: 8px; background: linear-gradient(90deg, rgb(var(--ov) / 0.07) 0%, rgb(var(--ov) / 0.14) 40%, rgb(var(--ov) / 0.07) 80%); background-size: 300% 100%; animation: sk-shine 1.4s ease-in-out infinite; }
+@keyframes sk-shine { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+.sk-ic { width: 44px; height: 44px; flex: none; border-radius: 13px; }
+.sk-num { width: 70px; height: 24px; margin-bottom: 8px; }
+.sk-line { height: 11px; }
+.sk-line + .sk-line { margin-top: 8px; }
+.sk-pill { width: 84px; height: 26px; flex: none; border-radius: 99px; }
+.sk-bar { width: 4px; align-self: stretch; flex: none; border-radius: 4px; }
+.w35 { width: 35%; } .w40 { width: 40%; } .w45 { width: 45%; } .w55 { width: 55%; } .w60 { width: 60%; } .w70 { width: 70%; }
+.sk-tile { display: flex; align-items: center; gap: 14px; padding: 16px 18px; min-height: 84px; border-radius: 18px; background: linear-gradient(180deg, rgb(var(--ov) / 0.06), rgb(var(--ov) / 0.03)); border: 1px solid rgb(var(--ov) / 0.1); }
+.sk-tile > span, .sk-row > span { flex: 1; min-width: 0; }
+.sk-row { display: flex; align-items: center; gap: 14px; padding: 10px 8px; min-height: 60px; }
+.sk-row + .sk-row { border-top: 1px solid rgb(var(--ov) / 0.06); }
+.sk-row.tall { padding: 14px; min-height: 70px; border-radius: 16px; border: 1px solid rgb(var(--ov) / 0.08); background: rgb(var(--ov) / 0.03); }
+.sk-row.tall + .sk-row.tall { margin-top: 10px; border-top: 1px solid rgb(var(--ov) / 0.08); }
+.sk-when { width: 70px; flex: none; }
+.sk-row .sk-ic { width: 38px; height: 38px; border-radius: 12px; }

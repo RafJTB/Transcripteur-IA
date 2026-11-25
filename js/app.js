@@ -1,6 +1,7 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 
+import { commitStale } from './ui/undo.js';
 import { bindSpeakerPick } from './ui/history.js';
 import { Look } from './presentation.js';
 import { Audios, History, RecChunks } from './history.js';
@@ -199,6 +200,7 @@ function bind() {
   bindSettings();
   bindActionBoard();
   bindSpeakerPick();
+  commitStale();
   bindActions();
   bindV3();
   bindDashboard();

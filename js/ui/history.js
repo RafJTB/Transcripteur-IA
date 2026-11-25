@@ -14,6 +14,7 @@ import { clearAudio, micBusy, player, setAudioFromBlob, videoIdOf } from './reco
 import { SP_PEOPLE } from './spaces.js';
 import { getAudio, isMine, renderResume } from './transcription.js';
 import { closeDrawers } from './views.js';
+import { removeMeeting } from './undo.js';
 
 // ======================================================================
 // Lexique
@@ -56,6 +57,7 @@ export async function renderHistory() {
   let sizes = {};
   try { [items, sizes] = await Promise.all([History.list(), Audios.sizes()]); } catch { list.innerHTML = '<p class="hist-empty">Historique indisponible dans ce navigateur.</p>'; return; }
   items = items.filter(isMine);
+  list.removeAttribute('aria-busy');
   renderFolderBar(items);
   if (state.folder !== 'all') items = items.filter((it) => (state.folder === 'none' ? !Folders.get(it.folderId) : it.folderId === state.folder));
   const total = items.reduce((a, it) => a + (it.durationS || 0), 0);
@@ -143,22 +145,17 @@ export async function renderHistory() {
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target === el) openIt(); });
     $('.pc-del', el).onclick = async () => {
       if (state.run?.doc.id === it.id || state.doc?.id === it.id && state.phase !== 'idle') return toast('Cette transcription est en cours.', 'warn');
-      const ok = await ask('Supprimer cette transcription ?', `« ${it.title} »${it.audioId ? ' et son audio seront' : ' sera'} définitivement effacé${it.audioId ? 's' : 'e'} de ce navigateur.`, 'Supprimer', { danger: true });
-      if (!ok) return;
-      await History.remove(it.id);
-      Sync.forget(it.id);
-      if (it.audioId) {
-        const others = (await History.list()).some((d) => d.audioId === it.audioId);
-        if (!others) {
-          await Audios.remove(it.audioId);
-          Sync.forget(null, it.audioId);
-          if (state.audio?.audioId === it.audioId) clearAudio();
+      // Disparition immédiate (la ligne se replie), « Annuler » pendant quelques secondes
+      el.classList.add('leaving');
+      await removeMeeting(it, ({ removed, audioId }) => {
+        if (removed) {
+          if (audioId && state.audio?.audioId === audioId) clearAudio();
+          if (state.doc?.id === it.id) clearResult();
         }
-      }
-      if (state.doc?.id === it.id) clearResult();
-      renderHistory();
-      renderStorage();
-      updateButtons();
+        renderHistory();
+        renderStorage();
+        updateButtons();
+      });
     };
     list.appendChild(el);
   }

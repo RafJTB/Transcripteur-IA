@@ -14,6 +14,11 @@ test('créer un espace, inviter, partager ; l’invitée voit la réunion, un ti
   await boot(page);
   await page.evaluate(() => localStorage.removeItem('mock.sb.db'));
   await seedMeetings(page);
+  await page.evaluate(async () => {
+    const d = await window.__app.History.get('d1');
+    d.event = { id: 'ev', title: 'Point équipe projet Ledona', start: 1, end: 2, joinUrl: 'https://teams.microsoft.com/l/meetup-join/secret', attendees: [{ name: 'Julie', email: 'julie@client.fr' }], organizer: { name: 'Raf', email: 'raf@exemple.fr' } };
+    await window.__app.History.put(d);
+  });
   await nav(page, 'spaces');
 
   // Nouvel espace
@@ -39,6 +44,8 @@ test('créer un espace, inviter, partager ; l’invitée voit la réunion, un ti
   const shared = await page.evaluate(() => JSON.parse(localStorage.getItem('mock.sb.db')).space_docs[0]);
   expect(shared.author_email).toBe('raf@exemple.fr');
   expect(JSON.stringify(shared.doc.speakers)).not.toContain('emb'); // empreintes de voix jamais partagées
+  // Réunion du calendrier : ni adresses des participants ni lien de visio envoyés
+  expect(shared.doc.event).toEqual({ title: 'Point équipe projet Ledona', start: 1, end: 2 });
 
   // Julie
   const j = await context.newPage();

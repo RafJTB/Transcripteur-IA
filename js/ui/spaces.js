@@ -2,7 +2,7 @@
 
 import { Audios, History, newId } from '../history.js';
 import { Auth } from '../cloud.js';
-import { Spaces, sanitizeSharedDoc, spacesError } from '../spaces.js';
+import { Spaces, normalizeUrl, sanitizeSharedDoc, spacesError } from '../spaces.js';
 import { canEncodeOpus, encodeOggOpus } from '../opus-ogg.js';
 import { decodeToMono16k } from '../audio.js';
 import { speakerColor } from '../speakers.js';
@@ -201,9 +201,10 @@ async function openSpaceDoc(id) {
 function bindSpaces() {
   // Configuration
   $('#spc-save').onclick = () => {
-    const url = $('#spc-url').value.trim();
+    const url = normalizeUrl($('#spc-url').value);
+    $('#spc-url').value = url;
     const key = $('#spc-key').value.trim();
-    if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)\/?$/i.test(url)) return toast('Adresse attendue : https://xxxx.supabase.co', 'warn', 5000);
+    if (!/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(url)) return toast('Adresse attendue : https://xxxx.supabase.co', 'warn', 5000);
     if (!key.startsWith('•') && key.length < 20) return toast('Clé publique (anon / publishable) attendue.', 'warn', 5000);
     // Clé secrète (accès total à la base, sans règles d'accès) : refusée, quel que soit son format
     let role = '';

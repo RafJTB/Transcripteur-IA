@@ -11,12 +11,19 @@ const lsSet = (k, v) => { try { v ? localStorage.setItem(LS + k, v) : localStora
 const BUCKET = 'space-audio';
 const MSG_COLS = 'id, space_id, author, author_name, author_email, body, doc_id, created_at';
 
+/** « https://xxx.supabase.co/rest/v1/ » (adresse de l'API copiée telle quelle) → « https://xxx.supabase.co ». */
+export const normalizeUrl = (u) => {
+  const t = String(u || '').trim();
+  const m = t.match(/^(https:\/\/[a-z0-9-]+\.supabase\.(?:co|in))(?:\/.*)?$/i);
+  return m ? m[1].toLowerCase() : t.replace(/\/+$/, '');
+};
+
 let client = null;
 let clientKey = '';
 
 export const Spaces = {
   /** Adresse et clé publique du projet : config.js, sinon réglées dans l'appli. */
-  url: () => (SUPABASE_URL || lsGet('url')).trim().replace(/\/+$/, ''),
+  url: () => normalizeUrl(SUPABASE_URL || lsGet('url')),
   key: () => (SUPABASE_ANON_KEY || lsGet('key')).trim(),
   configured: () => /^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(Spaces.url()) && Spaces.key().length > 20,
   fixed: () => !!(SUPABASE_URL && SUPABASE_ANON_KEY),
@@ -149,6 +156,9 @@ export const Spaces = {
     // On ne partage que ce qui sert : pas l'état interne ni les empreintes de voix
     const { job, owner, remoteSeen, audioId, folderId, actionState, ...rest } = doc;
     const clean = { ...rest, speakers: (doc.speakers || []).map(({ emb, learned, known, ...p }) => p) };
+    // Réunion du calendrier : seulement le titre et l'horaire (ni adresses e-mail des participants, ni lien de visio)
+    if (doc.event) clean.event = { title: doc.event.title, start: doc.event.start, end: doc.event.end };
+    else delete clean.event;
     const { data, error } = await c.from('space_docs').insert({
       space_id: spaceId, title: doc.title, doc: clean, duration_s: doc.durationS || null,
       audio_path, audio_bytes: audioBlob?.size || null, author_name: me?.name || null, author_email: me?.email || null,
@@ -263,7 +273,7 @@ export function spacesError(e) {
   const t = String(e?.message || e || '');
   const detail = [e?.code, e?.message, e?.details, e?.hint].filter(Boolean).join(' · ').slice(0, 220);
   if (/permission denied for (table|schema|function|sequence)/i.test(t)) return `Droits manquants sur la base : exécute à nouveau le script SQL complet (onglet Espaces → Copier le script SQL). Détail : ${detail}`;
-  if (/relation .* does not exist|schema cache|Could not find the table/i.test(t)) return 'La base n’est pas encore prête : exécute le script SQL (Paramètres de l’espace collaboratif).';
+  if (/relation .* does not exist|schema cache|Could not find the table/i.test(t)) return 'La base n’est pas à jour : exécute le script SQL dans Supabase (SQL Editor → Run). Il est ré-exécutable sans danger.';
   if (/Bucket not found/i.test(t)) return 'Le stockage audio n’est pas prêt : exécute le script SQL complet.';
   // « duplicate key value violates unique constraint » : à tester avant « violates »
   if (/duplicate key/i.test(t)) return 'Cette personne est déjà membre.';

@@ -2281,8 +2281,7 @@ button.store-chip { cursor: pointer; font: inherit; }
 .spc-mismatch-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 720px) { .spc-mismatch { flex-direction: column; align-items: stretch; } }
 
-/* =====================================================================
-   Page « Nouvelle transcription » (v5) : scène d'enregistrement + réglages
+/* ==============================================================   Page « Nouvelle transcription » (v5) : scène d'enregistrement + réglages
    ===================================================================== */
 section.view[data-page='record'] { container-type: inline-size; container-name: recpage; }
 .rec-grid { grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 18px; align-items: stretch; }
@@ -2785,3 +2784,9 @@ html.lg-refract .lg-pill { -webkit-backdrop-filter: url(#lg-refract) blur(8px) s
 /* Pendant le glissement : une seule pastille, l'onglet de départ perd son fond propre */
 .lg-host.lg-dragging > :not(.lg-pill) { background: none !important; border-color: transparent !important; box-shadow: none !important; }
 .lg-host.lg-dragging > :not(.lg-pill):not([data-lg-on]) { color: var(--text-2) !important; }
+=======
+/* Conversation : marche à suivre si la table manque dans Supabase */
+.chat-setup { margin: auto 0; display: grid; gap: 8px; padding: 16px; border-radius: 14px; border: 1px dashed var(--line-2); background: rgb(var(--ov) / 0.04); }
+.chat-setup small { color: var(--text-2); font-size: 13px; }
+.chat-setup ol { margin: 4px 0 0; padding-left: 20px; display: grid; gap: 10px; font-size: 13.5px; }
+.chat-compose.blocked { opacity: 0.45; pointer-events: none; }

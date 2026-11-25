@@ -40,7 +40,7 @@ test('premier lancement : pas montré à qui a déjà des réunions', async ({ p
   await page.addInitScript(() => localStorage.setItem('transcripteur.onboard.force', '1'));
   await boot(page);
   await page.locator('.ob [data-ob="skip"]').click();
-  await page.evaluate(() => { localStorage.removeItem('transcripteur.onboarded'); });
+  await page.evaluate(() => { localStorage.removeItem('transcripteur.onboarded.local'); });
   await seedMeetings(page);
   await page.reload();
   await page.waitForFunction(() => window.__appBoot && window.__app);
@@ -62,4 +62,42 @@ test('pages vides illustrées, avec le bon bouton', async ({ page }) => {
   await nav(page, 'projects');
   await page.locator('#hist-search').fill('xyzzy');
   await expect(page.locator('#hist-list .em')).toContainText('Rien trouvé pour « xyzzy »');
+});
+
+test('premier lancement : une fois par compte, après avoir regardé le Drive', async ({ page, context, browser }) => {
+  const { fakeDrive } = await import('./mocks/drive.js');
+  const files = await fakeDrive(context);
+  await context.addInitScript(() => {
+    localStorage.setItem('transcripteur.onboard.force', '1');
+    localStorage.setItem('transcripteur.onboarded.local', '1'); // déjà vue hors connexion, ou avec un autre compte
+    localStorage.setItem('transcripteur.onboarded.autre@exemple.fr', '1');
+    localStorage.setItem('transcripteur.cloud.user', JSON.stringify({ email: 'neuf@exemple.fr', name: 'Neuf', picture: '' }));
+    sessionStorage.setItem('transcripteur.cloud.token', JSON.stringify({ value: 'faux', exp: Date.now() + 3600e3 }));
+  });
+  // Compte neuf, Drive vide : présentée
+  await boot(page);
+  await expect(page.locator('.ob')).toBeVisible();
+  await page.locator('.ob [data-ob="skip"]').click();
+  expect(await page.evaluate(() => localStorage.getItem('transcripteur.onboarded.neuf@exemple.fr'))).toBe('1');
+  // Ce compte a maintenant des réunions dans son Drive…
+  await seedMeetings(page);
+  await page.evaluate(async () => {
+    for (const id of ['d1', 'd2']) { const d = await window.__app.History.get(id); d.owner = 'neuf@exemple.fr'; await window.__app.History.put(d); }
+    await window.__app.syncNow();
+  });
+  await expect.poll(() => [...files.values()].filter((f) => f.appProperties.kind === 'doc').length).toBe(2);
+  // … et l'ouvre dans un autre navigateur (rien en local) : pas de présentation
+  const other = await browser.newContext({ permissions: ['microphone'] });
+  await fakeDrive(other, files);
+  await other.addInitScript(() => {
+    localStorage.setItem('transcripteur.theme', 'dark');
+    localStorage.setItem('transcripteur.onboard.force', '1');
+    localStorage.setItem('transcripteur.cloud.user', JSON.stringify({ email: 'neuf@exemple.fr', name: 'Neuf', picture: '' }));
+    sessionStorage.setItem('transcripteur.cloud.token', JSON.stringify({ value: 'faux', exp: Date.now() + 3600e3 }));
+  });
+  const p2 = await other.newPage();
+  await boot(p2);
+  await expect.poll(() => p2.evaluate(() => localStorage.getItem('transcripteur.onboarded.neuf@exemple.fr')), { timeout: 15_000 }).toBe('1');
+  await expect(p2.locator('.ob')).toHaveCount(0);
+  await other.close();
 });

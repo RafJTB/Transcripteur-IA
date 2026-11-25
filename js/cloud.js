@@ -8,7 +8,7 @@
 // - La transcription reste 100 % locale ; seuls les résultats (et l'audio) sont copiés
 //   dans le Drive de la personne connectée. Personne d'autre n'y a accès.
 
-import { Look, hash } from './presentation.js';
+import { Look, hash, isCustomPerso } from './presentation.js';
 import { GOOGLE_CLIENT_ID } from './config.js';
 import { History, Audios } from './history.js';
 
@@ -353,6 +353,12 @@ export const Sync = {
       else if (p.kind === 'folders') rFolders = f;
     }
 
+    // 0. Présentation (thème, fond, couleurs, effets) : la plus récente gagne. En premier (rapide),
+    //    et isolée : un envoi d'audio qui échoue plus loin ne l'empêche pas.
+    if (Look.enabled()) {
+      try { await Sync._syncLook(files); } catch (e) { Look.setStatus('error', e.message); }
+    }
+
     // 1. Suppressions faites sur ce navigateur
     const tomb = json(ls.get(tombKey()), { docs: [], audios: [] });
     for (const id of [...tomb.docs]) {
@@ -438,8 +444,6 @@ export const Sync = {
     const fl = new Blob([JSON.stringify(Folders.raw())], { type: 'application/json' });
     await Drive.put(rFolders?.id || null, 'dossiers.json', fl, { kind: 'folders' });
 
-    // 5. Présentation (thème, fond, couleurs, effets) : la plus récente gagne
-    if (Look.enabled()) await Sync._syncLook(files);
     return changed;
   },
 
@@ -447,22 +451,39 @@ export const Sync = {
     const newest = (kind) => files.filter((f) => f.appProperties?.kind === kind).sort((a, b) => (Number(b.appProperties.u) || 0) - (Number(a.appProperties.u) || 0))[0] || null;
     const rLook = newest('look');
     const rImg = files.filter((f) => f.appProperties?.kind === 'lookimg').pop() || null;
-    const ru = Number(rLook?.appProperties?.u) || 0;
-    // Réglages faits avant cette fonction (sans date) et rien encore dans le Drive : on les envoie
-    if (!Look.updatedAt() && !rLook && Look.isCustom()) Look.stamp();
+    let ru = Number(rLook?.appProperties?.u) || 0;
+    const custom = Look.isCustom();
+    let remote = null;
+    // Le Drive ne contient qu'une présentation par défaut envoyée automatiquement (pas choisie par
+    // l'utilisateur) : elle n'écrase jamais une vraie présentation personnalisée, qui est envoyée à la place.
+    if (rLook && custom) {
+      const p = rLook.appProperties || {};
+      let rCustom = p.c === '1' ? true : p.c === '0' ? false : null;
+      let rAuto = p.a === '1' ? true : p.a === '0' ? false : null;
+      if (rCustom == null || rAuto == null) { // fichier d'une version précédente : on lit son contenu
+        remote = await Drive.getJson(rLook.id);
+        rCustom ??= remote.custom ?? (isCustomPerso(remote.perso) || !!remote.imgHash);
+        rAuto ??= remote.auto ?? true;
+      }
+      if (!rCustom && rAuto) { ru = 0; Look.stamp(); }
+    }
+    // Réglages faits avant cette fonction (sans date), personnalisés : envoyés si le Drive n'a rien de mieux
+    if (!Look.updatedAt() && custom && !ru) Look.stamp();
     const lu = Look.updatedAt();
     if (rLook && ru > lu) {
       // Réglages plus récents ailleurs : on les applique ici
-      const remote = await Drive.getJson(rLook.id);
+      remote ??= await Drive.getJson(rLook.id);
       const img = remote.imgHash && remote.imgHash !== hash(Look.image()) && rImg ? await Drive.getText(rImg.id) : null;
-      if (Look.apply(remote, img)) Sync.onLook?.();
+      if (Look.apply(remote, img)) { Look.setStatus('in'); Sync.onLook?.(); }
     } else if (lu > ru) {
       // Réglages faits ici plus récents : on les envoie (l'image seulement si elle a changé)
       const snap = Look.snapshot();
-      await Drive.put(rLook?.id || null, 'presentation.json', new Blob([JSON.stringify(snap)], { type: 'application/json' }), { kind: 'look', u: String(lu) });
+      if (!snap.custom && snap.auto) return; // jamais de présentation par défaut envoyée sans que l'utilisateur l'ait choisie
+      await Drive.put(rLook?.id || null, 'presentation.json', new Blob([JSON.stringify(snap)], { type: 'application/json' }), { kind: 'look', u: String(lu), c: snap.custom ? '1' : '0', a: snap.auto ? '1' : '0' });
       const img = Look.image();
       if (img && rImg?.appProperties?.h !== snap.imgHash) await Drive.put(rImg?.id || null, 'fond-perso.txt', new Blob([img], { type: 'text/plain' }), { kind: 'lookimg', h: snap.imgHash });
-    }
+      Look.setStatus('out');
+    } else if (rLook || lu) Look.setStatus('same');
   },
 
   async _upload(d, fileId) {

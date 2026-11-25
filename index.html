@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-42" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-42" />
-  <script src="js/boot.js?v=2026-11-22-42"></script>
+  <meta name="app-version" content="2026-11-22-43" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-43" />
+  <script src="js/boot.js?v=2026-11-22-43"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -541,9 +541,10 @@
             <section class="glass dash-card look-sync">
               <label class="look-row">
                 <span class="look-ic"><svg viewBox="0 0 24 24"><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8z"/><path d="m9.5 13.5 2 2 3.5-4"/></svg></span>
-                <span class="look-txt"><b>Retrouver ma présentation sur mes autres navigateurs</b><small id="look-sync-info"></small></span>
+                <span class="look-txt"><b>Retrouver ma présentation sur mes autres navigateurs</b><small id="look-sync-info"></small><small class="look-status" id="look-status"></small></span>
                 <span class="switch"><input type="checkbox" id="look-sync" /><span class="track"></span></span>
               </label>
+              <div class="look-actions" id="look-actions"><button class="btn sm" type="button" id="look-push">Envoyer cette présentation</button><span>À faire depuis le navigateur qui a la bonne présentation : les autres la reçoivent à leur prochaine synchronisation.</span></div>
             </section>
             <section class="glass dash-card">
               <header class="dash-head"><h3>Fond d’écran</h3><span class="dash-sub" id="bg-count"></span></header>
@@ -994,6 +995,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-42"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-43"></script>
 </body>
 </html>

@@ -94,3 +94,53 @@ test('présentation choisie avant cette fonction (sans date) : envoyée au 1er p
   await a.close();
   await b.close();
 });
+
+test('un navigateur resté par défaut n’écrase pas une vraie présentation, même s’il se synchronise en premier', async ({ browser }) => {
+  const files = new Map();
+  // A : par défaut (avec un thème enregistré, comme après un simple clic sur le bouton du thème)
+  const a = await browser.newContext();
+  await fakeDrive(a, files);
+  await a.addInitScript(signedIn);
+  const pa = await a.newPage();
+  await boot(pa);
+  await pa.evaluate(() => window.__app.syncNow());
+  expect(looks(files)).toHaveLength(0); // rien d'envoyé : ce n'est pas une présentation choisie
+  // B : présentation personnalisée d'avant la fonction (sans date)
+  const b = await browser.newContext();
+  await fakeDrive(b, files);
+  await b.addInitScript(signedIn);
+  await b.addInitScript(() => { if (!localStorage.getItem('seeded')) { localStorage.setItem('seeded', '1'); localStorage.setItem('transcripteur.perso', JSON.stringify({ bg: 'crepuscule', blur: 14, veil: 100, panel: 100, accent: '#db2777' })); } });
+  const pb = await b.newPage();
+  await boot(pb);
+  await pb.evaluate(() => window.__app.syncNow());
+  await expect.poll(() => looks(files).length).toBe(1);
+  expect(await pb.evaluate(() => JSON.parse(localStorage.getItem('transcripteur.perso')).accent)).toBe('#db2777'); // B a gardé la sienne
+  // A la reçoit
+  await pa.evaluate(() => window.__app.syncNow());
+  await expect.poll(() => pa.evaluate(() => JSON.parse(localStorage.getItem('transcripteur.perso') || '{}').accent)).toBe('#db2777');
+  await nav(pa, 'custom');
+  await expect(pa.locator('#look-status')).toContainText('Importée');
+  await a.close(); await b.close();
+});
+
+test('ancienne version : une présentation par défaut déjà envoyée automatiquement ne gagne pas contre une vraie', async ({ browser }) => {
+  const files = new Map();
+  const b = await browser.newContext();
+  await fakeDrive(b, files);
+  // Fichier laissé par la version précédente : présentation par défaut, sans indicateurs
+  files.set('old', { id: 'old', name: 'presentation.json', appProperties: { kind: 'look', u: String(Date.now()) }, data: Buffer.from(JSON.stringify({ v: 1, u: Date.now(), theme: 'dark', perso: { bg: 'photo', blur: 14, veil: 100, panel: 100, accent: null, hover: 'all', hoverColor: null }, imgHash: '' })) });
+  await b.addInitScript(signedIn);
+  await b.addInitScript(() => { if (!localStorage.getItem('seeded')) { localStorage.setItem('seeded', '1'); localStorage.setItem('transcripteur.perso', JSON.stringify({ bg: 'dunes', accent: '#db2777' })); } });
+  const pb = await b.newPage();
+  await boot(pb);
+  await pb.evaluate(() => window.__app.syncNow());
+  expect(await pb.evaluate(() => JSON.parse(localStorage.getItem('transcripteur.perso')).bg)).toBe('dunes');
+  const newest = looks(files).sort((x, y) => Number(y.appProperties.u) - Number(x.appProperties.u))[0];
+  expect(JSON.parse(newest.data.toString()).perso.bg).toBe('dunes');
+  // Bouton « Envoyer cette présentation »
+  await nav(pb, 'custom');
+  await expect(pb.locator('#look-status')).toContainText('Envoyée');
+  await pb.locator('#look-push').click();
+  await expect(pb.locator('.toast').filter({ hasText: 'Présentation envoyée' })).toBeVisible();
+  await b.close();
+});

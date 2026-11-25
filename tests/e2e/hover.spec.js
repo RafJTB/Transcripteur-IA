@@ -69,7 +69,7 @@ test('survol : la lueur marche aussi sur les pages ajoutées après coup (projet
   const [rx, ry] = await center(page.locator('.proj-row').first());
   await page.mouse.move(rx, ry);
   await expect(glow).toHaveClass(/on/);
-  const [sx, sy] = await center(page.locator('.proj-side h4'));
+  const [sx, sy] = await center(page.locator('.proj-side .side-title'));
   await page.mouse.move(sx, sy);
   await expect(glow).toHaveClass(/on/);
   // Réunion ouverte : la barre de vérification (bloc détecté automatiquement, sans liste)

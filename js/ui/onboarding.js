@@ -1,7 +1,9 @@
 // Premier lancement : présentation en 3 étapes (ce que fait l'appli, le micro, par où commencer).
-// Montrée une seule fois, à qui n'a encore aucune réunion ; « Revoir la présentation » dans l'Aide.
+// Montrée une fois par compte (ou une fois hors connexion), à qui n'a encore aucune réunion,
+// y compris dans son Google Drive ; « Revoir la présentation » dans l'Aide.
 
 import { newId } from '../history.js';
+import { Auth, Sync } from '../cloud.js';
 import { listMicrophones } from '../audio.js';
 import { $, esc, store, toast } from './core.js';
 import { openDoc } from './history.js';
@@ -22,11 +24,27 @@ const I = {
 let el = null, step = 0, stream = null, raf = 0, ctx = null;
 
 /** Au démarrage : présentation si c'est la première fois (et qu'aucune réunion n'existe). */
+const seenKey = () => `onboarded.${Auth.user()?.email || 'local'}`;
+
+/** Première synchronisation du démarrage terminée (ou impossible). */
+function firstSync(ms = 20000) {
+  return new Promise((resolve) => {
+    const done = (st) => { off(); clearTimeout(t); resolve(st); };
+    const off = Sync.on((st) => { if (['ok', 'error', 'expired', 'off'].includes(st.status)) done(st.status); });
+    const t = setTimeout(() => done('timeout'), ms);
+    if (Sync.status === 'ok') done('ok');
+  });
+}
+
 export async function maybeOnboard() {
-  if (store.get('onboarded') === '1') return;
+  const key = seenKey();
+  if (store.get(key) === '1') return;
   // Navigateur piloté par des tests : seulement si on le demande explicitement
   if (navigator.webdriver && store.get('onboard.force') !== '1') return;
-  if ((await myDocs()).length) { store.set('onboarded', '1'); return; }
+  // Connecté : ses réunions sont peut-être seulement dans son Drive (nouveau navigateur), on attend de le savoir
+  if (Auth.user() && Sync.enabled() && (await firstSync()) !== 'ok') return;
+  if (seenKey() !== key || el) return; // compte changé entre-temps, ou déjà ouverte
+  if ((await myDocs()).length) { store.set(key, '1'); return; }
   openOnboarding();
 }
 
@@ -149,7 +167,7 @@ function stopMic() {
 
 function close(done) {
   stopMic();
-  if (done) store.set('onboarded', '1');
+  if (done) store.set(seenKey(), '1');
   el?.remove();
   el = null;
 }

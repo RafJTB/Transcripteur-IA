@@ -55,3 +55,37 @@ export function dayLabel(ts, now = Date.now()) {
   const sameYear = new Date(ts).getFullYear() === new Date(now).getFullYear();
   return new Date(ts).toLocaleDateString('fr-FR', sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+// ---------- Recherche par intervenant ----------
+const foldTxt = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const isGeneric = (n) => !n || /^Personne \d+$/.test(n);
+
+/** Intervenants nommés de toutes les réunions, du plus présent au moins présent. */
+export function meetingPeople(docs) {
+  const m = new Map();
+  for (const d of docs) {
+    const seen = new Set();
+    (d.segments || []).forEach((s) => {
+      const name = d.speakers?.[s.spk]?.name;
+      if (isGeneric(name)) return;
+      const key = foldTxt(name);
+      const e = m.get(key) || { name, meetings: 0, seconds: 0 };
+      e.seconds += Math.max(0, (s.end || 0) - (s.start || 0));
+      if (!seen.has(key)) { seen.add(key); e.meetings++; }
+      m.set(key, e);
+    });
+  }
+  return [...m.values()].sort((a, b) => b.meetings - a.meetings || b.seconds - a.seconds || a.name.localeCompare(b.name, 'fr'));
+}
+
+/**
+ * Passages d'une réunion dits par un intervenant (comparaison sans accents ni majuscules),
+ * éventuellement limités à ceux qui contiennent le texte cherché.
+ * @returns {{text: string, start: number}[]}
+ */
+export function saidBy(doc, person, q = '') {
+  const p = foldTxt(person), nq = foldTxt(q).trim();
+  return (doc.segments || [])
+    .filter((s) => foldTxt(doc.speakers?.[s.spk]?.name) === p && (!nq || foldTxt(s.text).includes(nq)))
+    .map((s) => ({ text: s.text, start: s.start }));
+}

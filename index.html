@@ -14,9 +14,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-title" content="Transcripteur IA" />
-  <meta name="app-version" content="2026-11-22-39" />
-  <link rel="stylesheet" href="styles.css?v=2026-11-22-39" />
-  <script src="js/boot.js?v=2026-11-22-39"></script>
+  <meta name="app-version" content="2026-11-22-41" />
+  <link rel="stylesheet" href="styles.css?v=2026-11-22-41" />
+  <script src="js/boot.js?v=2026-11-22-41"></script>
 </head>
 <body data-page="home">
   <div class="bg-photo" aria-hidden="true"></div>
@@ -33,6 +33,7 @@
         <button type="button" data-nav="home" class="active"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Accueil</span></button>
         <span class="nav-head d-only" aria-hidden="true">Gestion</span>
         <button type="button" data-nav="projects"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Mes projets</span></button>
+        <button type="button" data-nav="actions" class="d-only"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg><span>Suivi des actions</span></button>
         <button type="button" data-nav="spaces" class="d-only"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg><span>Espaces partagés</span></button>
         <button type="button" data-nav="calendar" class="d-only"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Calendrier</span></button>
         <button type="button" data-nav="history"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Historique</span></button>
@@ -420,6 +421,10 @@
             <header class="proj-head">
               <div><h2 id="h-hist">Historique</h2><span class="hist-count" id="hist-count"></span></div>
               <span class="grow"></span>
+              <label class="proj-spk" title="Ne montrer que les réunions où cette personne parle ; avec la recherche du haut, seulement ce qu’elle a dit">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <select id="proj-speaker" aria-label="Intervenant"><option value="">Tous les intervenants</option></select>
+              </label>
               <button class="icon-btn danger" id="hist-clear" type="button" title="Tout supprimer (transcriptions et audios)" aria-label="Tout supprimer"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
               <button class="btn primary proj-new" id="proj-new" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nouvelle transcription</button>
             </header>
@@ -435,6 +440,29 @@
               </aside>
               <div class="hist-list" id="hist-list"></div>
             </div>
+          </section>
+
+          <!-- ===== SUIVI DES ACTIONS ===== -->
+          <section class="view view-page ab-page" data-page="actions">
+            <div class="home-head ab-head">
+              <div><h2>Suivi des actions</h2><p>Toutes les actions relevées dans tes réunions : qui doit faire quoi, et pour quand.</p></div>
+              <button class="btn" id="ab-copy" type="button"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copier la liste</button>
+            </div>
+            <div class="ab-stats" id="ab-stats"></div>
+            <section class="glass dash-card ab-card">
+              <div class="ab-tools">
+                <label class="ab-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" id="ab-q" placeholder="Chercher une action…" aria-label="Chercher une action" /></label>
+                <select id="ab-folder" class="glass-select" aria-label="Dossier"></select>
+                <span class="grow"></span>
+                <div class="seg" id="ab-by" role="tablist" aria-label="Regrouper par">
+                  <button type="button" role="tab" data-ab-by="due">Échéance</button>
+                  <button type="button" role="tab" data-ab-by="who">Responsable</button>
+                  <button type="button" role="tab" data-ab-by="meeting">Réunion</button>
+                </div>
+              </div>
+              <div class="ab-people" id="ab-people" aria-label="Responsables"></div>
+              <div class="ab-list" id="ab-list"></div>
+            </section>
           </section>
 
           <!-- ===== ESPACES COLLABORATIFS ===== -->
@@ -572,6 +600,7 @@
             <div class="home-head"><h2>Paramètres</h2><p>Compte, assistant, voix, moteur, lexique et stockage. Les réglages du micro sont sur la page « Nouvelle transcription ».</p></div>
             <div class="m-links">
               <button class="btn glass-btn" type="button" data-nav="calendar"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendrier</button>
+              <button class="btn glass-btn" type="button" data-nav="actions"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>Actions</button>
               <button class="btn glass-btn" type="button" data-nav="spaces"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 5.8"/></svg>Espaces</button>
               <button class="btn glass-btn" type="button" data-nav="analytics"><svg viewBox="0 0 24 24"><path d="M5 20V11M10 20V5M15 20v-6M20 20V9"/></svg>Analyses</button>
               <button class="btn glass-btn" type="button" data-nav="models"><svg viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>Modèles</button>
@@ -965,6 +994,6 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=2026-11-22-39"></script>
+  <script type="module" src="js/app.js?v=2026-11-22-41"></script>
 </body>
 </html>

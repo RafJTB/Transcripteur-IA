@@ -156,7 +156,7 @@ function insightsHtml(docs) {
       <h4>Actions extraites</h4>
       <div class="ins-big"><b>${nAct}</b>${aDelta != null && aDelta !== 0 ? trend(`${Math.abs(aDelta)} %`, aDelta > 0 ? 'up' : 'down') : ''}</div>
       <small class="ins-sub">ces 7 derniers jours${nAct ? ` · ${nOpen} à faire` : ''}</small>
-      <button class="link-btn more-link" type="button" data-nav="analytics">Voir les actions en cours<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      <button class="link-btn more-link" type="button" data-nav="actions">Voir les actions en cours<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </div>`;
 }
 

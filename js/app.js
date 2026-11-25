@@ -1,6 +1,7 @@
 // Orchestrateur de l'interface : source audio → transcription (worker) → résultat/export.
 // Nouveautés : transcription en direct, reprise automatique, suppression des enregistrements.
 
+import { bindSpeakerPick } from './ui/history.js';
 import { Look } from './presentation.js';
 import { Audios, History, RecChunks } from './history.js';
 import { Auth, Folders, Sync } from './cloud.js';
@@ -28,6 +29,7 @@ import { cancel, hideResume, isMine, persist, renderResume, startTranscription }
 import { autoTranslate, translateDoc } from './ui/translation.js';
 import { closeDrawers, openDrawer, setView } from './ui/views.js';
 import { bindSettings } from './ui/settings-ui.js';
+import { bindActionBoard } from './ui/actions-board.js';
 import { bindReport } from './ui/report-ui.js';
 import { handleCalendarReturn, initCalendar } from './ui/calendar-ui.js';
 import { bindVerify, verifyDoc } from './ui/verify-ui.js';
@@ -195,6 +197,8 @@ function bind() {
   bindSpeakers();
   bindVoices();
   bindSettings();
+  bindActionBoard();
+  bindSpeakerPick();
   bindActions();
   bindV3();
   bindDashboard();

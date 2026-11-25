@@ -38,3 +38,17 @@ test('périodes : aujourd’hui, cette semaine, puis par mois ; libellés courts
   assert.match(dayLabel(at(10), now), /^10 nov/);
   assert.match(dayLabel(new Date(2025, 0, 5).getTime(), now), /2025/);
 });
+
+test('recherche par intervenant : personnes nommées, passages dits par l’une d’elles', async () => {
+  const { meetingPeople, saidBy } = await import('../../js/projects.js');
+  const docs = [
+    { speakers: [{ name: 'Raf' }, { name: 'Marc' }, { name: 'Personne 3' }], segments: [{ spk: 0, start: 0, end: 10, text: 'Bonjour' }, { spk: 1, start: 10, end: 40, text: 'Je relance le BET pour les réseaux.' }, { spk: 2, start: 40, end: 50, text: 'ok' }] },
+    { speakers: [{ name: 'marc' }], segments: [{ spk: 0, start: 0, end: 5, text: 'Les RÉSEAUX sont posés.' }] },
+  ];
+  const people = meetingPeople(docs);
+  assert.deepEqual(people.map((p) => p.name), ['Marc', 'Raf']); // « marc » = « Marc », « Personne 3 » ignorée
+  assert.equal(people[0].meetings, 2);
+  assert.equal(saidBy(docs[0], 'Marc').length, 1);
+  assert.equal(saidBy(docs[1], 'MARC', 'reseaux').length, 1); // sans accents ni majuscules
+  assert.equal(saidBy(docs[0], 'Raf', 'réseaux').length, 0);
+});

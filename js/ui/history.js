@@ -4,7 +4,7 @@ import { Audios, History } from '../history.js';
 import { Folders, Sync } from '../cloud.js';
 import { saveLexicon } from '../lexicon.js';
 import { speakerColor } from '../speakers.js';
-import { dayGroup, dayLabel, folderColor, speakerShares } from '../projects.js';
+import { dayGroup, dayLabel, folderColor, meetingPeople, saidBy, speakerShares } from '../projects.js';
 import { folderOptions, moveToFolder, renderFolderBar } from './account.js';
 import { $, ask, esc, fmtBytes, fmtHours, fmtShortDur, fold, initials, relDay, state, toast } from './core.js';
 import { STAT_ICONS, actionSources, docIcon, renderAnalytics, renderDashboard } from './dashboard.js';
@@ -63,10 +63,14 @@ export async function renderHistory() {
   $('#hist-count').innerHTML = items.length ? `<b>${items.length} réunion${items.length > 1 ? 's' : ''}</b>${total ? ` · ${fmtHours(total)} d’audio` : ''}${acts ? ` · <b>${acts} action${acts > 1 ? 's' : ''}</b> à faire` : ''}` : '';
   renderProjStorage(sizes);
   if (!items.length) { list.innerHTML = `<div class="hist-empty"><span class="r-ico violet">${STAT_ICONS.docs}</span><b>${state.folder === 'all' ? 'Aucune transcription pour l’instant' : 'Ce dossier est vide'}</b><small>${state.folder === 'all' ? 'Lance ta première avec « Nouvelle transcription » sur l’accueil.' : 'Range une transcription ici avec son menu « Dossier ».'}</small></div>`; return; }
-  const q = [...$('#hist-search').value.trim()].map(fold).join('');
+  const rawQ = $('#hist-search').value.trim();
+  const q = [...rawQ].map(fold).join('');
+  // Intervenant choisi : seulement ses réunions ; avec un texte cherché, seulement ce qu'il a dit
+  const who = renderSpeakerPicker(items);
+  if (who) items = items.filter((it) => saidBy(it, who, rawQ).length);
   const textOf = (it) => [...`${it.title} ${it.segments.map((x) => x.text).join(' ')}`].map(fold).join('');
-  if (q) items = items.filter((it) => textOf(it).includes(q));
-  if (!items.length) { list.innerHTML = '<p class="hist-empty">Aucun résultat.</p>'; return; }
+  if (q && !who) items = items.filter((it) => textOf(it).includes(q));
+  if (!items.length) { list.innerHTML = `<p class="hist-empty">${who ? `Aucune réunion où ${esc(who)} ${rawQ ? `parle de « ${esc(rawQ)} »` : 'parle'}.` : 'Aucun résultat.'}</p>`; return; }
   list.innerHTML = '';
   const now = Date.now();
   let group = null;
@@ -111,13 +115,19 @@ export async function renderHistory() {
     mv.onchange = () => moveToFolder(it, mv.value);
     const all = it.segments.map((x) => x.text).join(' ');
     let preview = all.slice(0, 160);
-    if (q) {
+    if (who) {
+      // Ce que la personne a dit (le passage cherché, sinon sa première intervention)
+      const said = saidBy(it, who, rawQ);
+      const n = said.length;
+      preview = `${who} : « ${said[0].text.slice(0, 150)}${said[0].text.length > 150 ? '…' : ''} »${n > 1 ? ` (+${n - 1} passage${n > 2 ? 's' : ''})` : ''}`;
+      el.dataset.seek = String(said[0].start);
+    } else if (q) {
       // Montre le passage qui contient le mot cherché
       const at = [...all].map(fold).join('').indexOf(q);
       if (at > 40) preview = '…' + all.slice(at - 40, at + 120);
     }
     $('.pr-txt small', el).textContent = `${folder ? `${folder.name} · ` : ''}${preview || '(vide)'}`;
-    const openIt = () => openDoc(it);
+    const openIt = () => { openDoc(it); if (el.dataset.seek) seekWhenReady(it.id, Number(el.dataset.seek)); };
     el.addEventListener('click', (e) => {
       if (e.target.closest('.pr-btn, .hist-move')) return;
       openIt();
@@ -154,6 +164,33 @@ export async function renderHistory() {
   }
 }
 
+/** Liste des intervenants (en-tête de Mes projets) ; renvoie l'intervenant choisi, s'il existe encore. */
+let speakerPick = '';
+function renderSpeakerPicker(items) {
+  const sel = $('#proj-speaker');
+  if (!sel) return '';
+  const people = meetingPeople(items);
+  if (speakerPick && !people.some((p) => p.name === speakerPick)) speakerPick = '';
+  sel.innerHTML = `<option value="">Tous les intervenants</option>${people.map((p) => `<option value="${esc(p.name)}"${p.name === speakerPick ? ' selected' : ''}>${esc(p.name)} (${p.meetings})</option>`).join('')}`;
+  sel.disabled = !people.length;
+  sel.closest('.proj-spk').classList.toggle('on', !!speakerPick);
+  return speakerPick;
+}
+export function setSpeakerPick(name) { speakerPick = name || ''; renderHistory(); }
+
+/** Ouvre la réunion au passage de l'intervenant (quand le texte est affiché). */
+function seekWhenReady(docId, t) {
+  const t0 = Date.now();
+  const tick = () => {
+    if (state.doc?.id !== docId) return;
+    const segs = [...document.querySelectorAll('#transcript [data-start]')];
+    const target = segs.find((s) => Math.abs(Number(s.dataset.start) - t) < 0.5)?.closest('.segment');
+    if (target) { target.scrollIntoView({ block: 'center' }); target.classList.add('flash'); setTimeout(() => target.classList.remove('flash'), 1600); return; }
+    if (Date.now() - t0 < 3000) setTimeout(tick, 120);
+  };
+  setTimeout(tick, 150);
+}
+
 /** Actions encore à faire dans une réunion (relevées par l'onglet Actions). */
 function openActionCount(d) {
   try { return actionSources([d])[0].items.filter((x) => x.type === 'action' && !x.done).length; } catch { return 0; }
@@ -168,6 +205,11 @@ async function renderProjStorage(sizes) {
   try { quota = (await navigator.storage?.estimate?.())?.quota || 0; } catch { /* inconnu */ }
   const pct = quota ? Math.min(100, Math.max(1, (used / quota) * 100)) : 0;
   el.innerHTML = `<span>Audio gardé sur ce PC</span><span class="bar"><i style="width:${pct.toFixed(1)}%"></i></span><small>${fmtBytes(used)}${quota ? ` sur ${fmtBytes(quota)} disponibles` : ''}</small>`;
+}
+
+export function bindSpeakerPick() {
+  const sel = $('#proj-speaker');
+  if (sel) sel.onchange = () => setSpeakerPick(sel.value);
 }
 
 export function openDoc(it) {

@@ -245,7 +245,9 @@ export function bindAccount(authResult) {
     e.stopPropagation();
     const u = Auth.user();
     if (!u) return signIn();
-    if (Auth.expired()) return signIn(true);
+    // Reconnexion demandée : vraie connexion (le compte est proposé d'office). Une tentative silencieuse
+    // a déjà échoué au lancement ; la refaire échouerait pareil si Google demande une confirmation.
+    if (Auth.expired()) return signIn(false);
     const menu = $('#user-menu');
     if (menu.hidden) renderUserMenu();
     menu.hidden = !menu.hidden;
@@ -265,7 +267,7 @@ export function bindAccount(authResult) {
   $('#um-settings').onclick = () => { $('#user-menu').hidden = true; setView('settings'); };
   $('#um-logout').onclick = () => { $('#user-menu').hidden = true; signOut(); };
   // Paramètres
-  $('#acc-login').onclick = () => signIn(!!Auth.user());
+  $('#acc-login').onclick = () => signIn(false);
   $('#acc-sync').onclick = () => syncNow();
   $('#acc-logout').onclick = signOut;
   $('#acc-client').addEventListener('change', (e) => { Auth.setClientId(e.target.value); renderAccount(); toast(e.target.value.trim() ? 'Identifiant client enregistré.' : 'Identifiant client effacé.', 'ok', 2500); });
